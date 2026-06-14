@@ -8,16 +8,16 @@
 ---Read-only: instruction-granularity stepping and instruction breakpoints are
 ---deliberately not handled here.
 
-local manager  = require("easydap.manager")
-local config   = require("easydap.config")
-local ui_util  = require("easydap.util.ui_util")
-local throttle = require("easydap.util.throttle")
+local manager   = require("easydap.manager")
+local config    = require("easydap.config")
+local ui_util   = require("easydap.util.ui_util")
+local throttle  = require("easydap.util.throttle")
 
 -- ── Tunables ───────────────────────────────────────────────────────────────
 
-local _COUNT  = 80   -- instructions requested per disassemble
-local _OFFSET = -20  -- start a little before the PC so it sits mid-pane
-local _ADDR_W = 18   -- width of the address column
+local _COUNT    = 80 -- instructions requested per disassemble
+local _OFFSET   = -20 -- start a little before the PC so it sits mid-pane
+local _ADDR_W   = 18 -- width of the address column
 
 -- ── Highlight groups ───────────────────────────────────────────────────────
 
@@ -74,9 +74,10 @@ end
 ---@field private _ns        integer  static render highlights (symbols, addresses)
 ---@field private _ns_pc     integer  PC line highlight + sign
 ---@field private _ns_block  integer  transient source-block highlight
----@field private _aug       integer  autocmd group
+---@field private _aug?      integer  sync autocmd group; created on open, deleted on close
 ---@field private _gen       integer  generation guard for stale session callbacks
 ---@field private _syncing   boolean  re-entrancy guard around programmatic moves
+---@field private _closing?   boolean  re-entrancy guard around close()
 ---@field private _src_sync  fun()    throttled source -> asm
 ---@field private _asm_sync  fun()    throttled asm -> source
 local DisassemblyView = {}
@@ -92,7 +93,6 @@ function DisassemblyView.new()
         _ns       = vim.api.nvim_create_namespace("easydap_disasm"),
         _ns_pc    = vim.api.nvim_create_namespace("easydap_disasm_pc"),
         _ns_block = vim.api.nvim_create_namespace("easydap_disasm_block"),
-        _aug      = vim.api.nvim_create_augroup("easydap_disasm", { clear = true }),
         _gen      = 0,
         _syncing  = false,
     }, DisassemblyView)
@@ -105,6 +105,19 @@ function DisassemblyView:_init()
     self._src_sync = throttle.throttle_wrap(40, function() self:_sync_from_source() end)
     self._asm_sync = throttle.throttle_wrap(40, function() self:_sync_to_source() end)
 
+    manager.on_active_changed:subscribe(function(_, sess) self:_bind_session(sess) end)
+    manager.on_selection_changed:subscribe(function()
+        if self:_is_open() then self:_load(false) end
+    end)
+    self:_bind_session(manager.session())
+end
+
+---Create the sync autocmd group (and its source-side listener) on first open.
+---@private
+function DisassemblyView:_ensure_autocmds()
+    if self._aug then return end
+    self._aug = vim.api.nvim_create_augroup("easydap_disasm_sync", { clear = true })
+
     -- source -> asm: a global CursorMoved that only fires while focused in the
     -- bound source window and the pane is open.
     vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
@@ -115,21 +128,16 @@ function DisassemblyView:_init()
             self._src_sync()
         end,
     })
+end
 
-    vim.api.nvim_create_autocmd("WinClosed", {
-        group = self._aug,
-        callback = function(ev)
-            if tonumber(ev.match) == self._win then
-                self._win = nil
-            end
-        end,
-    })
-
-    manager.on_active_changed:subscribe(function(_, sess) self:_bind_session(sess) end)
-    manager.on_selection_changed:subscribe(function()
-        if self:_is_open() then self:_load(false) end
-    end)
-    self:_bind_session(manager.session())
+---Delete the sync autocmd group; called whenever the pane closes so the global
+---CursorMoved listener does not linger while the pane is hidden.
+---@private
+function DisassemblyView:_teardown_autocmds()
+    if self._aug then
+        vim.api.nvim_del_augroup_by_id(self._aug)
+        self._aug = nil
+    end
 end
 
 -- ── Session binding ────────────────────────────────────────────────────────
@@ -166,17 +174,21 @@ end
 
 ---@private
 function DisassemblyView:_ensure_win()
+    self:_ensure_autocmds()
+
     if not (self._bufnr and vim.api.nvim_buf_is_valid(self._bufnr)) then
-        self._bufnr = ui_util.create_sratch_buffer(false, { filetype = "asm" }, function ()
+        -- buffer deleted -> close the window too
+        self._bufnr = ui_util.create_sratch_buffer(false, { filetype = "asm" }, function()
             self._bufnr = nil
+            self:close()
         end)
         pcall(vim.api.nvim_buf_set_name, self._bufnr, "easydap://disassembly")
         self:_setup_keymaps(self._bufnr)
 
         -- asm -> source: bound to the asm buffer.
         vim.api.nvim_create_autocmd("CursorMoved", {
-            group  = self._aug,
-            buffer = self._bufnr,
+            group    = self._aug,
+            buffer   = self._bufnr,
             callback = function()
                 if self._syncing then return end
                 self._asm_sync()
@@ -185,16 +197,21 @@ function DisassemblyView:_ensure_win()
     end
 
     if not self:_is_open() then
-        local prev = vim.api.nvim_get_current_win()
-        vim.cmd("vsplit")
-        local win = vim.api.nvim_get_current_win()
-        vim.api.nvim_win_set_buf(win, self._bufnr)
+        -- enter=false: keep focus on the source window; _load() focuses us
+        -- explicitly on an interactive open.
+        local win                  = ui_util.create_window(self._bufnr, false, {
+            split = "left",
+            win   = 0,
+        }, function()
+            -- window closed -> delete the buffer too
+            self._win = nil
+            self:close()
+        end)
         vim.wo[win].number         = false
         vim.wo[win].relativenumber = false
         vim.wo[win].signcolumn     = "yes"
         vim.wo[win].winfixbuf      = true
-        self._win = win
-        vim.api.nvim_set_current_win(prev)
+        self._win                  = win
     end
 end
 
@@ -254,8 +271,8 @@ function DisassemblyView:_render(instrs, pc_ref)
 
     for _, ins in ipairs(instrs) do
         if ins.symbol and ins.symbol ~= cur_sym then
-            cur_sym       = ins.symbol
-            lines[#lines + 1]   = ins.symbol .. ":"
+            cur_sym               = ins.symbol
+            lines[#lines + 1]     = ins.symbol .. ":"
             headers[#headers + 1] = #lines
         end
 
@@ -404,13 +421,27 @@ function DisassemblyView:open()
     self:_load(true)
 end
 
----Close the disassembly pane if visible.
+---Close the disassembly pane: tears down the window, buffer and autocmds
+---together. Re-entrant-safe so it can be driven from either the WinClosed or
+---the BufDelete/BufWipeout callback (window and buffer co-terminate).
 function DisassemblyView:close()
-    if self:_is_open() then
-        pcall(vim.api.nvim_win_close, self._win, true)
-    end
-    self._win = nil
+    if self._closing then return end
+    self._closing = true
+
     self:_clear_block()
+    self:_teardown_autocmds()
+
+    local win, buf = self._win, self._bufnr
+    self._win, self._bufnr = nil, nil
+
+    if win and vim.api.nvim_win_is_valid(win) then
+        pcall(vim.api.nvim_win_close, win, true)
+    end
+    if buf and vim.api.nvim_buf_is_valid(buf) then
+        pcall(vim.api.nvim_buf_delete, buf, { force = true })
+    end
+
+    self._closing = false
 end
 
 return DisassemblyView
