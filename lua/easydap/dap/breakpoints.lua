@@ -73,8 +73,9 @@ end
 ---@param source string
 ---@param line   integer
 ---@param opts   { condition?: string, hit_condition?: string, log_message?: string, disabled?: boolean }?
----@return easydap.dap.SourceBreakpoint
+---@return easydap.dap.SourceBreakpoint?
 function M.add(source, line, opts)
+    if not require("easydap.store").require_project("breakpoint") then return nil end
     opts = opts or {}
     for _, bp in ipairs(_source_bps) do
         if bp.source == source and bp.line == line then
@@ -107,13 +108,14 @@ end
 ---@param source string
 ---@param line   integer
 ---@param opts   { condition?: string, hit_condition?: string, log_message?: string, disabled?: boolean }
----@return easydap.dap.SourceBreakpoint
+---@return easydap.dap.SourceBreakpoint?
 function M.patch(source, line, opts)
     local bp
     for _, b in ipairs(_source_bps) do
         if b.source == source and b.line == line then bp = b; break end
     end
     if not bp then
+        if not require("easydap.store").require_project("breakpoint") then return nil end
         bp = {
             internal_id = _new_id(), source = source, line = line,
             disabled = false,
@@ -188,8 +190,9 @@ end
 
 ---@param name string
 ---@param opts { disabled?: boolean }?
----@return easydap.dap.FunctionBreakpoint
+---@return easydap.dap.FunctionBreakpoint?
 function M.add_function(name, opts)
+    if not require("easydap.store").require_project("function breakpoint") then return nil end
     opts = opts or {}
     for _, bp in ipairs(_function_bps) do
         if bp.name == name then
@@ -272,8 +275,9 @@ end
 
 ---@param name       string
 ---@param break_mode easydap.dap.ExceptionBreakMode?  defaults to "always"
----@return easydap.dap.ExceptionNameBreakpoint
+---@return easydap.dap.ExceptionNameBreakpoint?
 function M.add_exception_name(name, break_mode)
+    if not require("easydap.store").require_project("exception breakpoint") then return nil end
     break_mode = break_mode or "always"
     for _, bp in ipairs(_exception_name_bps) do
         if bp.name == name then

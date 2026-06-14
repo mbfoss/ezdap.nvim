@@ -23,8 +23,9 @@ local function _new_id()
 end
 
 ---@param expr string
----@return easydap.Expression
+---@return easydap.Expression?
 function M.add(expr)
+    if not require("easydap.store").require_project("watch expression") then return nil end
     local e = { internal_id = _new_id(), expr = expr }
     _expressions[#_expressions + 1] = e
     M.on_change:emit()
