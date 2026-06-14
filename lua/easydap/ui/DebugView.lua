@@ -6,6 +6,7 @@ local breakpoints = require("easydap.dap.breakpoints")
 local str_util    = require("easydap.util.str_util")
 local inputwin    = require("easydap.util.inputwin")
 local select      = require("easydap.util.select").select
+local timer       = require("easydap.util.timer")
 
 ---@alias easydap.DebugView.ItemKind
 ---| "root"
@@ -46,22 +47,18 @@ local select      = require("easydap.util.select").select
 
 ---@alias easydap.DebugView.Chunk { [1]: string, [2]: string? }
 
----@param t any  uv timer or nil
+---@param stop fun()?  stop fn returned by `_start_timer`, or nil
 ---@return nil
-local function _cancel_timer(t)
-    if t then
-        t:stop(); t:close()
-    end
+local function _cancel_timer(stop)
+    if stop then stop() end
     return nil
 end
 
 ---@param delay integer  milliseconds
 ---@param fn    fun()
----@return any  uv timer
+---@return fun()  stop  stops and closes the timer
 local function _start_timer(delay, fn)
-    local t = vim.uv.new_timer()
-    if t then t:start(delay, 0, vim.schedule_wrap(fn)) end
-    return t
+    return timer.start_timer(delay, true, fn)
 end
 
 ---@type { sessions: string, stack: string, variables: string, expressions: string, breakpoints: string }
@@ -198,9 +195,9 @@ end
 ---@field private _query_ctx        number
 ---@field private _subs             fun()[]
 ---@field private _expanded         table<string,boolean>
----@field private _greyout_timer    any
----@field private _session_timer    any
----@field private _removal_timers   table<number,any>
+---@field private _greyout_timer    fun()?
+---@field private _session_timer    fun()?
+---@field private _removal_timers   table<number,fun()>
 local DebugView = {}
 DebugView.__index = DebugView
 

@@ -6,6 +6,7 @@ local extmarks   = require("easydap.ui.extmarks")
 local manager    = require("easydap.manager")
 local ui_util    = require("easydap.util.ui_util")
 local config     = require("easydap.config")
+local timer      = require("easydap.util.timer")
 
 local M          = {}
 
@@ -18,6 +19,8 @@ local _sign_group
 local _line_group
 local _sign_id   = 1 -- fixed id: we only ever show one debugline sign at a time
 local _gen       = 0 -- generation counter to guard stale session callbacks
+---@type function?  stop fn for the pending deferred clear, if any
+local _stop_clear_timer
 
 local _SIGN_HL   = "EasydapFrameSign"
 local _LINE_HL   = "EasydapFrameLine"
@@ -39,9 +42,31 @@ local function _show_stopped(sess)
     ui_util.smart_open_file(src.path, lnum, col, activate)
 end
 
-local function _clear()
+local function _remove_marks()
     if _sign_group then _sign_group.remove_signs() end
     if _line_group then _line_group.remove_extmarks() end
+end
+
+local function _cancel_clear_timer()
+    if _stop_clear_timer then
+        _stop_clear_timer()
+        _stop_clear_timer = nil
+    end
+end
+
+local function _clear()
+    _cancel_clear_timer()
+    _remove_marks()
+end
+
+---Clear after `delay_ms` to avoid flicker during step-through.
+---@param delay_ms integer
+local function _deferred_clear(delay_ms)
+    _cancel_clear_timer()
+    _stop_clear_timer = timer.start_timer(delay_ms, true, function()
+        _stop_clear_timer = nil
+        _remove_marks()
+    end)
 end
 
 function M.init()
@@ -74,7 +99,7 @@ function M.init()
         end)
         sess:on("continued", function()
             if gen ~= _gen then return end
-            _clear()
+            _deferred_clear(config.antiflicker_delay)
         end)
         sess:on("terminated", function()
             if gen ~= _gen then return end
