@@ -528,7 +528,7 @@ function M.define_group(group, group_opts)
     local group_info = {
         priority = group_opts.priority,
         data = {
-            ns = vim.api.nvim_create_namespace("nvtoolkit_extmarks_" .. group),
+            ns = vim.api.nvim_create_namespace(group),
             byfile = {},
             id_to_file = {},
         }

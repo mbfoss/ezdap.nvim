@@ -322,23 +322,27 @@ function M.continue(id)
 end
 
 ---@param id number
-function M.next(id)
-    local s = _sessions[id]; if s then s:next() end
+---@param granularity easydap.dap.proto.SteppingGranularity?
+function M.next(id, granularity)
+    local s = _sessions[id]; if s then s:next(nil, granularity) end
 end
 
 ---@param id number
-function M.step_in(id)
-    local s = _sessions[id]; if s then s:step_in() end
+---@param granularity easydap.dap.proto.SteppingGranularity?
+function M.step_in(id, granularity)
+    local s = _sessions[id]; if s then s:step_in(nil, granularity) end
 end
 
 ---@param id number
-function M.step_out(id)
-    local s = _sessions[id]; if s then s:step_out() end
+---@param granularity easydap.dap.proto.SteppingGranularity?
+function M.step_out(id, granularity)
+    local s = _sessions[id]; if s then s:step_out(nil, granularity) end
 end
 
 ---@param id number
-function M.step_back(id)
-    local s = _sessions[id]; if s then s:step_back() end
+---@param granularity easydap.dap.proto.SteppingGranularity?
+function M.step_back(id, granularity)
+    local s = _sessions[id]; if s then s:step_back(nil, granularity) end
 end
 
 ---@param id number

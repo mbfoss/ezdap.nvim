@@ -101,11 +101,22 @@ end
 
 -- ── Stepping (delegate to client with active id) ───────────────────────────
 
+---@type easydap.dap.proto.SteppingGranularity
+local _granularity = "line"
+
+---Set the granularity used for subsequent steps. The disassembly pane switches
+---this to "instruction" while focused and back to "line" on leave.
+---@param g easydap.dap.proto.SteppingGranularity
+function M.set_granularity(g) _granularity = g end
+
+---@return easydap.dap.proto.SteppingGranularity
+function M.granularity() return _granularity end
+
 function M.continue()     if _active_id then client.continue(_active_id) end end
-function M.next()         if _active_id then client.next(_active_id) end end
-function M.step_in()      if _active_id then client.step_in(_active_id) end end
-function M.step_out()     if _active_id then client.step_out(_active_id) end end
-function M.step_back()    if _active_id then client.step_back(_active_id) end end
+function M.next()         if _active_id then client.next(_active_id, _granularity) end end
+function M.step_in()      if _active_id then client.step_in(_active_id, _granularity) end end
+function M.step_out()     if _active_id then client.step_out(_active_id, _granularity) end end
+function M.step_back()    if _active_id then client.step_back(_active_id, _granularity) end end
 function M.pause()        if _active_id then client.pause(_active_id) end end
 function M.restart()      if _active_id then client.restart(_active_id) end end
 
@@ -146,7 +157,7 @@ end
 ---@return integer
 local function _cursor_location()
     local bufnr = vim.api.nvim_get_current_buf()
-    if vim.bo.buftype[bufnr] ~= "" then
+    if (vim.bo.buftype[bufnr] or "") ~= "" then
         vim.notify("[dap] current buffer is not a regular buffer", vim.log.levels.WARN)
         return nil, 0
     end

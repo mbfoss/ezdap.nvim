@@ -59,14 +59,17 @@ local breakpoints = require("easydap.dap.breakpoints")
 ---@field terminate     fun(self: easydap.dap.Session, cb: fun(err: string?)?)
 ---@field disconnect    fun(self: easydap.dap.Session, cb: fun()?)
 ---@field continue      fun(self: easydap.dap.Session, thread_id: integer?)
----@field next          fun(self: easydap.dap.Session, thread_id: integer?)
----@field step_in       fun(self: easydap.dap.Session, thread_id: integer?)
----@field step_out      fun(self: easydap.dap.Session, thread_id: integer?)
+---@field next          fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?)
+---@field step_in       fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?)
+---@field step_out      fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?)
 ---@field pause         fun(self: easydap.dap.Session, thread_id: integer?)
----@field step_back     fun(self: easydap.dap.Session, thread_id: integer?)
+---@field step_back     fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?)
 ---@field restart       fun(self: easydap.dap.Session)
 ---@field evaluate      fun(self: easydap.dap.Session, expr: string, context: string, cb: fun(body: easydap.dap.proto.EvaluateResponseBody?, err: string?))
 ---@field disassemble   fun(self: easydap.dap.Session, ref: string, count: integer, offset: integer?, cb: fun(instructions: easydap.dap.proto.DisassembledInstruction[]?, err: string?))
+---@field instruction_breakpoints        fun(self: easydap.dap.Session): table<string, easydap.dap.BpStatus>
+---@field toggle_instruction_breakpoint  fun(self: easydap.dap.Session, ref: string, cb: fun(err: string?)?)
+---@field _instr_bps                     table<string, easydap.dap.BpStatus>
 ---@field request       fun(self: easydap.dap.Session, command: string, args: table?, cb: fun(body: table?, err: string?)?)
 ---@field capable       fun(self: easydap.dap.Session, name: string): boolean
 ---@field current_thread      fun(self: easydap.dap.Session): easydap.dap.Thread?
@@ -119,6 +122,7 @@ function M.new(conn, config)
         _source_buffers       = {},
         _bp_status            = {},
         _adapter_id_map       = {},
+        _instr_bps            = {},
         _listeners            = {},
         _stop_cb              = nil,
         _stopping             = false,
@@ -134,18 +138,42 @@ end
 
 -- ── Listener helpers ───────────────────────────────────────────────────────
 
----@param event   string
+---@alias easydap.dap.SessionEvent
+---| "state_changed"
+---| "selection_changed"
+---| "thread_updated"
+---| "breakpoint_updated"
+---| "instruction_breakpoints_changed"
+---| "variable_changed"
+---| "stopped"
+---| "continued"
+---| "terminated"
+---| "output"
+---| "start_debugging"
+---| "run_in_terminal"
+---| "terminal_exit"
+
+---@param event   easydap.dap.SessionEvent
 ---@param handler fun(...)
 function Session:on(event, handler)
     self._listeners[event] = self._listeners[event] or {}
     table.insert(self._listeners[event], handler)
 end
 
----@param event string
----@param ...   any
+---@param event easydap.dap.SessionEvent
+---@param ... any
 function Session:_emit(event, ...)
-    for _, h in ipairs(self._listeners[event] or {}) do
-        pcall(h, ...)
+    local snapshot = vim.list_slice(self._listeners[event] or {})
+
+    for _, fn in ipairs(snapshot) do
+        local ok, err = xpcall(fn, debug.traceback, ...)
+        if not ok then
+            vim.api.nvim_echo(
+                { { tostring(err), "ErrorMsg" } },
+                true,
+                { err = true }
+            )
+        end
     end
 end
 
@@ -838,14 +866,15 @@ end
 
 -- ── Control flow ───────────────────────────────────────────────────────────
 
----@param self      easydap.dap.Session
----@param command   string
----@param thread_id integer?
-local function _step_like(self, command, thread_id)
+---@param self        easydap.dap.Session
+---@param command     string
+---@param thread_id   integer?
+---@param granularity easydap.dap.proto.SteppingGranularity?  defaults to "line"
+local function _step_like(self, command, thread_id, granularity)
     thread_id = thread_id or self._thread_id
     local args = { threadId = thread_id }
     if self:capable("supportsSteppingGranularity") then
-        args.granularity = "line"
+        args.granularity = granularity or "line"
     end
     self:request(command, args, function(_, err)
         if err then
@@ -871,21 +900,25 @@ function Session:continue(thread_id)
 end
 
 ---@param thread_id integer?
-function Session:next(thread_id) _step_like(self, "next", thread_id) end
+---@param granularity easydap.dap.proto.SteppingGranularity?
+function Session:next(thread_id, granularity) _step_like(self, "next", thread_id, granularity) end
 
 ---@param thread_id integer?
-function Session:step_in(thread_id) _step_like(self, "stepIn", thread_id) end
+---@param granularity easydap.dap.proto.SteppingGranularity?
+function Session:step_in(thread_id, granularity) _step_like(self, "stepIn", thread_id, granularity) end
 
 ---@param thread_id integer?
-function Session:step_out(thread_id) _step_like(self, "stepOut", thread_id) end
+---@param granularity easydap.dap.proto.SteppingGranularity?
+function Session:step_out(thread_id, granularity) _step_like(self, "stepOut", thread_id, granularity) end
 
 ---@param thread_id integer?
-function Session:step_back(thread_id)
+---@param granularity easydap.dap.proto.SteppingGranularity?
+function Session:step_back(thread_id, granularity)
     if not self:capable("supportsStepBack") then
         self:report("[dap] adapter does not support step back")
         return
     end
-    _step_like(self, "stepBack", thread_id)
+    _step_like(self, "stepBack", thread_id, granularity)
 end
 
 ---@param thread_id integer?
@@ -905,6 +938,7 @@ function Session:restart()
     self._sources          = {}
     self._bp_status       = {}
     self._adapter_id_map  = {}
+    self._instr_bps       = {}
     self:request("restart", { arguments = self:_protocol_args() }, function(_, err)
         if err then self:report("[dap] restart failed: " .. err) end
     end)
@@ -928,6 +962,61 @@ function Session:disassemble(ref, count, offset, cb)
     }, function(body, err)
         cb(body and body.instructions, err)
     end)
+end
+
+---Instruction breakpoints currently set on this session, keyed by reference.
+---Session-scoped: instruction references are only valid within a live session,
+---so these are never persisted to the project store.
+---@return table<string, easydap.dap.BpStatus> address -> verified status
+function Session:instruction_breakpoints()
+    return self._instr_bps
+end
+
+---Push the current instruction-breakpoint set to the adapter.
+---DAP requires the full list on every call.
+---@private
+---@param cb fun(err: string?)?
+function Session:_sync_instruction_breakpoints(cb)
+    if not self:capable("supportsInstructionBreakpoints") then
+        if cb then cb("adapter does not support instruction breakpoints") end
+        return
+    end
+    local refs = vim.tbl_keys(self._instr_bps) ---@type string[]
+    local args = vim.tbl_map(function(ref) return { instructionReference = ref } end, refs)
+    self:request("setInstructionBreakpoints", { breakpoints = args }, function(body, err)
+        if err then
+            if cb then cb(err) end
+            return
+        end
+        local results = body and body.breakpoints or {}
+        for i, ref in ipairs(refs) do
+            local bp = results[i]
+            self._instr_bps[ref] = {
+                verified = bp and bp.verified or false,
+                message  = bp and bp.message,
+                hits     = 0,
+            }
+        end
+        self:_emit("instruction_breakpoints_changed", self)
+        if cb then cb(nil) end
+    end)
+end
+
+---Toggle an instruction breakpoint at the given reference (address).
+---@param ref string  instructionReference (an instruction address)
+---@param cb  fun(err: string?)?
+function Session:toggle_instruction_breakpoint(ref, cb)
+    if not self:capable("supportsInstructionBreakpoints") then
+        self:report("[dap] adapter does not support instruction breakpoints")
+        if cb then cb("unsupported") end
+        return
+    end
+    if self._instr_bps[ref] then
+        self._instr_bps[ref] = nil
+    else
+        self._instr_bps[ref] = { verified = false, hits = 0 }
+    end
+    self:_sync_instruction_breakpoints(cb)
 end
 
 -- ── Data fetching ──────────────────────────────────────────────────────────

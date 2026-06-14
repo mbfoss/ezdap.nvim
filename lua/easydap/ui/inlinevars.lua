@@ -1,10 +1,10 @@
-local M         = {}
+local M            = {}
 
-local str_util  = require("easydap.util.str_util")
-local manager   = require("easydap.manager")
-local config    = require("easydap.config")
-local extmarks  = require("easydap.ui.extmarks")
-local ui_util   = require("easydap.util.ui_util")
+local str_util     = require("easydap.util.str_util")
+local manager      = require("easydap.manager")
+local config       = require("easydap.config")
+local extmarks     = require("easydap.ui.extmarks")
+local ui_util      = require("easydap.util.ui_util")
 
 local _group       = extmarks.define_group("inlinevars", { priority = 100 })
 local _seq         = 0
@@ -17,15 +17,17 @@ local _mark_id     = 0
 local _clear_timer = nil
 
 do
-	local hl = vim.api.nvim_get_hl(0, { name = "Special", link = false })
-	hl.bg = hl.bg or ui_util.auto_bg(hl.fg)
-    vim.api.nvim_set_hl(0, "EasyTasksDebugPill", {
+	local hl = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
+	hl.bg = ui_util.auto_bg(0x1D6433)
+	vim.api.nvim_set_hl(0, "EasydapPill", {
 		fg = hl.fg,
 		bg = hl.bg,
+		default = true
 	})
-	vim.api.nvim_set_hl(0, "EasyTasksDebugPillSep", {
+	vim.api.nvim_set_hl(0, "EasydapPillSep", {
 		fg = hl.bg,
 		bg = "NONE",
+		default = true,
 	})
 end
 
@@ -64,9 +66,9 @@ local function _set_extmark(file, row, col, text)
 	_group.set_file_extmark(_mark_id, file, row + 1, col, {
 		virt_text = {
 			{ " " },
-			{ "\u{E0B6}", "EasyTasksDebugPillSep" },
-			{ text, "EasyTasksDebugPill" },
-			{ "\u{E0B4}", "EasyTasksDebugPillSep" },
+			{ "\u{E0B6}", "EasydapPillSep" },
+			{ text,       "EasydapPill" },
+			{ "\u{E0B4}", "EasydapPillSep" },
 		},
 		virt_text_pos = "inline",
 		hl_mode = "combine",
@@ -271,7 +273,9 @@ function M.enable(v)
 	if not _enabled and _unsub then
 		_unsub()
 		_unsub = nil
-		if _unsub_var then _unsub_var(); _unsub_var = nil end
+		if _unsub_var then
+			_unsub_var(); _unsub_var = nil
+		end
 	end
 end
 

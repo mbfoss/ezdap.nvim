@@ -15,22 +15,22 @@ local throttle  = require("easydap.util.throttle")
 
 -- ── Tunables ───────────────────────────────────────────────────────────────
 
-local _COUNT    = 80 -- instructions requested per disassemble
+local _COUNT    = 80  -- instructions requested per initial disassemble
 local _OFFSET   = -20 -- start a little before the PC so it sits mid-pane
-local _ADDR_W   = 18 -- width of the address column
+local _ADDR_W   = 18  -- width of the address column
+local _PAGE     = 40  -- instructions fetched per on-demand page
+local _PAGE_PAD = 6   -- trigger paging when the cursor is within this many rows of an edge
 
 -- ── Highlight groups ───────────────────────────────────────────────────────
 
 local _PC_HL    = "EasydapDisasmPC"
 local _BLOCK_HL = "EasydapDisasmBlock"
-local _SYM_HL   = "EasydapDisasmSymbol"
-local _ADDR_HL  = "EasydapDisasmAddr"
+local _BP_HL    = "EasydapDisasmBp"
 
 local function _define_highlights()
     vim.api.nvim_set_hl(0, _PC_HL, { bg = ui_util.auto_bg(0xD4A017), default = true })
     vim.api.nvim_set_hl(0, _BLOCK_HL, { bg = ui_util.auto_bg(0x4A6FA5), default = true })
-    vim.api.nvim_set_hl(0, _SYM_HL, { link = "Function", default = true })
-    vim.api.nvim_set_hl(0, _ADDR_HL, { link = "Comment", default = true })
+    vim.api.nvim_set_hl(0, _BP_HL, { link = "DiagnosticError", default = true })
 end
 
 -- ── Helpers ────────────────────────────────────────────────────────────────
@@ -74,6 +74,10 @@ end
 ---@field private _ns        integer  static render highlights (symbols, addresses)
 ---@field private _ns_pc     integer  PC line highlight + sign
 ---@field private _ns_block  integer  transient source-block highlight
+---@field private _ns_bp     integer  instruction-breakpoint signs
+---@field private _instrs?   easydap.DisassemblyView.Row[]  current ordered instruction list (paging)
+---@field private _pc_ref?   string   instructionReference marked as the PC for the current load
+---@field private _paging?   boolean  in-flight paging guard
 ---@field private _aug?      integer  sync autocmd group; created on open, deleted on close
 ---@field private _gen       integer  generation guard for stale session callbacks
 ---@field private _syncing   boolean  re-entrancy guard around programmatic moves
@@ -93,6 +97,7 @@ function DisassemblyView.new()
         _ns       = vim.api.nvim_create_namespace("easydap_disasm"),
         _ns_pc    = vim.api.nvim_create_namespace("easydap_disasm_pc"),
         _ns_block = vim.api.nvim_create_namespace("easydap_disasm_block"),
+        _ns_bp    = vim.api.nvim_create_namespace("easydap_disasm_bp"),
         _gen      = 0,
         _syncing  = false,
     }, DisassemblyView)
@@ -162,6 +167,10 @@ function DisassemblyView:_bind_session(sess)
         if gen ~= self._gen then return end
         self:close()
     end)
+    sess:on("instruction_breakpoints_changed", function()
+        if gen ~= self._gen then return end
+        if self:_is_open() then self:_draw_bps() end
+    end)
 end
 
 -- ── Window / buffer plumbing ───────────────────────────────────────────────
@@ -185,14 +194,27 @@ function DisassemblyView:_ensure_win()
         pcall(vim.api.nvim_buf_set_name, self._bufnr, "easydap://disassembly")
         self:_setup_keymaps(self._bufnr)
 
-        -- asm -> source: bound to the asm buffer.
+        -- asm -> source sync + edge paging, bound to the asm buffer.
         vim.api.nvim_create_autocmd("CursorMoved", {
             group    = self._aug,
             buffer   = self._bufnr,
             callback = function()
+                self:_maybe_page()
                 if self._syncing then return end
                 self._asm_sync()
             end,
+        })
+
+        -- steps issued while focused here use instruction granularity.
+        vim.api.nvim_create_autocmd("BufEnter", {
+            group    = self._aug,
+            buffer   = self._bufnr,
+            callback = function() manager.set_granularity("instruction") end,
+        })
+        vim.api.nvim_create_autocmd("BufLeave", {
+            group    = self._aug,
+            buffer   = self._bufnr,
+            callback = function() manager.set_granularity("line") end,
         })
     end
 
@@ -250,7 +272,7 @@ function DisassemblyView:_load(focus)
                 return
             end
             self:_ensure_win()
-            self:_render(instrs, ref)
+            self:_render(instrs, ref, true)
             if focus and self:_is_open() then
                 vim.api.nvim_set_current_win(self._win)
             end
@@ -260,8 +282,9 @@ end
 
 ---@private
 ---@param instrs easydap.dap.proto.DisassembledInstruction[]
----@param pc_ref string
-function DisassemblyView:_render(instrs, pc_ref)
+---@param pc_ref string?
+---@param recenter boolean?  center the cursor on the PC row (fresh loads only)
+function DisassemblyView:_render(instrs, pc_ref, recenter)
     local lines   = {} ---@type string[]
     local rows    = {} ---@type table<integer, easydap.DisassemblyView.Row>
     local by_src  = {} ---@type table<string, table<integer, easydap.DisassemblyView.SrcRange>>
@@ -302,22 +325,15 @@ function DisassemblyView:_render(instrs, pc_ref)
     self:_set_lines(lines)
     self._rows   = rows
     self._by_src = by_src
-
-    -- static highlights
-    vim.api.nvim_buf_clear_namespace(self._bufnr, self._ns, 0, -1)
-    for _, h in ipairs(headers) do
-        vim.api.nvim_buf_set_extmark(self._bufnr, self._ns, h - 1, 0, { line_hl_group = _SYM_HL })
-    end
-    for lnum, ins in pairs(rows) do
-        local addr_len = #(ins.address or "")
-        if addr_len > 0 then
-            vim.api.nvim_buf_set_extmark(self._bufnr, self._ns, lnum - 1, 0, {
-                end_col = addr_len, hl_group = _ADDR_HL,
-            })
-        end
-    end
+    self._instrs = instrs
+    self._pc_ref = pc_ref
 
     self:_draw_pc(pc_row)
+    self:_draw_bps()
+
+    if recenter and pc_row and self:_is_open() then
+        pcall(vim.api.nvim_win_set_cursor, self._win, { pc_row, 0 })
+    end
 end
 
 -- ── PC marker ──────────────────────────────────────────────────────────────
@@ -331,10 +347,8 @@ function DisassemblyView:_draw_pc(pc_row)
         line_hl_group = _PC_HL,
         sign_text     = config.signs.debug_frame,
         sign_hl_group = _PC_HL,
+        priority      = 40,
     })
-    if self:_is_open() then
-        pcall(vim.api.nvim_win_set_cursor, self._win, { pc_row, 0 })
-    end
 end
 
 ---@private
@@ -349,6 +363,131 @@ function DisassemblyView:_clear_block()
     if self._bufnr and vim.api.nvim_buf_is_valid(self._bufnr) then
         vim.api.nvim_buf_clear_namespace(self._bufnr, self._ns_block, 0, -1)
     end
+end
+
+-- ── Instruction breakpoints ────────────────────────────────────────────────
+
+---Re-draw breakpoint signs from the active session's instruction-breakpoint set.
+---@private
+function DisassemblyView:_draw_bps()
+    if not (self._bufnr and vim.api.nvim_buf_is_valid(self._bufnr)) then return end
+    vim.api.nvim_buf_clear_namespace(self._bufnr, self._ns_bp, 0, -1)
+
+    local sess = self._sess
+    if not sess then return end
+    local bps = sess:instruction_breakpoints()
+    if not bps or vim.tbl_isempty(bps) then return end
+
+    for lnum, ins in pairs(self._rows) do
+        local st = ins.address and bps[ins.address]
+        if st then
+            local sign = st.verified
+                and config.signs.active_breakpoint
+                or config.signs.inactive_breakpoint
+            vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_bp, lnum - 1, 0, {
+                sign_text = sign, sign_hl_group = _BP_HL,
+            })
+        end
+    end
+end
+
+---Toggle an instruction breakpoint on the instruction under the cursor.
+---@private
+function DisassemblyView:_toggle_bp_at_cursor()
+    if not self:_is_open() then return end
+    local ins = self._rows[vim.api.nvim_win_get_cursor(self._win)[1]]
+    if not ins or not ins.address then return end
+    local sess = self._sess
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN)
+        return
+    end
+    sess:toggle_instruction_breakpoint(ins.address)
+end
+
+-- ── Paging ─────────────────────────────────────────────────────────────────
+
+---@private
+---@param addr string?
+---@return integer?
+function DisassemblyView:_row_of_addr(addr)
+    if not addr then return end
+    for lnum, ins in pairs(self._rows) do
+        if _addr_eq(ins.address, addr) then return lnum end
+    end
+end
+
+---Fetch more instructions when the cursor nears either edge of the buffer.
+---@private
+function DisassemblyView:_maybe_page()
+    if self._paging or not self:_is_open() then return end
+    if not self._instrs or #self._instrs == 0 then return end
+    local row   = vim.api.nvim_win_get_cursor(self._win)[1]
+    local total = vim.api.nvim_buf_line_count(self._bufnr)
+    if row <= _PAGE_PAD then
+        self:_page("up")
+    elseif row >= total - _PAGE_PAD then
+        self:_page("down")
+    end
+end
+
+---Extend the instruction window in the given direction and re-render in place.
+---@private
+---@param dir "up"|"down"
+function DisassemblyView:_page(dir)
+    local sess   = self._sess
+    local instrs = self._instrs
+    if not sess or not instrs or #instrs == 0 then return end
+    self._paging      = true
+
+    -- anchor the view on the instruction under the cursor so it doesn't jump
+    local anchor      = self._rows[vim.api.nvim_win_get_cursor(self._win)[1]]
+    local anchor_addr = anchor and anchor.address
+
+    local ref, offset
+    if dir == "up" then
+        ref, offset = instrs[1].address, -_PAGE
+    else
+        ref, offset = instrs[#instrs].address, 1
+    end
+    if not ref then
+        self._paging = false; return
+    end
+
+    sess:disassemble(ref, _PAGE, offset, function(new, err)
+        vim.schedule(function()
+            self._paging = false
+            local cur = self._instrs
+            if err or not new or #new == 0 or not cur or not self:_is_open() then return end
+
+            local have = {}
+            for _, i in ipairs(cur) do have[i.address] = true end
+            local add = {}
+            for _, i in ipairs(new) do
+                if i.address and not have[i.address] then add[#add + 1] = i end
+            end
+            if #add == 0 then return end
+
+            local merged ---@type easydap.DisassemblyView.Row[]
+            if dir == "up" then
+                merged = {}
+                vim.list_extend(merged, add)
+                vim.list_extend(merged, cur)
+            else
+                merged = cur
+                vim.list_extend(merged, add)
+            end
+
+            self:_render(merged, self._pc_ref, false)
+
+            local r = self:_row_of_addr(anchor_addr)
+            if r then
+                self._syncing = true
+                pcall(vim.api.nvim_win_set_cursor, self._win, { r, 0 })
+                vim.schedule(function() self._syncing = false end)
+            end
+        end)
+    end)
 end
 
 -- ── Sync ───────────────────────────────────────────────────────────────────
@@ -367,7 +506,7 @@ function DisassemblyView:_sync_from_source()
     if not entry then return end
 
     for l = entry.first, entry.last do
-        vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_block, l - 1, 0, { line_hl_group = _BLOCK_HL })
+        vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_block, l - 1, 0, { line_hl_group = _BLOCK_HL, priority = 30 })
     end
 
     self._syncing = true
@@ -393,7 +532,7 @@ function DisassemblyView:_sync_to_source()
         -- inlined frame: instruction maps to a different file
         local asm = self._win
         vim.api.nvim_set_current_win(win)
-        local newwin = ui_util.smart_open_file(ins._path, ins._sline, 0)
+        local newwin = ui_util.smart_open_file(ins._path, ins._sline, 0, false)
         if newwin and newwin > 0 then self._src_win = newwin end
         if asm and vim.api.nvim_win_is_valid(asm) then
             vim.api.nvim_set_current_win(asm)
@@ -409,6 +548,8 @@ end
 function DisassemblyView:_setup_keymaps(bufnr)
     vim.keymap.set("n", "q", function() self:close() end,
         { buffer = bufnr, desc = "Close disassembly pane" })
+    vim.keymap.set("n", "<CR>", function() self:_toggle_bp_at_cursor() end,
+        { buffer = bufnr, desc = "Toggle instruction breakpoint" })
 end
 
 -- ── Public API ─────────────────────────────────────────────────────────────

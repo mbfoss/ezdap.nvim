@@ -114,9 +114,10 @@ end
 ---@param filepath string
 ---@param line? integer 1-based line number (nil = just open)
 ---@param col?  integer 0-based column (nil = column 0)
+---@param activate boolean? activates the file window
 ---@return number winid or -1
 ---@return number bufnr or -1
-function M.smart_open_file(filepath, line, col)
+function M.smart_open_file(filepath, line, col, activate)
     if line and line < 1 then line = nil end
     if col and col < 0 then col = nil end
     if not filepath or filepath == "" then return -1, -1 end
@@ -127,7 +128,9 @@ function M.smart_open_file(filepath, line, col)
         if _is_regular_win(winid) then
             local bufnr = vim.api.nvim_win_get_buf(winid)
             if vim.api.nvim_buf_get_name(bufnr) == full_path then
-                vim.api.nvim_set_current_win(winid)
+                if activate ~= false then
+                    vim.api.nvim_set_current_win(winid)
+                end
                 _safe_set_cursor_pos(winid, line, col)
                 return winid, bufnr
             end
@@ -135,7 +138,9 @@ function M.smart_open_file(filepath, line, col)
     end
 
     local winid = _get_regular_window()
-    vim.api.nvim_set_current_win(winid)
+    if activate ~= false then
+        vim.api.nvim_set_current_win(winid)
+    end
 
     local bufnr = vim.fn.bufnr(full_path)
     if bufnr ~= -1 then

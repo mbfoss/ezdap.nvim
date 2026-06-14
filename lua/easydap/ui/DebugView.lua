@@ -86,10 +86,10 @@ end
 local function _fmt_session(data, chunks)
     local info = data.session_info
     if not info then return end
-    local paused = info.is_paused
-    local terminated = info.state == "terminated"
-    local icon = terminated and "●" or (paused and "■" or "▶")
-    local hl   = terminated and "NonText" or (paused and "DiagnosticWarn" or "DiagnosticOk")
+    local paused        = info.is_paused
+    local terminated    = info.state == "terminated"
+    local icon          = terminated and "●" or (paused and "■" or "▶")
+    local hl            = terminated and "NonText" or (paused and "DiagnosticWarn" or "DiagnosticOk")
     chunks[#chunks + 1] = { icon, hl }
     chunks[#chunks + 1] = { " ", nil }
     chunks[#chunks + 1] = { data.name, data.is_current and "Special" or nil }
@@ -161,7 +161,7 @@ local function _fmt_breakpoint(data, chunks)
         end
         if data.hit_condition then
             chunks[#chunks + 1] = { " • hit: " .. data.hit_condition, "Comment" }
-        end        
+        end
         if data.log_message then
             chunks[#chunks + 1] = { " • log: " .. data.log_message, "Comment" }
         end
@@ -869,15 +869,15 @@ function DebugView:_load_breakpoints()
             expandable = false,
             expanded   = false,
             data       = {
-                kind        = "breakpoint",
-                path        = path,
-                name        = short .. ":" .. bp.line,
-                bp_kind     = "source",
-                bp_id       = bp.internal_id,
-                bp_source   = bp.source,
-                bp_line     = bp.line,
-                disabled    = bp.disabled,
-                verified    = src_st and src_st.verified,
+                kind          = "breakpoint",
+                path          = path,
+                name          = short .. ":" .. bp.line,
+                bp_kind       = "source",
+                bp_id         = bp.internal_id,
+                bp_source     = bp.source,
+                bp_line       = bp.line,
+                disabled      = bp.disabled,
+                verified      = src_st and src_st.verified,
                 condition     = bp.condition,
                 hit_condition = bp.hit_condition,
                 log_message   = bp.log_message,
@@ -997,7 +997,10 @@ function DebugView:_open(focus)
     local win = vim.api.nvim_get_current_win()
     vim.api.nvim_win_set_buf(win, bufnr)
     vim.api.nvim_win_set_width(win, 50)
-    vim.wo[win].winfixbuf = true
+    vim.wo[win].winfixbuf      = true
+    vim.wo[win].signcolumn     = "no"
+    vim.wo[win].number         = false
+    vim.wo[win].relativenumber = false
     if not focus then vim.api.nvim_set_current_win(prev_win) end
 end
 
@@ -1116,8 +1119,13 @@ function DebugView:_setup_keymaps(bufnr)
             inputwin.open({ prompt = "New value: ", default = d.value or "" }, function(input)
                 if input == nil then return end
                 self._active_sess:set_variable(parent_ref,
-                { name = d.name, value = d.value, variablesReference = d.variablesReference or 0, evaluateName = d
-                    .evaluateName }, input,
+                    {
+                        name = d.name,
+                        value = d.value,
+                        variablesReference = d.variablesReference or 0,
+                        evaluateName = d
+                            .evaluateName
+                    }, input,
                     function(_, err)
                         if err then return end
                         self:_load_vars(self._query_ctx)
