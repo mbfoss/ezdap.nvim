@@ -173,6 +173,31 @@ function M.blend_colors(c1, c2, alpha)
     return bit.bor(bit.lshift(r, 16), bit.lshift(g, 8), b)
 end
 
+---@type table<string, fun(): vim.api.keyset.highlight>
+local _themed_hls = {}
+local _themed_group = vim.api.nvim_create_augroup("EasydapThemedHl", { clear = true })
+local _themed_autocmd_created = false
+
+---Define a highlight group whose attributes depend on the current colorscheme.
+---@param name string
+---@param spec_fn fun(): vim.api.keyset.highlight
+function M.define_themed_hl(name, spec_fn)
+    _themed_hls[name] = spec_fn
+    vim.api.nvim_set_hl(0, name, spec_fn())
+    if _themed_autocmd_created then
+        return
+    end
+    _themed_autocmd_created = true
+    vim.api.nvim_create_autocmd("ColorScheme", {
+        group = _themed_group,
+        callback = function()
+            for hl_name, fn in pairs(_themed_hls) do
+                vim.api.nvim_set_hl(0, hl_name, fn())
+            end
+        end,
+    })
+end
+
 ---Derive a subtle background tint from a foreground color by blending it
 ---into the Normal background at low opacity.
 ---@param fg integer  -- 24-bit foreground color

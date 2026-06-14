@@ -28,8 +28,12 @@ local _BLOCK_HL = "EasydapDisasmBlock"
 local _BP_HL    = "EasydapDisasmBp"
 
 local function _define_highlights()
-    vim.api.nvim_set_hl(0, _PC_HL, { bg = ui_util.auto_bg(0xD4A017), default = true })
-    vim.api.nvim_set_hl(0, _BLOCK_HL, { bg = ui_util.auto_bg(0x4A6FA5), default = true })
+    ui_util.define_themed_hl(_PC_HL, function()
+        return { bg = ui_util.auto_bg(0xD4A017), default = true }
+    end)
+    ui_util.define_themed_hl(_BLOCK_HL, function()
+        return { bg = ui_util.auto_bg(0x4A6FA5), default = true }
+    end)
     vim.api.nvim_set_hl(0, _BP_HL, { link = "DiagnosticError", default = true })
 end
 

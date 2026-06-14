@@ -24,8 +24,19 @@ local _stop_clear_timer
 
 local _SIGN_HL   = "EasydapFrameSign"
 local _LINE_HL   = "EasydapFrameLine"
+local _hl_init ---@type boolean?
+
+local function _ensure_hl()
+    if _hl_init then return end
+    _hl_init = true
+    vim.api.nvim_set_hl(0, _SIGN_HL, { link = "Todo", default = true })
+    ui_util.define_themed_hl(_LINE_HL, function()
+        return { bg = ui_util.auto_bg(0xD4A017), default = true }
+    end)
+end
 
 local function _show_stopped(sess)
+    _ensure_hl()
     if not _sign_group or not _line_group then return end
     local frame = sess:current_stack_frame()
     if not frame then return end
@@ -72,9 +83,6 @@ end
 function M.init()
     if _init_done then return end
     _init_done = true
-
-    vim.api.nvim_set_hl(0, _SIGN_HL, { link = "Todo", default = true })
-    vim.api.nvim_set_hl(0, _LINE_HL, { bg = ui_util.auto_bg(0xD4A017), default = true })
 
     _sign_group = signs.define_group("easydap_framesign", { priority = 20 })
     _sign_group.define_sign(_sign_name, config.signs.debug_frame, _SIGN_HL)
