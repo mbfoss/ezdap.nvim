@@ -87,7 +87,10 @@ local function _fmt_session(data, chunks)
     local info = data.session_info
     if not info then return end
     local paused = info.is_paused
-    chunks[#chunks + 1] = { paused and "■" or "▶", paused and "DiagnosticWarn" or "DiagnosticOk" }
+    local terminated = info.state == "terminated"
+    local icon = terminated and "●" or (paused and "■" or "▶")
+    local hl   = terminated and "NonText" or (paused and "DiagnosticWarn" or "DiagnosticOk")
+    chunks[#chunks + 1] = { icon, hl }
     chunks[#chunks + 1] = { " ", nil }
     chunks[#chunks + 1] = { data.name, data.is_current and "Special" or nil }
     if info.state and info.state ~= "running" then
