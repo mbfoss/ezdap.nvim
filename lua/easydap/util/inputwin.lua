@@ -115,7 +115,7 @@ function M.open(opts, on_confirm)
     vim.api.nvim_create_autocmd("WinLeave", {
         group = win_augroup,
         once = true,
-        callback = close,
+        callback = function() close(nil) end,
     })
 end
 

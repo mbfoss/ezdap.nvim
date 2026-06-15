@@ -1193,7 +1193,7 @@ function DebugView:_setup_keymaps(bufnr)
         end
     end)
 
-    map("c", "Change variable value, breakpoint condition, or data breakpoint access type", function()
+    map("c", "Change variable value, breakpoint condition/hit condition, or data breakpoint access type", function()
         local cur = self._tree:get_cursor_item()
         if not cur or not cur.data then return end
         local d = cur.data
@@ -1212,11 +1212,14 @@ function DebugView:_setup_keymaps(bufnr)
                 sess:add_data_breakpoint({ data_id = d.bp_data_id, name = d.name, access_type = at })
             end)
         elseif d.kind == "breakpoint" and d.bp_kind == "source" and d.bp_source and d.bp_line then
-            inputwin.open({ prompt = "Condition (empty to clear): ", default = d.condition or "" }, function(input)
-                if input == nil then return end
-                breakpoints.patch(d.bp_source, d.bp_line, { condition = input })
-                local sess = manager.session()
-                if sess then sess:sync_breakpoints(d.bp_source) end
+            inputwin.open({ prompt = "Condition (empty to clear): ", default = d.condition or "" }, function(cond)
+                if cond == nil then return end
+                inputwin.open({ prompt = "Hit condition (empty to clear): ", default = d.hit_condition or "" }, function(hit)
+                    if hit == nil then return end
+                    breakpoints.patch(d.bp_source, d.bp_line, { condition = cond, hit_condition = hit })
+                    local sess = manager.session()
+                    if sess then sess:sync_breakpoints(d.bp_source) end
+                end)
             end)
         elseif d.kind == "breakpoint" and d.bp_kind == "exception_type" and d.bp_ex_name then
             local _modes = { "always", "unhandled", "userUnhandled", "never" }
@@ -1264,7 +1267,7 @@ function DebugView:_setup_keymaps(bufnr)
             "d     Remove watch expression or breakpoint",
             "r     Rename expression",
             "e     Toggle breakpoint enabled/disabled",
-            "c     Change variable value / breakpoint condition / exception break mode / data access type",
+            "c     Change variable value / breakpoint condition or hit condition / exception break mode / data access type",
         }, "\n"), { title = "Keymaps" })
     end)
 end
