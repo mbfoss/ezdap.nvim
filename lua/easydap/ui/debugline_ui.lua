@@ -26,23 +26,16 @@ local _SIGN_HL   = "EasydapFrameSign"
 local _LINE_HL   = "EasydapFrameLine"
 local _hl_init ---@type boolean?
 
-local function _ensure_hl()
-    if _hl_init then return end
-    _hl_init = true
-    vim.api.nvim_set_hl(0, _SIGN_HL, { link = "Todo", default = true })
-    ui_util.define_themed_hl(_LINE_HL, function()
-        return { bg = ui_util.auto_bg(0xD4A017), default = true }
-    end)
-end
+vim.api.nvim_set_hl(0, _SIGN_HL, { link = "Todo", default = true })
+vim.api.nvim_set_hl(0, _LINE_HL, { link = "DiffChange", default = true })
 
 local function _show_stopped(sess)
-    _ensure_hl()
     if not _sign_group or not _line_group then return end
     local frame = sess:current_stack_frame()
     if not frame then return end
     local src = frame.source
     if not src or not src.path or src.path == "" then return end
-    local lnum = frame.line or 1
+    local lnum = (frame.line and frame.line > 0) and frame.line or 1
     _sign_group.set_file_sign(_sign_id, src.path, lnum, _sign_name, nil)
     _line_group.set_file_extmark(_sign_id, src.path, lnum, 0, { line_hl_group = _LINE_HL, priority = 40 }, nil)
     if sess.state_reason == "function call" then

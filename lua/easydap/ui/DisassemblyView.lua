@@ -13,6 +13,8 @@ local config    = require("easydap.config")
 local ui_util   = require("easydap.util.ui_util")
 local throttle  = require("easydap.util.throttle")
 
+local _au_group_gen
+
 -- ── Tunables ───────────────────────────────────────────────────────────────
 
 local _COUNT    = 80  -- instructions requested per initial disassemble
@@ -27,15 +29,10 @@ local _PC_HL    = "EasydapDisasmPC"
 local _BLOCK_HL = "EasydapDisasmBlock"
 local _BP_HL    = "EasydapDisasmBp"
 
-local function _define_highlights()
-    ui_util.define_themed_hl(_PC_HL, function()
-        return { bg = ui_util.auto_bg(0xD4A017), default = true }
-    end)
-    ui_util.define_themed_hl(_BLOCK_HL, function()
-        return { bg = ui_util.auto_bg(0x4A6FA5), default = true }
-    end)
-    vim.api.nvim_set_hl(0, _BP_HL, { link = "DiagnosticError", default = true })
-end
+vim.api.nvim_set_hl(0, _PC_HL, { link = "DiffChange", default = true })
+vim.api.nvim_set_hl(0, _BLOCK_HL, { link = "CursorLine", default = true })
+vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
+
 
 -- ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -75,7 +72,6 @@ end
 ---@field private _sess?     easydap.dap.Session
 ---@field private _rows      table<integer, easydap.DisassemblyView.Row>  asm line -> instruction
 ---@field private _by_src    table<string, table<integer, easydap.DisassemblyView.SrcRange>>
----@field private _ns        integer  static render highlights (symbols, addresses)
 ---@field private _ns_pc     integer  PC line highlight + sign
 ---@field private _ns_block  integer  transient source-block highlight
 ---@field private _ns_bp     integer  instruction-breakpoint signs
@@ -93,12 +89,9 @@ DisassemblyView.__index = DisassemblyView
 
 ---@return easydap.DisassemblyView
 function DisassemblyView.new()
-    _define_highlights()
-
     local self = setmetatable({
         _rows     = {},
         _by_src   = {},
-        _ns       = vim.api.nvim_create_namespace("easydap_disasm"),
         _ns_pc    = vim.api.nvim_create_namespace("easydap_disasm_pc"),
         _ns_block = vim.api.nvim_create_namespace("easydap_disasm_block"),
         _ns_bp    = vim.api.nvim_create_namespace("easydap_disasm_bp"),
@@ -125,7 +118,8 @@ end
 ---@private
 function DisassemblyView:_ensure_autocmds()
     if self._aug then return end
-    self._aug = vim.api.nvim_create_augroup(("easydap_disasm_sync_%d"):format(self._ns), { clear = true })
+    _au_group_gen = _au_group_gen and (_au_group_gen + 1) or 1
+    self._aug = vim.api.nvim_create_augroup(("easydap_disasm_sync_%d"):format(_au_group_gen), { clear = true })
 
     -- source -> asm: a global CursorMoved that only fires while focused in the
     -- bound source window and the pane is open.
@@ -191,7 +185,7 @@ function DisassemblyView:_ensure_win()
 
     if not (self._bufnr and vim.api.nvim_buf_is_valid(self._bufnr)) then
         -- buffer deleted -> close the window too
-        self._bufnr = ui_util.create_sratch_buffer(false, { filetype = "asm" }, function()
+        self._bufnr = ui_util.create_scratch_buffer(false, { filetype = "asm" }, function()
             self._bufnr = nil
             self:close()
         end)

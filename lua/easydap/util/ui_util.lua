@@ -1,5 +1,8 @@
 local M = {}
 
+---@type table<string, fun(): vim.api.keyset.highlight>?
+local _themed_hl_data
+
 local function _is_regular_buffer(bufnr)
     if not vim.api.nvim_buf_is_valid(bufnr) then
         return false
@@ -155,12 +158,30 @@ function M.smart_open_file(filepath, line, col, activate)
     return winid, bufnr
 end
 
+---Convert a color to a 24-bit integer.
+---@param color integer|string
+---@return integer
+function M.normalize_color(color)
+    if type(color) == "number" then
+        return color
+    end
+    if type(color) == "string" then
+        color = color:gsub("^#", "")
+        local n = tonumber(color, 16)
+        if n then
+            return n
+        end
+    end
+    error("invalid color: " .. tostring(color))
+end
+
 ---Linearly blend two 24-bit integer colors.
----@param c1 integer  -- base color
----@param c2 integer  -- blend-toward color
+---@param c1 integer|string  -- base color
+---@param c2 integer|string  -- blend-toward color
 ---@param alpha number  -- 0 = all c1, 1 = all c2
 ---@return integer
 function M.blend_colors(c1, c2, alpha)
+    c1, c2 = M.normalize_color(c1), M.normalize_color(c2)
     local r1 = bit.rshift(c1, 16)
     local g1 = bit.band(bit.rshift(c1, 8), 0xFF)
     local b1 = bit.band(c1, 0xFF)
@@ -173,39 +194,24 @@ function M.blend_colors(c1, c2, alpha)
     return bit.bor(bit.lshift(r, 16), bit.lshift(g, 8), b)
 end
 
----@type table<string, fun(): vim.api.keyset.highlight>
-local _themed_hls = {}
-local _themed_group = vim.api.nvim_create_augroup("EasydapThemedHl", { clear = true })
-local _themed_autocmd_created = false
-
 ---Define a highlight group whose attributes depend on the current colorscheme.
 ---@param name string
 ---@param spec_fn fun(): vim.api.keyset.highlight
 function M.define_themed_hl(name, spec_fn)
-    _themed_hls[name] = spec_fn
-    vim.api.nvim_set_hl(0, name, spec_fn())
-    if _themed_autocmd_created then
-        return
+    if not _themed_hl_data then
+        _themed_hl_data = {}
+        local themed_group = vim.api.nvim_create_augroup("EasydapThemedHl", { clear = true })
+        vim.api.nvim_create_autocmd("ColorScheme", {
+            group = themed_group,
+            callback = function()
+                for hl_name, fn in pairs(_themed_hl_data) do
+                    vim.api.nvim_set_hl(0, hl_name, fn())
+                end
+            end,
+        })
     end
-    _themed_autocmd_created = true
-    vim.api.nvim_create_autocmd("ColorScheme", {
-        group = _themed_group,
-        callback = function()
-            for hl_name, fn in pairs(_themed_hls) do
-                vim.api.nvim_set_hl(0, hl_name, fn())
-            end
-        end,
-    })
-end
-
----Derive a subtle background tint from a foreground color by blending it
----into the Normal background at low opacity.
----@param fg integer  -- 24-bit foreground color
----@return integer
-function M.auto_bg(fg)
-    local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
-    local bg = normal.bg or 0x1e1e2e
-    return M.blend_colors(bg, fg, 0.15)
+    _themed_hl_data[name] = spec_fn
+    vim.api.nvim_set_hl(0, name, spec_fn())
 end
 
 return M

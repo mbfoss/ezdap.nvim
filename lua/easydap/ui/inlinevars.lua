@@ -16,18 +16,14 @@ local _unsub_var
 local _mark_id     = 0
 local _clear_timer = nil
 
-do
-	local hl = vim.api.nvim_get_hl(0, { name = "Special", link = false })
-	hl.bg = hl.bg or ui_util.auto_bg(0x1D5443)
-	vim.api.nvim_set_hl(0, "EasydapPill", {
-		fg = hl.fg,
-		bg = hl.bg,
-	})
-	vim.api.nvim_set_hl(0, "EasydapPillSep", {
-		fg = hl.bg,
+vim.api.nvim_set_hl(0, "EasydapPill", { link = "Visual", default = true })
+ui_util.define_themed_hl("EasydapPillSep", function()
+	local hl = vim.api.nvim_get_hl(0, { name = "EasydapPill", link = false })
+	return {
+		fg = hl and hl.bg or nil,
 		bg = "NONE",
-	})
-end
+	}
+end)
 
 local function _cancel_clear_timer()
 	if _clear_timer then

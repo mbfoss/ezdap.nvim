@@ -12,6 +12,9 @@ local M = {}
 local _group
 local _init_done
 
+local _BP_HL = "EasydapBreakpoint"
+vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
+
 local function _sign_name(bp)
     local has_cond = bp.condition or bp.hit_condition
     if bp.disabled then
@@ -45,15 +48,15 @@ function M.init()
     _init_done = true
     _group = signs.define_group("easydap_breakpoints", { priority = 10 })
     local s = config.signs
-    _group.define_sign("active_breakpoint",        s.active_breakpoint,        "Debug")
-    _group.define_sign("inactive_breakpoint",      s.inactive_breakpoint,      "Debug")
-    _group.define_sign("cond_breakpoint",          s.cond_breakpoint,          "Debug")
-    _group.define_sign("inactive_cond_breakpoint", s.inactive_cond_breakpoint, "Debug")
-    _group.define_sign("logpoint",                 s.logpoint,                 "Debug")
-    _group.define_sign("inactive_logpoint",        s.inactive_logpoint,        "Debug")
-    _group.define_sign("disabled_breakpoint",      s.disabled_breakpoint,      "Debug")
-    _group.define_sign("disabled_cond_breakpoint", s.disabled_cond_breakpoint, "Debug")
-    _group.define_sign("disabled_logpoint",        s.disabled_logpoint,        "Debug")
+    _group.define_sign("active_breakpoint",        s.active_breakpoint,        _BP_HL)
+    _group.define_sign("inactive_breakpoint",      s.inactive_breakpoint,      _BP_HL)
+    _group.define_sign("cond_breakpoint",          s.cond_breakpoint,          _BP_HL)
+    _group.define_sign("inactive_cond_breakpoint", s.inactive_cond_breakpoint, _BP_HL)
+    _group.define_sign("logpoint",                 s.logpoint,                 _BP_HL)
+    _group.define_sign("inactive_logpoint",        s.inactive_logpoint,        _BP_HL)
+    _group.define_sign("disabled_breakpoint",      s.disabled_breakpoint,      _BP_HL)
+    _group.define_sign("disabled_cond_breakpoint", s.disabled_cond_breakpoint, _BP_HL)
+    _group.define_sign("disabled_logpoint",        s.disabled_logpoint,        _BP_HL)
 
     breakpoints.on_change:subscribe(_refresh)
     manager.on_active_changed:subscribe(function() _refresh() end)
