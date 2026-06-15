@@ -158,6 +158,8 @@ local function _fmt_breakpoint(data, chunks)
         chunks[#chunks + 1] = { "  [unsupported]", "DiagnosticWarn" }
     elseif data.bp_kind == "exception_type" and data.break_mode then
         chunks[#chunks + 1] = { " [" .. data.break_mode .. "]", "Comment" }
+    elseif data.bp_kind == "function" then
+        chunks[#chunks + 1] = { " [fn]", "Comment" }
     else
         if data.bp_kind == "data" and data.access_type then
             chunks[#chunks + 1] = { " [" .. data.access_type .. "]", "Comment" }
