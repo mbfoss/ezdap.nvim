@@ -586,8 +586,8 @@ function DebugView:_set_active(id, sess)
     -- Re-bind data-breakpoint refresh to the new active session. Data breakpoints
     -- are session-scoped, so we listen directly; stale listeners self-disable via
     -- the generation guard (the session drops all listeners when it terminates).
-    self._dbp_gen = (self._dbp_gen or 0) + 1
-    local dbp_gen = self._dbp_gen
+    self._dbp_gen     = (self._dbp_gen or 0) + 1
+    local dbp_gen     = self._dbp_gen
     if sess then
         sess:on("data_breakpoints_changed", function()
             if dbp_gen ~= self._dbp_gen then return end
@@ -1039,7 +1039,8 @@ function DebugView:_open(focus)
     vim.cmd("vsplit")
     local win = vim.api.nvim_get_current_win()
     vim.api.nvim_win_set_buf(win, bufnr)
-    vim.api.nvim_win_set_width(win, 50)
+    vim.api.nvim_win_set_width(win, math.ceil(vim.o.columns * 0.2))
+    vim.wo[win].winfixwidth    = true
     vim.wo[win].winfixbuf      = true
     vim.wo[win].signcolumn     = "no"
     vim.wo[win].number         = false
@@ -1066,7 +1067,9 @@ end
 ---@param cur easydap.ui.TreeBuffer.Item  a node whose data.kind == "variable"
 function DebugView:_toggle_data_breakpoint(cur)
     local sess = self._active_sess
-    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    end
     if not sess:capable("supportsDataBreakpoints") then
         vim.notify("[dap] adapter does not support data breakpoints", vim.log.levels.WARN)
         return
@@ -1196,9 +1199,11 @@ function DebugView:_setup_keymaps(bufnr)
         local d = cur.data
         if d.kind == "breakpoint" and d.bp_kind == "data" and d.bp_data_id then
             local sess = manager.session()
-            if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
-            local _types   = { "read", "write", "readWrite" }
-            local cur_at   = d.access_type
+            if not sess then
+                vim.notify("[dap] no active session", vim.log.levels.WARN); return
+            end
+            local _types = { "read", "write", "readWrite" }
+            local cur_at = d.access_type
             select(_types, {
                 prompt      = "Access type for " .. d.name .. ": ",
                 format_item = function(t) return (t == cur_at and "● " or "  ") .. t end,
