@@ -641,6 +641,11 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
 
     self:_draw_pc(pc_row)
     self:_draw_bps()
+
+    -- after the splice has redrawn, pull content into any blank below EOF
+    vim.schedule(function()
+        if self:_is_open() then ui_util.fill_viewport(self._win) end
+    end)
 end
 
 -- ── Sync ───────────────────────────────────────────────────────────────────
@@ -687,13 +692,44 @@ end
 
 -- ── Keymaps ────────────────────────────────────────────────────────────────
 
+---Vertical motion that pages when it would otherwise stall at an edge. Bound to
+---j/k and the arrow keys: the pad heuristic in `_maybe_page` prefetches while
+---scrolling, but a cursor pinned on the first/last line (reached via a jump like
+---gg/G/search) fires no CursorMoved, so the move is a silent no-op. Here we catch
+---that case and fetch the adjacent page instead; otherwise the keypress falls
+---through to its normal motion (count preserved).
+---@private
+---@param dir "up"|"down"
+---@param key string  literal motion to replay when not sitting on the edge
+function DisassemblyView:_edge_motion(dir, key)
+    if not self:_is_open() then return end
+
+    local row   = vim.api.nvim_win_get_cursor(self._win)[1]
+    local total = vim.api.nvim_buf_line_count(self._bufnr)
+
+    if dir == "up" and row <= 1 then
+        self:_page("up")
+    elseif dir == "down" and row >= total then
+        self:_page("down")
+    else
+        local n = vim.v.count1
+        vim.api.nvim_feedkeys((n > 1 and tostring(n) or "") .. key, "n", false)
+    end
+end
+
 ---@private
 ---@param bufnr integer
 function DisassemblyView:_setup_keymaps(bufnr)
-    vim.keymap.set("n", "q", function() self:close() end,
-        { buffer = bufnr, desc = "Close disassembly pane" })
-    vim.keymap.set("n", "<CR>", function() self:_toggle_bp_at_cursor() end,
-        { buffer = bufnr, desc = "Toggle instruction breakpoint" })
+    local function map(lhs, rhs, desc)
+        vim.keymap.set("n", lhs, rhs, { buffer = bufnr, desc = desc })
+    end
+
+    map("q", function() self:close() end, "Close disassembly pane")
+    map("<CR>", function() self:_toggle_bp_at_cursor() end, "Toggle instruction breakpoint")
+    map("j", function() self:_edge_motion("down", "j") end, "Down (page at last line)")
+    map("k", function() self:_edge_motion("up", "k") end, "Up (page at first line)")
+    map("<Down>", function() self:_edge_motion("down", "j") end, "Down (page at last line)")
+    map("<Up>", function() self:_edge_motion("up", "k") end, "Up (page at first line)")
 end
 
 -- ── Public API ─────────────────────────────────────────────────────────────

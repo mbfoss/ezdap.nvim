@@ -158,6 +158,27 @@ function M.smart_open_file(filepath, line, col, activate)
     return winid, bufnr
 end
 
+---Pull content down into any blank space at the bottom of a window so the
+---viewport stays full instead of showing a handful of lines over a field of
+---`~`. Scrolls the view only (never the cursor) and only when there are earlier
+---lines to pull down; a buffer genuinely shorter than the window is left alone.
+---@param winid integer
+function M.fill_viewport(winid)
+    if not vim.api.nvim_win_is_valid(winid) then return end
+    local h    = vim.api.nvim_win_get_height(winid)
+    local info = vim.fn.getwininfo(winid)[1]
+    if not info then return end
+
+    local visible = info.botline - info.topline + 1
+    if visible >= h or info.topline <= 1 then return end
+
+    vim.api.nvim_win_call(winid, function()
+        local view   = vim.fn.winsaveview()
+        view.topline = math.max(1, view.topline - (h - visible))
+        vim.fn.winrestview(view)
+    end)
+end
+
 ---Convert a color to a 24-bit integer.
 ---@param color integer|string
 ---@return integer
