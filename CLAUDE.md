@@ -45,7 +45,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 
 **Persistence** — [store.lua](lua/easydap/store.lua)
 - Project-scoped: root is cwd when it directly contains a `root_markers` entry
-  (default `.git`). Namespaces merge into a single `easydap.json` at the root.
+  (default `.git`). Namespaces merge into a single data file at the root (`.easydap.json` by default).
   Writes are deferred; `flush()` persists. Breakpoints and expressions are saved
   on `VimLeavePre` and project-leave, restored on project-enter.
 
