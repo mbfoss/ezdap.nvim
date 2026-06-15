@@ -52,6 +52,45 @@ local function _norm(path)
     return vim.fn.fnamemodify(path, ":p")
 end
 
+---First line in a row table whose instruction matches `addr`.
+---@param rows table<integer, easydap.DisassemblyView.Row>
+---@param addr string?
+---@return integer?
+local function _row_of(rows, addr)
+    if not addr then return end
+    for lnum, ins in pairs(rows) do
+        if _addr_eq(ins.address, addr) then return lnum end
+    end
+end
+
+---Last non-nil `symbol` in a list — the running symbol a follow-on render would
+---inherit, used to decide whether a neighbouring header is still needed.
+---@param list easydap.DisassemblyView.Row[]
+---@return string?
+local function _tail_sym(list)
+    for i = #list, 1, -1 do
+        if list[i].symbol then return list[i].symbol end
+    end
+end
+
+---Smallest index `>= i0` at which `_build` would emit a symbol header (the
+---instruction starts a new symbol). Used to snap a front trim to a group
+---boundary so the retained top keeps owning its header.
+---@param instrs easydap.DisassemblyView.Row[]
+---@param i0 integer
+---@return integer?
+local function _group_start_at_or_after(instrs, i0)
+    local cur ---@type string?
+    for j = 1, i0 - 1 do
+        if instrs[j].symbol then cur = instrs[j].symbol end
+    end
+    for i = i0, #instrs do
+        local s = instrs[i].symbol
+        if s and s ~= cur then return i end
+        if s then cur = s end
+    end
+end
+
 -- ── Class ──────────────────────────────────────────────────────────────────
 
 ---@class easydap.DisassemblyView.SrcRange
@@ -180,6 +219,15 @@ function DisassemblyView:_win_height()
     return _COUNT
 end
 
+---Instructions to fetch per load/page. Deliberately larger than the viewport so
+---there is always rendered content just beyond the visible area to scroll into
+---before the next page is fetched.
+---@private
+---@return integer
+function DisassemblyView:_page_size()
+    return self:_win_height() * 2
+end
+
 ---@private
 ---@return boolean
 function DisassemblyView:_is_open()
@@ -261,7 +309,7 @@ function DisassemblyView:_load(focus)
         return
     end
 
-    local count  = self:_win_height()
+    local count  = self:_page_size()
     local offset = -math.floor(count / 2)
     sess:disassemble(ref, count, offset, function(instrs, err)
         vim.schedule(function()
@@ -278,23 +326,27 @@ function DisassemblyView:_load(focus)
     end)
 end
 
+---Render an instruction list into buffer lines and the accompanying lookup
+---tables, without touching the buffer or any state. Pure: callers decide how to
+---apply the result (full replace for loads, incremental splice for paging).
 ---@private
----@param instrs easydap.dap.proto.DisassembledInstruction[]
+---@param instrs easydap.DisassemblyView.Row[]
 ---@param pc_ref string?
----@param recenter boolean?  center the cursor on the PC row (fresh loads only)
-function DisassemblyView:_render(instrs, pc_ref, recenter)
+---@return string[] lines
+---@return table<integer, easydap.DisassemblyView.Row> rows
+---@return table<string, table<integer, easydap.DisassemblyView.SrcRange>> by_src
+---@return integer? pc_row
+function DisassemblyView:_build(instrs, pc_ref)
     local lines   = {} ---@type string[]
     local rows    = {} ---@type table<integer, easydap.DisassemblyView.Row>
     local by_src  = {} ---@type table<string, table<integer, easydap.DisassemblyView.SrcRange>>
-    local headers = {} ---@type integer[]
     local pc_row  = nil ---@type integer?
     local cur_sym = nil ---@type string?
 
     for _, ins in ipairs(instrs) do
         if ins.symbol and ins.symbol ~= cur_sym then
-            cur_sym               = ins.symbol
-            lines[#lines + 1]     = ins.symbol .. ":"
-            headers[#headers + 1] = #lines
+            cur_sym           = ins.symbol
+            lines[#lines + 1] = ins.symbol .. ":"
         end
 
         local addr = ins.address or ""
@@ -319,6 +371,18 @@ function DisassemblyView:_render(instrs, pc_ref, recenter)
             end
         end
     end
+
+    return lines, rows, by_src, pc_row
+end
+
+---Render an instruction list into the buffer, replacing its entire contents.
+---Used for fresh loads; paging edits the buffer incrementally instead.
+---@private
+---@param instrs easydap.DisassemblyView.Row[]
+---@param pc_ref string?
+---@param recenter boolean?  center the cursor on the PC row (fresh loads only)
+function DisassemblyView:_render(instrs, pc_ref, recenter)
+    local lines, rows, by_src, pc_row = self:_build(instrs, pc_ref)
 
     self:_set_lines(lines)
     self._rows   = rows
@@ -405,72 +469,164 @@ end
 
 -- ── Paging ─────────────────────────────────────────────────────────────────
 
----@private
----@param addr string?
----@return integer?
-function DisassemblyView:_row_of_addr(addr)
-    if not addr then return end
-    for lnum, ins in pairs(self._rows) do
-        if _addr_eq(ins.address, addr) then return lnum end
-    end
-end
-
 ---Fetch more instructions when the cursor nears either edge of the buffer.
+---Triggered from CursorMoved, so ordinary scrolling (with `scrolloff` dragging
+---the cursor along) keeps fresh instructions flowing in without any explicit
+---jump. The trigger margin honours `scrolloff` so paging happens before the
+---cursor is pinned against the edge.
 ---@private
 function DisassemblyView:_maybe_page()
-    if self._paging or not self:_is_open() then return end
+    if self._paging or self._syncing or not self:_is_open() then return end
     if not self._instrs or #self._instrs == 0 then return end
+
     local row   = vim.api.nvim_win_get_cursor(self._win)[1]
     local total = vim.api.nvim_buf_line_count(self._bufnr)
-    if row <= _PAGE_PAD then
+    local so    = vim.wo[self._win].scrolloff
+    if so < 0 then so = vim.go.scrolloff end
+    local pad   = math.max(_PAGE_PAD, so + 2)
+
+    if row <= pad then
         self:_page("up")
-    elseif row >= total - _PAGE_PAD then
+    elseif row >= total - pad then
         self:_page("down")
     end
 end
 
----Shift the instruction window in the given direction and re-render it in
----place. The buffer is *replaced*, not extended, so its size stays bounded at a
----single page; the instruction under the cursor is kept as the anchor so the
----view does not jump.
+---Slide the loaded instruction window in `dir`: fetch a page just beyond the
+---current edge, then hand off to _apply_page to splice it in.
 ---@private
 ---@param dir "up"|"down"
 function DisassemblyView:_page(dir)
     local sess   = self._sess
     local instrs = self._instrs
-    if not sess or not instrs or #instrs == 0 then return end
-    self._paging      = true
+    if self._paging or not sess or not instrs or #instrs == 0 then return end
+    if not self:_is_open() then return end
 
-    -- anchor the view on the instruction under the cursor so it doesn't jump
-    local anchor      = self._rows[vim.api.nvim_win_get_cursor(self._win)[1]]
+    local edge      = dir == "down" and instrs[#instrs] or instrs[1]
+    local edge_addr = edge and edge.address
+    if not edge_addr then return end
+
+    -- Anchor on the instruction at (or, when sitting on a symbol header, just
+    -- below) the cursor. The splice leaves this instruction's line untouched, so
+    -- Neovim's own cursor/scroll handling holds the view exactly where it is.
+    local cur_line    = vim.api.nvim_win_get_cursor(self._win)[1]
+    local anchor      = self._rows[cur_line] or self._rows[cur_line + 1]
     local anchor_addr = anchor and anchor.address
-    if not anchor_addr then
-        self._paging = false; return
-    end
+    if not anchor_addr then return end
 
-    -- Fetch a fresh page centred around the anchor: paging down keeps the anchor
-    -- near the top (more instructions below it), paging up near the bottom.
-    local count  = self:_win_height()
-    local offset = dir == "down" and -_PAGE_PAD or -(count - _PAGE_PAD)
+    self._paging = true
+    local page   = self:_page_size()
+    local offset = dir == "down" and 1 or -page
 
     local gen = self._gen
-    sess:disassemble(anchor_addr, count, offset, function(new, err)
+    sess:disassemble(edge_addr, page, offset, function(new, err)
         if gen ~= self._gen then return end
         vim.schedule(function()
             if gen ~= self._gen then return end
             self._paging = false
             if err or not new or #new == 0 or not self:_is_open() then return end
-
-            self:_render(new, self._pc_ref, false)
-
-            local r = self:_row_of_addr(anchor_addr)
-            if r then
-                self._syncing = true
-                pcall(vim.api.nvim_win_set_cursor, self._win, { r, 0 })
-                vim.schedule(function() self._syncing = false end)
-            end
+            self:_apply_page(dir, new, page, anchor_addr)
         end)
     end)
+end
+
+---Splice a freshly fetched page into the buffer with two localised edits: grow
+---one end, trim the other, leaving the anchor instruction's line (and everything
+---between it and each edit) byte-identical. Edit ranges are derived from line
+---counts and `self._rows` — never from a stored copy of the buffer text. The
+---cursor is never set explicitly; Neovim shifts it along with its instruction.
+---@private
+---@param dir "up"|"down"
+---@param new easydap.DisassemblyView.Row[]
+---@param page integer
+---@param anchor_addr string
+function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
+    local buf = self._bufnr
+    if not (buf and vim.api.nvim_buf_is_valid(buf)) then return end
+
+    local instrs = self._instrs or {}
+    local seen   = {} ---@type table<string, boolean>
+    for _, ins in ipairs(instrs) do
+        if ins.address then seen[ins.address] = true end
+    end
+
+    local cap = page * 2  -- keep at most two pages' worth of instructions loaded
+    local merged ---@type easydap.DisassemblyView.Row[]
+    local consume = 0     -- old top lines the prepend overwrites (a stale header)
+
+    if dir == "down" then
+        local added = 0
+        for _, ins in ipairs(new) do
+            if ins.address and not seen[ins.address] then
+                instrs[#instrs + 1] = ins
+                seen[ins.address]   = true
+                added               = added + 1
+            end
+        end
+        if added == 0 then return end
+        -- trim the front, snapped to a symbol-group boundary so the new top still
+        -- owns its header
+        if #instrs > cap then
+            local f = _group_start_at_or_after(instrs, #instrs - cap + 1)
+            merged = f and vim.list_slice(instrs, f, #instrs) or instrs
+        else
+            merged = instrs
+        end
+    else
+        local head = {} ---@type easydap.DisassemblyView.Row[]
+        for _, ins in ipairs(new) do
+            if ins.address and not seen[ins.address] then
+                head[#head + 1]   = ins
+                seen[ins.address] = true
+            end
+        end
+        if #head == 0 then return end
+        -- the old first instruction loses its header iff the prepended block now
+        -- ends in that same symbol
+        local of = instrs[1]
+        if of and of.symbol and of.symbol == _tail_sym(head) then consume = 1 end
+        merged = head
+        for _, ins in ipairs(instrs) do merged[#merged + 1] = ins end
+        if #merged > cap then merged = vim.list_slice(merged, 1, cap) end
+    end
+
+    local new_lines, rows, by_src, pc_row = self:_build(merged, self._pc_ref)
+    local oa = _row_of(self._rows, anchor_addr)
+    local na = _row_of(rows, anchor_addr)
+
+    self._syncing          = true
+    vim.bo[buf].modifiable = true
+    if oa and na then
+        local o = vim.api.nvim_buf_line_count(buf)
+        local n = #new_lines
+        if dir == "down" then
+            -- append below, then trim the top (group boundary => oa-na lines)
+            vim.api.nvim_buf_set_lines(buf, o, o, false,
+                vim.list_slice(new_lines, na + (o - oa) + 1, n))
+            if oa > na then
+                vim.api.nvim_buf_set_lines(buf, 0, oa - na, false, {})
+            end
+        else
+            -- trim the bottom (old coords) first, then prepend at the top
+            if o > oa + (n - na) then
+                vim.api.nvim_buf_set_lines(buf, oa + (n - na), o, false, {})
+            end
+            vim.api.nvim_buf_set_lines(buf, 0, consume, false,
+                vim.list_slice(new_lines, 1, na - oa + consume))
+        end
+    else
+        -- anchor vanished (shouldn't happen): fall back to a full replace
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, new_lines)
+    end
+    vim.bo[buf].modifiable = false
+    vim.schedule(function() self._syncing = false end)
+
+    self._rows   = rows
+    self._by_src = by_src
+    self._instrs = merged
+
+    self:_draw_pc(pc_row)
+    self:_draw_bps()
 end
 
 -- ── Sync ───────────────────────────────────────────────────────────────────
@@ -511,15 +667,6 @@ function DisassemblyView:_sync_to_source()
     local curpath = _norm(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)))
     if curpath == ins._path then
         pcall(vim.api.nvim_win_set_cursor, win, { ins._sline, 0 })
-    else
-        -- inlined frame: instruction maps to a different file
-        local asm = self._win
-        vim.api.nvim_set_current_win(win)
-        local newwin = ui_util.smart_open_file(ins._path, ins._sline, 0, false)
-        if newwin and newwin > 0 then self._src_win = newwin end
-        if asm and vim.api.nvim_win_is_valid(asm) then
-            vim.api.nvim_set_current_win(asm)
-        end
     end
     vim.schedule(function() self._syncing = false end)
 end

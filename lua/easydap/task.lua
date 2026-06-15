@@ -195,7 +195,7 @@ M.start     = function(task, ctx, on_done)
                     vim.api.nvim_buf_set_name(buf,
                         _unique_buf_name("easydap://" .. run_key .. "/dap-messages"))                
                     vim.api.nvim_buf_set_var(buf, "easytasks_autoscroll", true)
-                    ctx.add_bufnr(buf, "DAP Messages")
+                    ctx.add_bufnr(buf, "DAP Messages", -3)
 
                     unsub = manager.on_raw_message:subscribe(function(sid, direction, msg)
                         if sid ~= id then return end
