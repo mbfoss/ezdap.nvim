@@ -38,6 +38,7 @@ local breakpoints = require("easydap.dap.breakpoints")
 ---@field verified boolean?
 ---@field message  string?
 ---@field hits     integer
+---@field line     integer?   adapter-resolved line, if it differs from the stored line (session-scoped)
 
 ---A data breakpoint (watchpoint) tracked by the session.
 ---Session-scoped: dataIds are obtained per-session via dataBreakpointInfo and
@@ -84,7 +85,6 @@ local breakpoints = require("easydap.dap.breakpoints")
 ---@field set_next_statement fun(self: easydap.dap.Session, target_id: integer, thread_id: integer?)
 ---@field restart_frame      fun(self: easydap.dap.Session, frame_id: integer)
 ---@field exception_info     fun(self: easydap.dap.Session, thread_id: integer?, cb: fun(body: easydap.dap.proto.ExceptionInfoResponseBody?, err: string?))
----@field breakpoint_locations fun(self: easydap.dap.Session, source: easydap.dap.proto.Source, line: integer, end_line: integer?, cb: fun(locations: easydap.dap.proto.BreakpointLocation[]?, err: string?))
 ---@field restart       fun(self: easydap.dap.Session)
 ---@field evaluate      fun(self: easydap.dap.Session, expr: string, context: string, cb: fun(body: easydap.dap.proto.EvaluateResponseBody?, err: string?))
 ---@field disassemble   fun(self: easydap.dap.Session, ref: string, count: integer, offset: integer?, cb: fun(instructions: easydap.dap.proto.DisassembledInstruction[]?, err: string?))
@@ -437,7 +437,14 @@ function Session:_sync_one_source(source, cb)
                 local bp = active_bps[i]
                 if bp then
                     local prev = self._bp_status[bp.internal_id]
-                    local st   = { verified = upd.verified, message = upd.message, hits = prev and prev.hits or 0 }
+                    local st   = {
+                        verified = upd.verified,
+                        message  = upd.message,
+                        hits     = prev and prev.hits or 0,
+                        -- Track where the adapter actually bound the breakpoint, if
+                        -- it moved it off the requested line, so the sign can follow.
+                        line     = (upd.line and upd.line ~= bp.line) and upd.line or nil,
+                    }
                     self._bp_status[bp.internal_id] = st
                     if upd.id then self._adapter_id_map[upd.id] = bp.internal_id end
                     changed = true
@@ -757,9 +764,16 @@ function Session:_on_breakpoint_event(body)
     local bp_id = self._adapter_id_map[upd.id]
     if not bp_id then return end
     local prev = self._bp_status[bp_id] or { hits = 0 }
-    local st   = { verified = upd.verified, message = upd.message, hits = prev.hits }
+    local bp   = breakpoints.find_by_internal_id(bp_id)
+    local st   = {
+        verified = upd.verified,
+        message  = upd.message,
+        hits     = prev.hits,
+        -- Follow the adapter's bound line for source breakpoints (session-scoped).
+        line     = (bp and bp.source and bp.source ~= "" and upd.line and upd.line ~= bp.line)
+            and upd.line or nil,
+    }
     self._bp_status[bp_id] = st
-    local bp = breakpoints.find_by_internal_id(bp_id)
     if bp then
         breakpoints.notify_change(bp.source and "source" or "function")
         self:_emit("breakpoint_updated", bp, st)
@@ -1157,23 +1171,6 @@ function Session:disassemble(ref, count, offset, cb)
         resolveSymbols    = true,
     }, function(body, err)
         cb(body and body.instructions, err)
-    end)
-end
-
----Query the valid breakpoint locations within a source range, so a breakpoint
----can snap to a real statement before it is set. Requires a live session.
----@param source   easydap.dap.proto.Source
----@param line     integer
----@param end_line integer?   query a range [line, end_line] (defaults to one line)
----@param cb       fun(locations: easydap.dap.proto.BreakpointLocation[]?, err: string?)
-function Session:breakpoint_locations(source, line, end_line, cb)
-    if not self:capable("supportsBreakpointLocationsRequest") then
-        return cb(nil, "adapter does not support breakpoint locations")
-    end
-    local args = { source = source, line = line }
-    if end_line then args.endLine = end_line end
-    self:request("breakpointLocations", args, function(body, err)
-        cb(body and body.breakpoints, err)
     end)
 end
 

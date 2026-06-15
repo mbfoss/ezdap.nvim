@@ -82,7 +82,7 @@ end
 
 ---Return the active session's adapter-verified status for a breakpoint, or nil if no session.
 ---@param bp_id integer  internal stable id (bp.internal_id)
----@return { verified: boolean?, message: string?, hits: integer }?
+---@return easydap.dap.BpStatus?
 function M.bp_status(bp_id)
     local sess = M.session()
     return sess and sess:bp_status(bp_id)
@@ -206,11 +206,33 @@ end
 
 M.breakpoint = {}
 
+---Find an existing source breakpoint in `file` whose currently displayed line
+---(the adapter-resolved line if the session moved it, else the stored line) is
+---`row`. Returns its stored line, which is the registry key to operate on.
+---@param file string
+---@param row  integer
+---@return integer?
+local function _existing_bp_line(file, row)
+    local bps = require("easydap.dap.breakpoints")
+    for _, bp in ipairs(bps.for_source(file)) do
+        local st    = M.bp_status(bp.internal_id)
+        local shown = (st and st.line) or bp.line
+        if shown == row or bp.line == row then return bp.line end
+    end
+end
+
 function M.breakpoint.toggle()
     local file, row = _cursor_location()
     if not file then return end
     local bps = require("easydap.dap.breakpoints")
-    bps.toggle(file, row)
+    -- Toggling off matches the line you see, which may be the adapter-resolved
+    -- line rather than the stored one.
+    local existing = _existing_bp_line(file, row)
+    if existing then
+        bps.remove(file, existing)
+    else
+        bps.add(file, row)
+    end
     _sync_bp(file)
 end
 
@@ -227,8 +249,12 @@ function M.breakpoint.remove()
     local file, row = _cursor_location()
     if not file then return end
     local bps = require("easydap.dap.breakpoints")
-    bps.remove(file, row)
-    _sync_bp(file)
+    -- Remove the breakpoint shown at the cursor (resolved or stored line).
+    local existing = _existing_bp_line(file, row)
+    if existing then
+        bps.remove(file, existing)
+        _sync_bp(file)
+    end
 end
 
 function M.breakpoint.clear_file()
