@@ -48,6 +48,7 @@ local breakpoints = require("easydap.dap.breakpoints")
 ---@field access_type   easydap.dap.proto.DataBreakpointAccessType?
 ---@field condition     string?
 ---@field hit_condition string?
+---@field disabled      boolean?                                 kept in the list but excluded from the synced set
 ---@field verified      boolean?
 ---@field message       string?
 
@@ -86,6 +87,7 @@ local breakpoints = require("easydap.dap.breakpoints")
 ---@field data_breakpoint_info           fun(self: easydap.dap.Session, name: string, variables_reference: integer?, cb: fun(body: easydap.dap.proto.DataBreakpointInfoResponseBody?, err: string?))
 ---@field add_data_breakpoint            fun(self: easydap.dap.Session, entry: { data_id: string, name: string, access_type?: easydap.dap.proto.DataBreakpointAccessType, condition?: string, hit_condition?: string }, cb: fun(err: string?)?)
 ---@field remove_data_breakpoint         fun(self: easydap.dap.Session, data_id: string, cb: fun(err: string?)?)
+---@field set_data_breakpoint_enabled    fun(self: easydap.dap.Session, data_id: string, enabled: boolean, cb: fun(err: string?)?)
 ---@field clear_data_breakpoints         fun(self: easydap.dap.Session, cb: fun(err: string?)?)
 ---@field _data_bps                      easydap.dap.DataBreakpoint[]
 ---@field request       fun(self: easydap.dap.Session, command: string, args: table?, cb: fun(body: table?, err: string?)?)
@@ -1112,6 +1114,21 @@ function Session:remove_data_breakpoint(data_id, cb)
     if cb then cb() end
 end
 
+---Enable/disable the data breakpoint with the given dataId and re-sync.
+---Disabled breakpoints stay in the list but are dropped from the synced set.
+---@param data_id string
+---@param enabled boolean
+---@param cb fun(err: string?)?
+function Session:set_data_breakpoint_enabled(data_id, enabled, cb)
+    for _, bp in ipairs(self._data_bps) do
+        if bp.data_id == data_id then
+            bp.disabled = not enabled
+            return self:_sync_data_breakpoints(cb)
+        end
+    end
+    if cb then cb() end
+end
+
 ---Remove all data breakpoints and re-sync.
 ---@param cb fun(err: string?)?
 function Session:clear_data_breakpoints(cb)
@@ -1132,20 +1149,23 @@ function Session:_sync_data_breakpoints(cb)
         if cb then cb("adapter does not support data breakpoints") end
         return
     end
-    local list = {}
+    local active, list = {}, {}
     for _, bp in ipairs(self._data_bps) do
-        local entry = { dataId = bp.data_id }
-        if bp.access_type   then entry.accessType   = bp.access_type end
-        if bp.condition     then entry.condition    = bp.condition end
-        if bp.hit_condition then entry.hitCondition = bp.hit_condition end
-        list[#list + 1] = entry
+        if not bp.disabled then
+            local entry = { dataId = bp.data_id }
+            if bp.access_type   then entry.accessType   = bp.access_type end
+            if bp.condition     then entry.condition    = bp.condition end
+            if bp.hit_condition then entry.hitCondition = bp.hit_condition end
+            active[#active + 1] = bp
+            list[#list + 1]     = entry
+        end
     end
     self:request("setDataBreakpoints", { breakpoints = list }, function(body, err)
         if err then
             self:report("[dap] setDataBreakpoints failed: " .. err)
         elseif body and body.breakpoints then
             for i, upd in ipairs(body.breakpoints) do
-                local bp = self._data_bps[i]
+                local bp = active[i]
                 if bp then
                     bp.verified = upd.verified
                     bp.message  = upd.message

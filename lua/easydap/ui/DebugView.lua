@@ -981,6 +981,7 @@ function DebugView:_load_breakpoints()
                     bp_kind     = "data",
                     bp_data_id  = bp.data_id,
                     access_type = bp.access_type,
+                    disabled    = bp.disabled,
                     verified    = bp.verified,
                 },
             }
@@ -1184,6 +1185,8 @@ function DebugView:_setup_keymaps(bufnr)
         elseif d.bp_kind == "exception_type" and d.bp_ex_name then
             breakpoints.set_exception_name_enabled(d.bp_ex_name, d.disabled)
             if sess then sess:sync_exception_breakpoints() end
+        elseif d.bp_kind == "data" and d.bp_data_id then
+            if sess then sess:set_data_breakpoint_enabled(d.bp_data_id, d.disabled) end
         end
     end)
 
