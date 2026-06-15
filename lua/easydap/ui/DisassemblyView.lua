@@ -26,10 +26,12 @@ local _PAGE_PAD = 6  -- trigger paging when the cursor is within this many rows 
 local _PC_HL    = "EasydapDisasmPC"
 local _BLOCK_HL = "EasydapDisasmBlock"
 local _BP_HL    = "EasydapDisasmBp"
+local _SYM_HL   = "EasydapDisasmSym"
 
 vim.api.nvim_set_hl(0, _PC_HL, { link = "DiffChange", default = true })
 vim.api.nvim_set_hl(0, _BLOCK_HL, { link = "CursorLine", default = true })
 vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
+vim.api.nvim_set_hl(0, _SYM_HL, { link = "Function", default = true })
 
 
 -- ── Helpers ────────────────────────────────────────────────────────────────
@@ -60,34 +62,6 @@ local function _row_of(rows, addr)
     if not addr then return end
     for lnum, ins in pairs(rows) do
         if _addr_eq(ins.address, addr) then return lnum end
-    end
-end
-
----Last non-nil `symbol` in a list — the running symbol a follow-on render would
----inherit, used to decide whether a neighbouring header is still needed.
----@param list easydap.DisassemblyView.Row[]
----@return string?
-local function _tail_sym(list)
-    for i = #list, 1, -1 do
-        if list[i].symbol then return list[i].symbol end
-    end
-end
-
----Smallest index `>= i0` at which `_build` would emit a symbol header (the
----instruction starts a new symbol). Used to snap a front trim to a group
----boundary so the retained top keeps owning its header.
----@param instrs easydap.DisassemblyView.Row[]
----@param i0 integer
----@return integer?
-local function _group_start_at_or_after(instrs, i0)
-    local cur ---@type string?
-    for j = 1, i0 - 1 do
-        if instrs[j].symbol then cur = instrs[j].symbol end
-    end
-    for i = i0, #instrs do
-        local s = instrs[i].symbol
-        if s and s ~= cur then return i end
-        if s then cur = s end
     end
 end
 
@@ -256,9 +230,18 @@ function DisassemblyView:_ensure_win()
             group    = self._aug,
             buffer   = self._bufnr,
             callback = function()
+                self:_update_winbar()
                 self:_maybe_page()
                 if self._syncing then return end
                 self._asm_sync()
+            end,
+        })
+
+        -- keep the sticky header current on pure scrolls (no cursor move)
+        vim.api.nvim_create_autocmd("WinScrolled", {
+            group    = self._aug,
+            callback = function(args)
+                if tonumber(args.match) == self._win then self:_update_winbar() end
             end,
         })
     end
@@ -278,6 +261,7 @@ function DisassemblyView:_ensure_win()
         vim.wo[win].relativenumber = false
         vim.wo[win].signcolumn     = "yes"
         vim.wo[win].winfixbuf      = true
+        vim.wo[win].winbar         = ""
         self._win                  = win
     end
 end
@@ -343,14 +327,10 @@ function DisassemblyView:_build(instrs, pc_ref)
     local rows    = {} ---@type table<integer, easydap.DisassemblyView.Row>
     local by_src  = {} ---@type table<string, table<integer, easydap.DisassemblyView.SrcRange>>
     local pc_row  = nil ---@type integer?
-    local cur_sym = nil ---@type string?
 
+    -- one buffer line per instruction (no symbol-header lines); the winbar shows
+    -- the running function name instead, so rows and lines stay 1:1.
     for _, ins in ipairs(instrs) do
-        if ins.symbol and ins.symbol ~= cur_sym then
-            cur_sym           = ins.symbol
-            lines[#lines + 1] = ins.symbol .. ":"
-        end
-
         local addr = ins.address or ""
         lines[#lines + 1] = ("%-" .. _ADDR_W .. "s %s"):format(addr, ins.instruction or "")
         local lnum = #lines
@@ -401,6 +381,8 @@ function DisassemblyView:_render(instrs, pc_ref, recenter)
 
     -- reset the single-line-move baseline: a fresh render is a jump, not a step
     self._last_row = self:_is_open() and vim.api.nvim_win_get_cursor(self._win)[1] or nil
+
+    self:_update_winbar()
 end
 
 -- ── PC marker ──────────────────────────────────────────────────────────────
@@ -470,6 +452,31 @@ function DisassemblyView:_toggle_bp_at_cursor()
         return
     end
     sess:toggle_instruction_breakpoint(ins.address)
+end
+
+-- ── Winbar (sticky function header) ────────────────────────────────────────
+
+---The running symbol owning `lnum`: the nearest `symbol` at or above it. Lets the
+---winbar name the current function even after its header line has been cropped.
+---@private
+---@param lnum integer
+---@return string?
+function DisassemblyView:_symbol_at(lnum)
+    for l = lnum, 1, -1 do
+        local ins = self._rows[l]
+        if ins and ins.symbol then return ins.symbol end
+    end
+end
+
+---Set the winbar to the function the top of the viewport sits in — a sticky
+---header that stays visible even when the in-buffer header has scrolled off or
+---been cropped away.
+---@private
+function DisassemblyView:_update_winbar()
+    if not self:_is_open() then return end
+    local top = vim.api.nvim_win_call(self._win, function() return vim.fn.line("w0") end)
+    local sym = self:_symbol_at(top)
+    vim.wo[self._win].winbar = sym and ("%%#%s# %s "):format(_SYM_HL, (sym:gsub("%%", "%%%%"))) or ""
 end
 
 -- ── Paging ─────────────────────────────────────────────────────────────────
@@ -564,7 +571,6 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
 
     local cap = page * 2 -- keep at most two pages' worth of instructions loaded
     local merged ---@type easydap.DisassemblyView.Row[]
-    local consume = 0    -- old top lines the prepend overwrites (a stale header)
 
     if dir == "down" then
         local added = 0
@@ -576,11 +582,10 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
             end
         end
         if added == 0 then return end
-        -- trim the front, snapped to a symbol-group boundary so the new top still
-        -- owns its header
+        -- bluntly crop the front to the cap: the new top may start mid-symbol with
+        -- no header line, but the winbar keeps showing the running function name.
         if #instrs > cap then
-            local f = _group_start_at_or_after(instrs, #instrs - cap + 1)
-            merged = f and vim.list_slice(instrs, f, #instrs) or instrs
+            merged = vim.list_slice(instrs, #instrs - cap + 1, #instrs)
         else
             merged = instrs
         end
@@ -593,10 +598,6 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
             end
         end
         if #head == 0 then return end
-        -- the old first instruction loses its header iff the prepended block now
-        -- ends in that same symbol
-        local of = instrs[1]
-        if of and of.symbol and of.symbol == _tail_sym(head) then consume = 1 end
         merged = head
         for _, ins in ipairs(instrs) do merged[#merged + 1] = ins end
         if #merged > cap then merged = vim.list_slice(merged, 1, cap) end
@@ -612,9 +613,9 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
         local o = vim.api.nvim_buf_line_count(buf)
         local n = #new_lines
         if dir == "down" then
-            -- append below, then trim the top (group boundary => oa-na lines).
-            -- Both edits sit outside the anchor's screen region, so Neovim keeps
-            -- the cursor on its instruction and the view steady on its own.
+            -- append below, then trim the top (oa-na lines). Both edits sit
+            -- outside the anchor's screen region, so Neovim keeps the cursor on
+            -- its instruction and the view steady on its own.
             vim.api.nvim_buf_set_lines(buf, o, o, false,
                 vim.list_slice(new_lines, na + (o - oa) + 1, n))
             if oa > na then
@@ -625,8 +626,8 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
             if o > oa + (n - na) then
                 vim.api.nvim_buf_set_lines(buf, oa + (n - na), o, false, {})
             end
-            vim.api.nvim_buf_set_lines(buf, 0, consume, false,
-                vim.list_slice(new_lines, 1, na - oa + consume))
+            vim.api.nvim_buf_set_lines(buf, 0, 0, false,
+                vim.list_slice(new_lines, 1, na - oa))
         end
     else
         -- anchor vanished (shouldn't happen): fall back to a full replace
@@ -644,7 +645,9 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
 
     -- after the splice has redrawn, pull content into any blank below EOF
     vim.schedule(function()
-        if self:_is_open() then ui_util.fill_viewport(self._win) end
+        if not self:_is_open() then return end
+        ui_util.fill_viewport(self._win)
+        self:_update_winbar()
     end)
 end
 
