@@ -22,6 +22,17 @@ M.on_project_enter = Signal.new() ---@type easydap.util.Signal<fun(root: string)
 --- Emitted after the cwd leaves a project.
 M.on_project_leave = Signal.new() ---@type easydap.util.Signal<fun()>
 
+---Returns true when the table holds no data — empty, or only (nested) empty tables.
+---@param  tbl table
+---@return boolean
+local function _is_empty(tbl)
+    for _, v in pairs(tbl) do
+        if type(v) ~= "table" then return false end
+        if not _is_empty(v) then return false end
+    end
+    return true
+end
+
 ---@return string|nil root
 local function _find_root()
     local config  = require("easydap.config")
@@ -52,6 +63,7 @@ end
 
 local function _flush_cache()
     if not _cached_root then return end
+    if _is_empty(_cache) then return end
     local path   = vim.fs.joinpath(_cached_root, "easydap.json")
     local ok, json_or_err = pcall(vim.json.encode, _cache)
     if not ok then return end
@@ -130,6 +142,7 @@ end
 ---@return string? err
 function M.flush()
     if not _cached_root then return true end
+    if _is_empty(_cache) then return true end
     local path = vim.fs.joinpath(_cached_root, "easydap.json")
     local ok, json_or_err = pcall(vim.json.encode, _cache)
     if not ok then
