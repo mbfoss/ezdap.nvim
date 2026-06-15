@@ -109,13 +109,44 @@ function M.granularity()
     return "line"
 end
 
+---Run `fn(sess)` on the active session, but only if it advertises `capability`.
+---Shows an error when the adapter lacks the capability, a warning when there is
+---no active session. Use for any user command gated on a DAP capability.
+---@param capability string  e.g. "supportsRestartFrame"
+---@param label      string  human-readable command name for the error message
+---@param fn         fun(sess: easydap.dap.Session, id: number)
+local function _with_capability(capability, label, fn)
+    local id = _active_id
+    if not id then return end
+    local sess = M.session()
+    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess:capable(capability) then
+        vim.notify("[dap] adapter does not support " .. label, vim.log.levels.ERROR)
+        return
+    end
+    fn(sess, id)
+end
+
 function M.continue()     if _active_id then client.continue(_active_id) end end
 function M.next()         if _active_id then client.next(_active_id, M.granularity()) end end
 function M.step_in()      if _active_id then client.step_in(_active_id, M.granularity()) end end
 function M.step_out()     if _active_id then client.step_out(_active_id, M.granularity()) end end
-function M.step_back()    if _active_id then client.step_back(_active_id, M.granularity()) end end
+function M.step_back()
+    _with_capability("supportsStepBack", "step back", function(_, id)
+        client.step_back(id, M.granularity())
+    end)
+end
+function M.reverse_continue()
+    _with_capability("supportsStepBack", "reverse continue", function(_, id)
+        client.reverse_continue(id)
+    end)
+end
 function M.pause()        if _active_id then client.pause(_active_id) end end
-function M.restart()      if _active_id then client.restart(_active_id) end end
+function M.restart()
+    _with_capability("supportsRestartRequest", "restart", function(_, id)
+        client.restart(id)
+    end)
+end
 
 ---@param cb fun()?
 function M.stop(cb)       if _active_id then client.stop(_active_id, cb) end end
@@ -492,10 +523,115 @@ function M.debug.step_over()     M.next()               end
 function M.debug.step_in()       M.step_in()            end
 function M.debug.step_out()      M.step_out()           end
 function M.debug.step_back()     M.step_back()          end
+function M.debug.reverse_continue() M.reverse_continue() end
 function M.debug.pause()         M.pause()              end
 function M.debug.restart()       M.restart()            end
 function M.debug.stop()          M.stop()               end
 function M.debug.terminate_all() client.quit()          end
+
+---Step into a specific call on the current line. Prompts when the line has
+---multiple call targets; falls back to a plain step-in when unsupported or
+---there is only one target.
+function M.debug.step_into_targets()
+    if not _active_id then return end
+    local sess = M.session()
+    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    local frame = sess:current_stack_frame()
+    if not frame then vim.notify("[dap] no selected frame", vim.log.levels.WARN); return end
+    client.step_in_targets(_active_id, frame.id, function(targets, _)
+        if not targets or #targets == 0 then M.step_in(); return end
+        if #targets == 1 then
+            client.step_in(_active_id, M.granularity(), targets[1].id)
+            return
+        end
+        select(targets, {
+            prompt      = "Step into",
+            format_item = function(t) return t.label end,
+        }, function(t)
+            if t then client.step_in(_active_id, M.granularity(), t.id) end
+        end)
+    end)
+end
+
+---Jump-to-cursor: set the next statement to execute to the line under the
+---cursor in the current buffer. Prompts when the line has multiple targets.
+function M.debug.jump_to_cursor()
+    _with_capability("supportsGotoTargetsRequest", "jump to cursor", function(_, id)
+        local path = vim.api.nvim_buf_get_name(0)
+        if path == "" then vim.notify("[dap] current buffer has no file", vim.log.levels.WARN); return end
+        local line = vim.api.nvim_win_get_cursor(0)[1]
+        ---@type easydap.dap.proto.Source
+        local source = { path = path, name = vim.fn.fnamemodify(path, ":t") }
+        client.goto_targets(id, source, line, function(targets, err)
+            if not targets or #targets == 0 then
+                vim.notify("[dap] no jump target at this line" .. (err and (": " .. err) or ""),
+                    vim.log.levels.WARN)
+                return
+            end
+            if #targets == 1 then
+                client.set_next_statement(id, targets[1].id)
+                return
+            end
+            select(targets, {
+                prompt      = "Jump to",
+                format_item = function(t) return t.label .. (t.line and ("  :" .. t.line) or "") end,
+            }, function(t)
+                if t then client.set_next_statement(id, t.id) end
+            end)
+        end)
+    end)
+end
+
+---Restart execution of the currently selected stack frame.
+function M.debug.restart_frame()
+    _with_capability("supportsRestartFrame", "restart frame", function(sess, id)
+        local frame = sess:current_stack_frame()
+        if not frame then vim.notify("[dap] no selected frame", vim.log.levels.WARN); return end
+        client.restart_frame(id, frame.id)
+    end)
+end
+
+---Show detailed information about the exception at the current stop in a float.
+function M.debug.exception_info()
+    _with_capability("supportsExceptionInfoRequest", "exception info", function(_, id)
+        client.exception_info(id, function(body, err)
+            if not body then
+                vim.notify("[dap] " .. (err or "no exception info available"), vim.log.levels.WARN)
+                return
+            end
+            local lines = { body.exceptionId or "Exception" }
+            local function append(text)
+                for _, l in ipairs(vim.split(text, "\n", { plain = true })) do
+                    lines[#lines + 1] = l
+                end
+            end
+            if body.description and body.description ~= "" then
+                lines[#lines + 1] = ""
+                append(body.description)
+            end
+            local d = body.details
+            if d then
+                if d.typeName and d.typeName ~= "" then
+                    lines[#lines + 1] = ""
+                    lines[#lines + 1] = "Type: " .. d.typeName
+                end
+                if d.message and d.message ~= "" and d.message ~= body.description then
+                    append(d.message)
+                end
+                if d.stackTrace and d.stackTrace ~= "" then
+                    lines[#lines + 1] = ""
+                    lines[#lines + 1] = "Stack trace:"
+                    append(d.stackTrace)
+                end
+            end
+            vim.lsp.util.open_floating_preview(lines, "plaintext", {
+                border   = "rounded",
+                title    = "Exception",
+                focus_id = "easydap_exception",
+            })
+        end)
+    end)
+end
 
 ---@param expr? string  defaults to word under cursor
 function M.debug.inspect(expr)

@@ -114,6 +114,8 @@ local function _register_user_commands()
         "breakpoint",
         "view", "continue", "continue_all",
         "step_over", "next", "step_in", "step_out", "step_back",
+        "step_into_targets", "reverse_continue",
+        "jump_to_cursor", "restart_frame", "exception_info",
         "pause", "restart",
         "stop", "terminate", "terminate_all",
         "session", "thread", "frame",
@@ -136,6 +138,16 @@ local function _register_user_commands()
             cmd.debug.step_out()
         elseif sub == "step_back" then
             cmd.debug.step_back()
+        elseif sub == "step_into_targets" then
+            cmd.debug.step_into_targets()
+        elseif sub == "reverse_continue" then
+            cmd.debug.reverse_continue()
+        elseif sub == "jump_to_cursor" then
+            cmd.debug.jump_to_cursor()
+        elseif sub == "restart_frame" then
+            cmd.debug.restart_frame()
+        elseif sub == "exception_info" then
+            cmd.debug.exception_info()
         elseif sub == "pause" then
             cmd.debug.pause()
         elseif sub == "restart" then

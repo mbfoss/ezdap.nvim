@@ -73,10 +73,16 @@ local breakpoints = require("easydap.dap.breakpoints")
 ---@field disconnect    fun(self: easydap.dap.Session, cb: fun()?)
 ---@field continue      fun(self: easydap.dap.Session, thread_id: integer?)
 ---@field next          fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?)
----@field step_in       fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?)
+---@field step_in       fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?, target_id: integer?)
 ---@field step_out      fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?)
 ---@field pause         fun(self: easydap.dap.Session, thread_id: integer?)
 ---@field step_back     fun(self: easydap.dap.Session, thread_id: integer?, granularity: easydap.dap.proto.SteppingGranularity?)
+---@field reverse_continue   fun(self: easydap.dap.Session, thread_id: integer?)
+---@field step_in_targets    fun(self: easydap.dap.Session, frame_id: integer, cb: fun(targets: easydap.dap.proto.StepInTarget[]?, err: string?))
+---@field goto_targets       fun(self: easydap.dap.Session, source: easydap.dap.proto.Source, line: integer, cb: fun(targets: easydap.dap.proto.GotoTarget[]?, err: string?))
+---@field set_next_statement fun(self: easydap.dap.Session, target_id: integer, thread_id: integer?)
+---@field restart_frame      fun(self: easydap.dap.Session, frame_id: integer)
+---@field exception_info     fun(self: easydap.dap.Session, thread_id: integer?, cb: fun(body: easydap.dap.proto.ExceptionInfoResponseBody?, err: string?))
 ---@field restart       fun(self: easydap.dap.Session)
 ---@field evaluate      fun(self: easydap.dap.Session, expr: string, context: string, cb: fun(body: easydap.dap.proto.EvaluateResponseBody?, err: string?))
 ---@field disassemble   fun(self: easydap.dap.Session, ref: string, count: integer, offset: integer?, cb: fun(instructions: easydap.dap.proto.DisassembledInstruction[]?, err: string?))
@@ -892,12 +898,14 @@ end
 ---@param command     string
 ---@param thread_id   integer?
 ---@param granularity easydap.dap.proto.SteppingGranularity?  defaults to "line"
-local function _step_like(self, command, thread_id, granularity)
+---@param target_id   integer?  step-in target (stepIn only), from step_in_targets
+local function _step_like(self, command, thread_id, granularity, target_id)
     thread_id = thread_id or self._thread_id
     local args = { threadId = thread_id }
     if self:capable("supportsSteppingGranularity") then
         args.granularity = granularity or "line"
     end
+    if target_id then args.targetId = target_id end
     self:request(command, args, function(_, err)
         if err then
             self:report(("[dap] %s failed: %s"):format(command, err))
@@ -927,7 +935,10 @@ function Session:next(thread_id, granularity) _step_like(self, "next", thread_id
 
 ---@param thread_id integer?
 ---@param granularity easydap.dap.proto.SteppingGranularity?
-function Session:step_in(thread_id, granularity) _step_like(self, "stepIn", thread_id, granularity) end
+---@param target_id integer?  a StepInTarget id from step_in_targets
+function Session:step_in(thread_id, granularity, target_id)
+    _step_like(self, "stepIn", thread_id, granularity, target_id)
+end
 
 ---@param thread_id integer?
 ---@param granularity easydap.dap.proto.SteppingGranularity?
@@ -941,6 +952,95 @@ function Session:step_back(thread_id, granularity)
         return
     end
     _step_like(self, "stepBack", thread_id, granularity)
+end
+
+---Resume reverse execution until a breakpoint is hit (time-travel debugging).
+---Gated by the same capability as step_back.
+---@param thread_id integer?
+function Session:reverse_continue(thread_id)
+    if not self:capable("supportsStepBack") then
+        self:report("[dap] adapter does not support reverse continue")
+        return
+    end
+    thread_id = thread_id or self._thread_id
+    self:request("reverseContinue", { threadId = thread_id }, function(_, err)
+        if err then
+            self:report("[dap] reverse continue failed: " .. err)
+            return
+        end
+        self:_on_continued({ threadId = thread_id --[[@as integer]], allThreadsContinued = false })
+    end)
+end
+
+---Query the possible step-in targets for a stack frame, for use with
+---`step_in(..., target_id)` to pick which call on the line to step into.
+---@param frame_id integer
+---@param cb fun(targets: easydap.dap.proto.StepInTarget[]?, err: string?)
+function Session:step_in_targets(frame_id, cb)
+    if not self:capable("supportsStepInTargetsRequest") then
+        return cb(nil, "adapter does not support step-in targets")
+    end
+    self:request("stepInTargets", { frameId = frame_id }, function(body, err)
+        cb(body and body.targets, err)
+    end)
+end
+
+---Query the valid jump-to-cursor targets at a source line.
+---@param source easydap.dap.proto.Source
+---@param line   integer
+---@param cb     fun(targets: easydap.dap.proto.GotoTarget[]?, err: string?)
+function Session:goto_targets(source, line, cb)
+    if not self:capable("supportsGotoTargetsRequest") then
+        return cb(nil, "adapter does not support goto targets")
+    end
+    self:request("gotoTargets", { source = source, line = line }, function(body, err)
+        cb(body and body.targets, err)
+    end)
+end
+
+---Set the next statement to execute (jump-to-cursor). The code between the
+---current location and the target is skipped, not executed. The adapter sends
+---a stopped event once the jump completes.
+---@param target_id integer  a GotoTarget id from goto_targets
+---@param thread_id integer?
+function Session:set_next_statement(target_id, thread_id)
+    thread_id = thread_id or self._thread_id
+    self:request("goto", { threadId = thread_id, targetId = target_id }, function(_, err)
+        if err then
+            self:report("[dap] goto failed: " .. err)
+            return
+        end
+        self:_on_continued({ threadId = thread_id --[[@as integer]], allThreadsContinued = false })
+    end)
+end
+
+---Restart execution of a single stack frame. The adapter sends a stopped event
+---(reason "restart") once the frame has been re-entered.
+---@param frame_id integer
+function Session:restart_frame(frame_id)
+    if not self:capable("supportsRestartFrame") then
+        self:report("[dap] adapter does not support restart frame")
+        return
+    end
+    self:request("restartFrame", { frameId = frame_id }, function(_, err)
+        if err then
+            self:report("[dap] restart frame failed: " .. err)
+            return
+        end
+        self:_on_continued({ threadId = self._thread_id --[[@as integer]], allThreadsContinued = false })
+    end)
+end
+
+---Fetch detailed information about the exception that caused the current stop.
+---Only meaningful while stopped with reason "exception".
+---@param thread_id integer?
+---@param cb fun(body: easydap.dap.proto.ExceptionInfoResponseBody?, err: string?)
+function Session:exception_info(thread_id, cb)
+    if not self:capable("supportsExceptionInfoRequest") then
+        return cb(nil, "adapter does not support exception info")
+    end
+    thread_id = thread_id or self._thread_id
+    self:request("exceptionInfo", { threadId = thread_id }, cb)
 end
 
 ---@param thread_id integer?

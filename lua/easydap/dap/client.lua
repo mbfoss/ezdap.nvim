@@ -329,8 +329,9 @@ end
 
 ---@param id number
 ---@param granularity easydap.dap.proto.SteppingGranularity?
-function M.step_in(id, granularity)
-    local s = _sessions[id]; if s then s:step_in(nil, granularity) end
+---@param target_id integer?  a StepInTarget id from step_in_targets
+function M.step_in(id, granularity, target_id)
+    local s = _sessions[id]; if s then s:step_in(nil, granularity, target_id) end
 end
 
 ---@param id number
@@ -343,6 +344,47 @@ end
 ---@param granularity easydap.dap.proto.SteppingGranularity?
 function M.step_back(id, granularity)
     local s = _sessions[id]; if s then s:step_back(nil, granularity) end
+end
+
+---@param id number
+function M.reverse_continue(id)
+    local s = _sessions[id]; if s then s:reverse_continue() end
+end
+
+---@param id       number
+---@param frame_id integer
+---@param cb       fun(targets: easydap.dap.proto.StepInTarget[]?, err: string?)
+function M.step_in_targets(id, frame_id, cb)
+    local s = _sessions[id]
+    if s then s:step_in_targets(frame_id, cb) else cb(nil, "no session") end
+end
+
+---@param id     number
+---@param source easydap.dap.proto.Source
+---@param line   integer
+---@param cb     fun(targets: easydap.dap.proto.GotoTarget[]?, err: string?)
+function M.goto_targets(id, source, line, cb)
+    local s = _sessions[id]
+    if s then s:goto_targets(source, line, cb) else cb(nil, "no session") end
+end
+
+---@param id        number
+---@param target_id integer
+function M.set_next_statement(id, target_id)
+    local s = _sessions[id]; if s then s:set_next_statement(target_id) end
+end
+
+---@param id       number
+---@param frame_id integer
+function M.restart_frame(id, frame_id)
+    local s = _sessions[id]; if s then s:restart_frame(frame_id) end
+end
+
+---@param id number
+---@param cb fun(body: easydap.dap.proto.ExceptionInfoResponseBody?, err: string?)
+function M.exception_info(id, cb)
+    local s = _sessions[id]
+    if s then s:exception_info(nil, cb) else cb(nil, "no session") end
 end
 
 ---@param id number
