@@ -61,7 +61,7 @@ end
 ---@param fn    fun()
 ---@return fun()  stop  stops and closes the timer
 local function _start_timer(delay, fn)
-    return timer.start_timer(delay, true, fn)
+    return timer.defer(delay, fn)
 end
 
 ---@type { sessions: string, stack: string, variables: string, expressions: string, breakpoints: string }

@@ -67,7 +67,7 @@ end
 ---@param delay_ms integer
 local function _deferred_clear(delay_ms)
     _cancel_clear_timer()
-    _stop_clear_timer = timer.start_timer(delay_ms, true, function()
+    _stop_clear_timer = timer.defer(delay_ms, function()
         _stop_clear_timer = nil
         _remove_marks()
     end)
