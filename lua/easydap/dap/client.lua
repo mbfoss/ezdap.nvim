@@ -393,6 +393,14 @@ function M.pause(id)
     local s = _sessions[id]; if s then s:pause() end
 end
 
+---@param id         number
+---@param thread_ids integer[]
+---@param cb         fun(err: string?)?
+function M.terminate_threads(id, thread_ids, cb)
+    local s = _sessions[id]
+    if s then s:terminate_threads(thread_ids, cb) elseif cb then cb("no session") end
+end
+
 ---@param id number
 function M.restart(id)
     local s = _sessions[id]; if s then s:restart() end

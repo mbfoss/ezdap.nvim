@@ -722,6 +722,20 @@ function M.debug.thread()
     end)
 end
 
+---Prompt for a thread and terminate it (requires supportsTerminateThreadsRequest).
+function M.debug.terminate_thread()
+    _with_capability("supportsTerminateThreadsRequest", "terminate thread", function(sess, id)
+        local threads = sess.threads
+        if #threads == 0 then vim.notify("[dap] no threads available", vim.log.levels.WARN); return end
+        select(threads, {
+            prompt      = "Terminate thread",
+            format_item = function(t) return t.id .. ": " .. t.name .. "  [" .. t.status .. "]" end,
+        }, function(t)
+            if t then client.terminate_threads(id, { t.id }) end
+        end)
+    end)
+end
+
 function M.debug.frame()
     local sess = M.session()
     if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end

@@ -118,7 +118,7 @@ local function _register_user_commands()
         "jump_to_cursor", "restart_frame", "exception_info",
         "pause", "restart",
         "stop", "terminate", "terminate_all",
-        "session", "thread", "frame",
+        "session", "thread", "terminate_thread", "frame",
         "inspect", "disassemble",
     }
 
@@ -164,6 +164,8 @@ local function _register_user_commands()
             cmd.debug.session()
         elseif sub == "thread" then
             cmd.debug.thread()
+        elseif sub == "terminate_thread" then
+            cmd.debug.terminate_thread()
         elseif sub == "frame" then
             cmd.debug.frame()
         elseif sub == "breakpoint" then
