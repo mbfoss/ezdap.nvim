@@ -89,6 +89,7 @@ end
 ---@field private _instrs?   easydap.DisassemblyView.Row[]  current ordered instruction list (paging)
 ---@field private _pc_ref?   string   instructionReference marked as the PC for the current load
 ---@field private _paging?   boolean  in-flight paging guard
+---@field private _exhausted table<"up"|"down", boolean>  edges with no further instructions to fetch
 ---@field private _last_row? integer  previous cursor row, to detect single-line moves
 ---@field private _aug?      integer  sync autocmd group; created on open, deleted on close
 ---@field private _gen       integer  generation guard for stale session callbacks
@@ -109,6 +110,7 @@ function DisassemblyView.new()
         _ns_bp    = vim.api.nvim_create_namespace("easydap_disasm_bp"),
         _gen      = 0,
         _syncing  = false,
+        _exhausted = { up = false, down = false },
     }, DisassemblyView)
     self:_init()
     return self
@@ -305,9 +307,9 @@ function DisassemblyView:_load(focus)
         return
     end
 
-    vim.notify("disassemble")
     local count  = self:_page_size()
     local offset = -math.floor(count / 2)
+    vim.notify("disassemble")
     sess:disassemble(ref, count, offset, function(instrs, err)
         vim.schedule(function()
             if err or not instrs then
@@ -399,10 +401,12 @@ function DisassemblyView:_render(instrs, pc_ref, recenter)
     local lines, rows, by_src, pc_row = self:_build(instrs, pc_ref)
 
     self:_set_lines(lines)
-    self._rows   = rows
-    self._by_src = by_src
-    self._instrs = instrs
-    self._pc_ref = pc_ref
+    self._rows      = rows
+    self._by_src    = by_src
+    self._instrs    = instrs
+    self._pc_ref    = pc_ref
+    self._exhausted = { up = false, down = false }
+    self._paging    = false -- a fresh load supersedes any page still in flight
 
     self:_draw_pc(pc_row)
     self:_draw_bps()
@@ -580,6 +584,14 @@ function DisassemblyView:_maybe_page()
     if so < 0 then so = vim.go.scrolloff end
     local pad = math.max(_PAGE_PAD, so + 2)
 
+    -- Re-arm an edge once the cursor steps off it. `_exhausted` means "no more
+    -- instructions *from this position*", not "never again": a transient empty
+    -- reply (e.g. an adapter that clamped a negative instructionOffset) must not
+    -- kill paging for good. At a real boundary the cursor stays pinned in the pad
+    -- zone, so the flag survives and no request is sent.
+    if row > pad then self._exhausted.up = false end
+    if row < total - pad then self._exhausted.down = false end
+
     if row <= pad then
         self:_page("up")
     elseif row >= total - pad then
@@ -595,6 +607,7 @@ function DisassemblyView:_page(dir)
     local sess   = self._sess
     local instrs = self._instrs
     if self._paging or not sess or not instrs or #instrs == 0 then return end
+    if self._exhausted[dir] then return end -- adapter already reported no more instructions this way
     if not self:_is_open() then return end
 
     local edge      = dir == "down" and instrs[#instrs] or instrs[1]
@@ -613,14 +626,23 @@ function DisassemblyView:_page(dir)
     local page   = self:_page_size()
     local offset = dir == "down" and 1 or -page
 
-    vim.notify("disassemble")
     local gen = self._gen
+    vim.notify("disassemble")
     sess:disassemble(edge_addr, page, offset, function(new, err)
         if gen ~= self._gen then return end
         vim.schedule(function()
             if gen ~= self._gen then return end
             self._paging = false
-            if err or not new or #new == 0 or not self:_is_open() then return end
+            if not self:_is_open() then return end
+            -- Past the edge of disassemblable memory the adapter either returns
+            -- nothing or fails the whole request (e.g. crossing below a program's
+            -- text start: "Failed to disassemble memory at 0x..."). Either way
+            -- there is no more to fetch this way, so mark the edge exhausted and
+            -- stop probing it. _maybe_page re-arms it once the cursor steps off.
+            if err or not new or #new == 0 then
+                self._exhausted[dir] = true
+                return
+            end
             self:_apply_page(dir, new, page, anchor_addr)
         end)
     end)
@@ -658,7 +680,10 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
                 added               = added + 1
             end
         end
-        if added == 0 then return end
+        if added == 0 then
+            self._exhausted.down = true
+            return
+        end
         -- bluntly crop the front to the cap: the new top may start mid-symbol with
         -- no header line, but the winbar keeps showing the running function name.
         if #instrs > cap then
@@ -674,7 +699,10 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
                 seen[ins.address] = true
             end
         end
-        if #head == 0 then return end
+        if #head == 0 then
+            self._exhausted.up = true
+            return
+        end
         merged = head
         for _, ins in ipairs(instrs) do merged[#merged + 1] = ins end
         if #merged > cap then merged = vim.list_slice(merged, 1, cap) end
@@ -716,14 +744,19 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
     self._rows   = rows
     self._by_src = by_src
     self._instrs = merged
+    -- the window slid, so the trimmed-away edge is fetchable again
+    self._exhausted[dir == "down" and "up" or "down"] = false
 
     self:_draw_pc(pc_row)
     self:_draw_bps()
 
-    -- after the splice has redrawn, pull content into any blank below EOF
+    -- after the splice has redrawn, pull content into any blank below EOF and
+    -- re-baseline the single-line-move detector to the cursor's spliced position
+    -- (it shifted with its instruction), so the next j/k reads as a 1-line move.
     vim.schedule(function()
         if not self:_is_open() then return end
         ui_util.fill_viewport(self._win)
+        self._last_row = vim.api.nvim_win_get_cursor(self._win)[1]
         self:_update_winbar()
     end)
 end

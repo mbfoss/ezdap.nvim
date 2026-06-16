@@ -38,20 +38,12 @@ local M = {}
 
 -- ── Small shared helpers ──────────────────────────────────────────────────
 
----Error if task.command is nil — adapter requires an explicit program path.
----@param task    table
----@param adapter string
-local function _require_command(task, adapter)
-    if task.command == nil then
-        error(("adapter '%s' requires `command` to be set to the program path"):format(adapter), 2)
-    end
-end
-
 ---Split task.command (string or string[]) into the program path and any extra args.
 ---@param task table
----@return string  program
----@return string[] args
+---@return string?  program
+---@return string[]? args
 local function _split_command(task)
+    if not task.command then return end
     local parts = type(task.command) == "table"
         and task.command
         or str_util.split_shell_args(task.command)
@@ -127,7 +119,6 @@ M.debugpy = {
     teardown           = function(_, ctx) if ctx then ctx.handle.stop() end end,
 
     derive_launch_args = function(task)
-        _require_command(task, "debugpy")
         local program, extra_args = _split_command(task)
         local args = {
             type            = "python",
@@ -160,7 +151,6 @@ M["debugpy-module"] = {
     teardown           = function(_, ctx) if ctx then ctx.handle.stop() end end,
 
     derive_launch_args = function(task)
-        _require_command(task, "debugpy-module")
         local module_name, extra_args = _split_command(task)
         local args = {
             type        = "python",
@@ -209,7 +199,7 @@ M["debugpy-remote"] = {
 M.codelldb = {
     command            = "codelldb",
     derive_launch_args = function(task)
-        _require_command(task, "codelldb")
+
         local program, extra_args = _split_command(task)
         local args = {
             type        = "lldb",
@@ -236,7 +226,6 @@ M["lldb-dap"] = {
     command = "lldb-dap",
 
     derive_launch_args = function(task)
-        _require_command(task, "lldb-dap")
         local program, extra_args = _split_command(task)
         local args = {
             type    = "lldb-dap",
@@ -261,7 +250,6 @@ M["lldb-dap"] = {
 M.gdb = {
     command            = { "gdb", "--interpreter=dap" },
     derive_launch_args = function(task)
-        _require_command(task, "gdb")
         local program, extra_args = _split_command(task)
         local args = {
             request                         = "launch",
@@ -288,7 +276,6 @@ M.netcoredbg = {
     command = { "netcoredbg", "--interpreter=vscode" },
 
     derive_launch_args = function(task)
-        _require_command(task, "netcoredbg")
         local program, extra_args = _split_command(task)
         local args = {
             program     = program,
@@ -337,7 +324,6 @@ M["java-debug-server"] = {
 M.lldb = {
     command            = "lldb-dap",
     derive_launch_args = function(task)
-        _require_command(task, "lldb")
         local program, extra_args = _split_command(task)
         local args = {
             type          = "lldb",
@@ -452,7 +438,6 @@ M["js-debug"] = {
     end,
 
     derive_launch_args = function(task)
-        _require_command(task, "js-debug")
         local program, extra_args = _split_command(task)
         local args = {
             type              = "pwa-node",
@@ -480,7 +465,6 @@ M["js-debug"] = {
 M["bash-debug-adapter"] = {
     command            = "bash-debug-adapter",
     derive_launch_args = function(task)
-        _require_command(task, "bash-debug-adapter")
         local program, extra_args = _split_command(task)
         local data_dir            = vim.fn.stdpath("data")
         local bashdb_path         = vim.fs.joinpath(data_dir, "mason", "packages", "bash-debug-adapter", "bashdb")
@@ -528,7 +512,6 @@ M["local-lua-debugger"] = {
     },
 
     derive_launch_args = function(task)
-        _require_command(task, "local-lua-debugger")
         local file = _split_command(task)
         return {
             type    = "lua-local",

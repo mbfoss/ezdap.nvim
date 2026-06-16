@@ -56,6 +56,8 @@ end
 ---@param col number  -- 0-based
 ---@param text string
 local function _set_extmark(file, row, col, text)
+	text = vim.trim(text)
+	if text == "" then return end
 	_mark_id = _mark_id + 1
 	_group.set_file_extmark(_mark_id, file, row + 1, col, {
 		virt_text = {

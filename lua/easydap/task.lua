@@ -41,10 +41,10 @@ end
 ---@param on_done fun(ok: boolean)
 ---@return fun()
 M.start     = function(task, ctx, on_done)
-    _run_counter    = _run_counter + 1
+    _run_counter   = _run_counter + 1
     local run_key  = (task.name or "debug") .. "#" .. _run_counter
 
-    local manager   = require("easydap.manager")
+    local manager  = require("easydap.manager")
     local adapters = require("easydap.adapters")
 
     -- Resolve named adapter config and build request_args via one of two paths:
@@ -52,7 +52,7 @@ M.start     = function(task, ctx, on_done)
     --   2. task.request_args absent  → call config.derive_request_args(config, task, request)
     --      to derive args from the generic task fields (command, args, cwd, env, …)
     -- Fallback when neither is available: use the adapter's base launch/attach args.
-    local base      = adapters[task.adapter]
+    local base     = adapters[task.adapter]
     if not base then
         ctx.report("unknown DAP adapter: " .. tostring(task.adapter))
         on_done(false)
@@ -64,10 +64,7 @@ M.start     = function(task, ctx, on_done)
     config.derive_launch_args = nil
     config.derive_attach_args = nil
 
-    if task.request_args then
-        config.request_args         = vim.deepcopy(task.request_args)
-        config.request_args.request = request
-    elseif request == "launch" and base.derive_launch_args then
+    if request == "launch" and base.derive_launch_args then
         local ok, result = pcall(base.derive_launch_args, task)
         if not ok then
             ctx.report("failed to build launch args, " .. tostring(result))
@@ -83,9 +80,10 @@ M.start     = function(task, ctx, on_done)
             return function() end
         end
         config.request_args = result
-    else
-        config.request_args = {}
     end
+
+    -- override  with user provided args
+    config.request_args = vim.tbl_deep_extend("force", config.request_args or {}, task.request_args or {})
 
     -- Adapters with setup manage config.host/port themselves (e.g. debugpy picks a
     -- free local port during setup). Only propagate task fields for adapters without setup.
@@ -93,8 +91,6 @@ M.start     = function(task, ctx, on_done)
         if task.host ~= nil then config.host = task.host end
         if task.port ~= nil then config.port = task.port end
     end
-
-
 
     -- REPL buffer: interactive DAP expression evaluation.
     local repl = require("easydap.ui.ReplBuffer").new({
@@ -193,7 +189,7 @@ M.start     = function(task, ctx, on_done)
                     vim.bo[buf].bufhidden  = "hide"
                     vim.bo[buf].modifiable = false
                     vim.api.nvim_buf_set_name(buf,
-                        _unique_buf_name("easydap://" .. run_key .. "/dap-messages"))                
+                        _unique_buf_name("easydap://" .. run_key .. "/dap-messages"))
                     vim.api.nvim_buf_set_var(buf, "easytasks_autoscroll", true)
                     ctx.add_bufnr(buf, "DAP Messages", -3)
 
