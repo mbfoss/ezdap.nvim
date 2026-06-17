@@ -56,7 +56,11 @@ local function _get_regular_window()
     end
 
     vim.cmd('vsplit')
-    return vim.api.nvim_get_current_win()
+    local newwin = vim.api.nvim_get_current_win()
+    -- A split inherits window-local options from its parent, so splitting off a
+    -- winfixbuf panel yields a winfixbuf window too; clear it so a file can load.
+    vim.wo[newwin].winfixbuf = false
+    return newwin
 end
 
 
@@ -126,6 +130,13 @@ function M.smart_open_file(filepath, line, col, activate)
     if not filepath or filepath == "" then return -1, -1 end
     local full_path = vim.fn.fnamemodify(filepath, ':p')
 
+    -- Don't conjure an empty buffer for a path with neither a live buffer nor a
+    -- file on disk.
+    local existing_bufnr = vim.fn.bufnr(full_path)
+    if existing_bufnr == -1 and vim.fn.filereadable(full_path) == 0 then
+        return -1, -1
+    end
+
     local tabpage = vim.api.nvim_get_current_tabpage()
     for _, winid in ipairs(vim.api.nvim_tabpage_list_wins(tabpage)) do
         if _is_regular_win(winid) then
@@ -145,12 +156,14 @@ function M.smart_open_file(filepath, line, col, activate)
         vim.api.nvim_set_current_win(winid)
     end
 
-    local bufnr = vim.fn.bufnr(full_path)
+    local bufnr = existing_bufnr
     if bufnr ~= -1 then
         vim.fn.win_execute(winid, "buffer " .. bufnr)
         vim.bo[bufnr].buflisted = true
     else
-        vim.cmd.edit(vim.fn.fnameescape(filepath))
+        -- Run the edit in the resolved regular window, not the current one,
+        -- which may be a winfixbuf panel when activate == false.
+        vim.fn.win_execute(winid, "edit " .. vim.fn.fnameescape(filepath))
         bufnr = vim.api.nvim_win_get_buf(winid)
     end
 
