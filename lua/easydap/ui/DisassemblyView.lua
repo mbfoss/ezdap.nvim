@@ -557,7 +557,6 @@ function DisassemblyView:_open_source_at_cursor()
     local path = ins._path or (ins.location and _norm(ins.location.path))
     local line = ins._sline or ins.line
     if not path then
-        vim.notify("[dap] no source mapping for this instruction", vim.log.levels.WARN)
         return
     end
 
