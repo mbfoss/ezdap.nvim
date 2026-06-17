@@ -19,7 +19,6 @@ local _au_group_gen
 
 local _COUNT    = 80 -- fallback instruction count when the window doesn't exist yet
 local _ADDR_W   = 18 -- width of the address column
-local _PAGE_PAD = 6  -- trigger paging when the cursor is within this many rows of an edge
 
 -- ── Highlight groups ───────────────────────────────────────────────────────
 
@@ -90,7 +89,6 @@ end
 ---@field private _pc_ref?   string   instructionReference marked as the PC for the current load
 ---@field private _paging?   boolean  in-flight paging guard
 ---@field private _exhausted table<"up"|"down", boolean>  edges with no further instructions to fetch
----@field private _last_row? integer  previous cursor row, to detect single-line moves
 ---@field private _aug?      integer  sync autocmd group; created on open, deleted on close
 ---@field private _gen       integer  generation guard for stale session callbacks
 ---@field private _syncing   boolean  re-entrancy guard around programmatic moves
@@ -309,7 +307,6 @@ function DisassemblyView:_load(focus)
 
     local count  = self:_page_size()
     local offset = -math.floor(count / 2)
-    vim.notify("disassemble")
     sess:disassemble(ref, count, offset, function(instrs, err)
         vim.schedule(function()
             if err or not instrs then
@@ -340,7 +337,6 @@ function DisassemblyView:_repoint_pc(ref)
     self:_draw_pc(row)
     if self:_is_open() then
         pcall(vim.api.nvim_win_set_cursor, self._win, { row, 0 })
-        self._last_row = row
         self:_update_winbar()
     end
     return true
@@ -414,9 +410,6 @@ function DisassemblyView:_render(instrs, pc_ref, recenter)
     if recenter and pc_row and self:_is_open() then
         pcall(vim.api.nvim_win_set_cursor, self._win, { pc_row, 0 })
     end
-
-    -- reset the single-line-move baseline: a fresh render is a jump, not a step
-    self._last_row = self:_is_open() and vim.api.nvim_win_get_cursor(self._win)[1] or nil
 
     self:_update_winbar()
 end
@@ -535,6 +528,29 @@ function DisassemblyView:_hover()
     })
 end
 
+-- ── Source navigation ──────────────────────────────────────────────────────
+
+---Open the source line the instruction under the cursor maps to, reusing a
+---window already showing that file (or the nearest regular window otherwise)
+---and focusing it. No-op with a warning when the instruction carries no source
+---mapping.
+---@private
+function DisassemblyView:_open_source_at_cursor()
+    if not self:_is_open() then return end
+    local ins = self._rows[vim.api.nvim_win_get_cursor(self._win)[1]]
+    if not ins then return end
+
+    local path = ins._path or (ins.location and _norm(ins.location.path))
+    local line = ins._sline or ins.line
+    if not path then
+        vim.notify("[dap] no source mapping for this instruction", vim.log.levels.WARN)
+        return
+    end
+
+    local col = ins.column and (ins.column - 1) or nil
+    ui_util.smart_open_file(path, line, col, true)
+end
+
 -- ── Winbar (sticky function header) ────────────────────────────────────────
 
 ---The running symbol owning `lnum`: the nearest `symbol` at or above it. Lets the
@@ -562,39 +578,35 @@ end
 
 -- ── Paging ─────────────────────────────────────────────────────────────────
 
----Fetch more instructions when the cursor steps to within one line of an edge.
----Triggered from CursorMoved, but only for single-line moves (j/k, <Up>/<Down>):
----jumps like G/gg/<C-d>/search move by more than one line and are deliberately
----ignored, so they land where the user aimed and never drag the view around.
+---Fetch more instructions when the cursor reaches an edge of the loaded window.
+---Driven purely by cursor position (CursorMoved): landing on the first line
+---pages up, landing on the last line pages down. Reaching an edge via a jump
+---(G/gg/search) pages just the same — the splice keeps the cursor on its own
+---instruction, so the view never lurches.
+---
+---No infinite retry: a page that comes back empty marks the edge `_exhausted`,
+---and with the cursor then pinned there (a no-op j/k fires no CursorMoved)
+---nothing re-requests until the cursor steps off the edge and back.
 ---@private
 function DisassemblyView:_maybe_page()
     if not self:_is_open() then return end
-
-    local row      = vim.api.nvim_win_get_cursor(self._win)[1]
-    local prev     = self._last_row
-    self._last_row = row
-
     if self._paging or self._syncing then return end
     if not self._instrs or #self._instrs == 0 then return end
-    -- only page when the cursor moved by exactly one line
-    if not prev or math.abs(row - prev) ~= 1 then return end
 
+    local row   = vim.api.nvim_win_get_cursor(self._win)[1]
     local total = vim.api.nvim_buf_line_count(self._bufnr)
-    local so    = vim.wo[self._win].scrolloff
-    if so < 0 then so = vim.go.scrolloff end
-    local pad = math.max(_PAGE_PAD, so + 2)
 
     -- Re-arm an edge once the cursor steps off it. `_exhausted` means "no more
     -- instructions *from this position*", not "never again": a transient empty
     -- reply (e.g. an adapter that clamped a negative instructionOffset) must not
-    -- kill paging for good. At a real boundary the cursor stays pinned in the pad
-    -- zone, so the flag survives and no request is sent.
-    if row > pad then self._exhausted.up = false end
-    if row < total - pad then self._exhausted.down = false end
+    -- kill paging for good. While the cursor sits pinned on a real boundary the
+    -- flag survives, so no request is re-sent.
+    if row > 1 then self._exhausted.up = false end
+    if row < total then self._exhausted.down = false end
 
-    if row <= pad then
+    if row <= 1 then
         self:_page("up")
-    elseif row >= total - pad then
+    elseif row >= total then
         self:_page("down")
     end
 end
@@ -627,7 +639,6 @@ function DisassemblyView:_page(dir)
     local offset = dir == "down" and 1 or -page
 
     local gen = self._gen
-    vim.notify("disassemble")
     sess:disassemble(edge_addr, page, offset, function(new, err)
         if gen ~= self._gen then return end
         vim.schedule(function()
@@ -751,12 +762,10 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
     self:_draw_bps()
 
     -- after the splice has redrawn, pull content into any blank below EOF and
-    -- re-baseline the single-line-move detector to the cursor's spliced position
-    -- (it shifted with its instruction), so the next j/k reads as a 1-line move.
+    -- refresh the sticky header for the slid viewport.
     vim.schedule(function()
         if not self:_is_open() then return end
         ui_util.fill_viewport(self._win)
-        self._last_row = vim.api.nvim_win_get_cursor(self._win)[1]
         self:_update_winbar()
     end)
 end
@@ -810,31 +819,6 @@ end
 
 -- ── Keymaps ────────────────────────────────────────────────────────────────
 
----Vertical motion that pages when it would otherwise stall at an edge. Bound to
----j/k and the arrow keys: the pad heuristic in `_maybe_page` prefetches while
----scrolling, but a cursor pinned on the first/last line (reached via a jump like
----gg/G/search) fires no CursorMoved, so the move is a silent no-op. Here we catch
----that case and fetch the adjacent page instead; otherwise the keypress falls
----through to its normal motion (count preserved).
----@private
----@param dir "up"|"down"
----@param key string  literal motion to replay when not sitting on the edge
-function DisassemblyView:_edge_motion(dir, key)
-    if not self:_is_open() then return end
-
-    local row   = vim.api.nvim_win_get_cursor(self._win)[1]
-    local total = vim.api.nvim_buf_line_count(self._bufnr)
-
-    if dir == "up" and row <= 1 then
-        self:_page("up")
-    elseif dir == "down" and row >= total then
-        self:_page("down")
-    else
-        local n = vim.v.count1
-        vim.api.nvim_feedkeys((n > 1 and tostring(n) or "") .. key, "n", false)
-    end
-end
-
 ---@private
 ---@param bufnr integer
 function DisassemblyView:_setup_keymaps(bufnr)
@@ -842,13 +826,8 @@ function DisassemblyView:_setup_keymaps(bufnr)
         vim.keymap.set("n", lhs, rhs, { buffer = bufnr, desc = desc })
     end
 
-    map("q", function() self:close() end, "Close disassembly pane")
-    map("<CR>", function() self:_toggle_bp_at_cursor() end, "Toggle instruction breakpoint")
+    map("<CR>", function() self:_open_source_at_cursor() end, "Open source line")
     map("K", function() self:_hover() end, "Instruction reference")
-    map("j", function() self:_edge_motion("down", "j") end, "Down (page at last line)")
-    map("k", function() self:_edge_motion("up", "k") end, "Up (page at first line)")
-    map("<Down>", function() self:_edge_motion("down", "j") end, "Down (page at last line)")
-    map("<Up>", function() self:_edge_motion("up", "k") end, "Up (page at first line)")
 end
 
 -- ── Public API ─────────────────────────────────────────────────────────────
