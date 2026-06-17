@@ -25,12 +25,10 @@ local _ADDR_W   = 18 -- width of the address column
 local _PC_HL    = "EasydapDisasmPC"
 local _BLOCK_HL = "EasydapDisasmBlock"
 local _BP_HL    = "EasydapDisasmBp"
-local _SYM_HL   = "EasydapDisasmSym"
 
 vim.api.nvim_set_hl(0, _PC_HL, { link = "DiffChange", default = true })
 vim.api.nvim_set_hl(0, _BLOCK_HL, { link = "CursorLine", default = true })
 vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
-vim.api.nvim_set_hl(0, _SYM_HL, { link = "Function", default = true })
 
 
 -- ── Helpers ────────────────────────────────────────────────────────────────
@@ -54,11 +52,13 @@ local function _norm(path)
 end
 
 ---Drop sentinel rows the adapter pads a `disassemble` reply with when the
----requested range overruns disassemblable memory: address "-1" (or any negative
----value), an empty/absent address, or an empty instruction string. These poison
----paging — the edge address handed to the next fetch is garbage, and the splice
----counts lines that carry no real instruction — so they must be stripped before
----the list is indexed into `_instrs`/`_rows`.
+---requested range overruns disassemblable memory. Two conventions are stripped:
+---the spec-sanctioned `presentationHint == "invalid"`, and the ad-hoc junk some
+---adapters emit instead — address "-1" (or any negative value), an empty/absent
+---address, or an empty instruction string. These poison paging — the edge
+---address handed to the next fetch is garbage, and the splice counts lines that
+---carry no real instruction — so they must be stripped before the list is
+---indexed into `_instrs`/`_rows`.
 ---@param instrs easydap.dap.proto.DisassembledInstruction[]
 ---@return easydap.dap.proto.DisassembledInstruction[]
 local function _valid_instrs(instrs)
@@ -66,7 +66,8 @@ local function _valid_instrs(instrs)
     for _, ins in ipairs(instrs) do
         local addr = ins.address
         local n    = addr and tonumber(addr)
-        if addr and addr ~= "" and (n == nil or n >= 0)
+        if ins.presentationHint ~= "invalid"
+            and addr and addr ~= "" and (n == nil or n >= 0)
             and ins.instruction and ins.instruction ~= "" then
             out[#out + 1] = ins
         end
@@ -255,18 +256,9 @@ function DisassemblyView:_ensure_win()
             group    = self._aug,
             buffer   = self._bufnr,
             callback = function()
-                self:_update_winbar()
                 self:_maybe_page()
                 if self._syncing then return end
                 self._asm_sync()
-            end,
-        })
-
-        -- keep the sticky header current on pure scrolls (no cursor move)
-        vim.api.nvim_create_autocmd("WinScrolled", {
-            group    = self._aug,
-            callback = function(args)
-                if tonumber(args.match) == self._win then self:_update_winbar() end
             end,
         })
     end
@@ -286,7 +278,6 @@ function DisassemblyView:_ensure_win()
         vim.wo[win].relativenumber = false
         vim.wo[win].signcolumn     = "yes"
         vim.wo[win].winfixbuf      = true
-        vim.wo[win].winbar         = ""
         self._win                  = win
     end
 end
@@ -363,7 +354,6 @@ function DisassemblyView:_repoint_pc(ref)
     self:_draw_pc(row)
     if self:_is_open() then
         pcall(vim.api.nvim_win_set_cursor, self._win, { row, 0 })
-        self:_update_winbar()
     end
     return true
 end
@@ -384,8 +374,8 @@ function DisassemblyView:_build(instrs, pc_ref)
     local by_src  = {} ---@type table<string, table<integer, easydap.DisassemblyView.SrcRange>>
     local pc_row  = nil ---@type integer?
 
-    -- one buffer line per instruction (no symbol-header lines); the winbar shows
-    -- the running function name instead, so rows and lines stay 1:1.
+    -- one buffer line per instruction (no symbol-header lines), so rows and
+    -- lines stay 1:1 — the paging splice depends on that invariant.
     for _, ins in ipairs(instrs) do
         local addr = ins.address or ""
         lines[#lines + 1] = ("%-" .. _ADDR_W .. "s %s"):format(addr, ins.instruction or "")
@@ -436,8 +426,6 @@ function DisassemblyView:_render(instrs, pc_ref, recenter)
     if recenter and pc_row and self:_is_open() then
         pcall(vim.api.nvim_win_set_cursor, self._win, { pc_row, 0 })
     end
-
-    self:_update_winbar()
 end
 
 -- ── PC marker ──────────────────────────────────────────────────────────────
@@ -577,31 +565,6 @@ function DisassemblyView:_open_source_at_cursor()
     ui_util.smart_open_file(path, line, col, false)
 end
 
--- ── Winbar (sticky function header) ────────────────────────────────────────
-
----The running symbol owning `lnum`: the nearest `symbol` at or above it. Lets the
----winbar name the current function even after its header line has been cropped.
----@private
----@param lnum integer
----@return string?
-function DisassemblyView:_symbol_at(lnum)
-    for l = lnum, 1, -1 do
-        local ins = self._rows[l]
-        if ins and ins.symbol then return ins.symbol end
-    end
-end
-
----Set the winbar to the function the top of the viewport sits in — a sticky
----header that stays visible even when the in-buffer header has scrolled off or
----been cropped away.
----@private
-function DisassemblyView:_update_winbar()
-    if not self:_is_open() then return end
-    local top = vim.api.nvim_win_call(self._win, function() return vim.fn.line("w0") end)
-    local sym = self:_symbol_at(top)
-    vim.wo[self._win].winbar = sym and ("%%#%s# %s "):format(_SYM_HL, (sym:gsub("%%", "%%%%"))) or ""
-end
-
 -- ── Paging ─────────────────────────────────────────────────────────────────
 
 ---Fetch more instructions when the cursor reaches an edge of the loaded window.
@@ -728,8 +691,8 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
             self._exhausted.down = true
             return
         end
-        -- bluntly crop the front to the cap: the new top may start mid-symbol with
-        -- no header line, but the winbar keeps showing the running function name.
+        -- bluntly crop the front to the cap; the new top may start mid-symbol,
+        -- which is fine since instructions render one-per-line with no headers.
         if #instrs > cap then
             merged = vim.list_slice(instrs, #instrs - cap + 1, #instrs)
         else
@@ -794,12 +757,10 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
     self:_draw_pc(pc_row)
     self:_draw_bps()
 
-    -- after the splice has redrawn, pull content into any blank below EOF and
-    -- refresh the sticky header for the slid viewport.
+    -- after the splice has redrawn, pull content into any blank below EOF.
     vim.schedule(function()
         if not self:_is_open() then return end
         ui_util.fill_viewport(self._win)
-        self:_update_winbar()
     end)
 end
 

@@ -17,6 +17,7 @@ assert(false, "should not require() a meta file")
 ---@alias easydap.dap.proto.ScopePresentationHint "arguments"|"locals"|"registers"|"returnValue"|string
 ---@alias easydap.dap.proto.VariablePresentationHintKind "property"|"method"|"class"|"data"|"event"|"baseClass"|"innerClass"|"interface"|"mostDerivedClass"|"virtual"|"dataBreakpoint"|string
 ---@alias easydap.dap.proto.VariablePresentationHintVisibility "public"|"private"|"protected"|"internal"|"final"
+---@alias easydap.dap.proto.DisassembledInstructionPresentationHint "normal"|"invalid"
 ---@alias easydap.dap.proto.EvaluateContext "watch"|"repl"|"hover"|"clipboard"|"variables"|string
 ---@alias easydap.dap.proto.CompletionItemType "method"|"function"|"constructor"|"field"|"variable"|"class"|"interface"|"module"|"property"|"unit"|"value"|"enum"|"keyword"|"snippet"|"text"|"color"|"file"|"reference"|"customcolor"
 ---@alias easydap.dap.proto.InvalidatedAreas "all"|"stacks"|"threads"|"variables"|string
@@ -244,6 +245,7 @@ assert(false, "should not require() a meta file")
 ---@field column?           integer
 ---@field endLine?          integer
 ---@field endColumn?        integer
+---@field presentationHint? easydap.dap.proto.DisassembledInstructionPresentationHint
 
 -- ── Capabilities ───────────────────────────────────────────────────────────
 
