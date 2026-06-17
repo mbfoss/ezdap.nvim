@@ -293,7 +293,7 @@ function DisassemblyView:_load(focus)
     end
     local frame = sess:current_stack_frame()
     local ref   = frame and frame.instructionPointerReference
-    if not ref then
+    if not ref or type(ref) ~= "string" or ref == "" then
         if focus then vim.notify("[dap] no instruction pointer for current frame", vim.log.levels.WARN) end
         return
     end
