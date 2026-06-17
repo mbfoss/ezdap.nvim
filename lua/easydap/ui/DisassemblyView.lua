@@ -548,7 +548,7 @@ function DisassemblyView:_open_source_at_cursor()
     end
 
     local col = ins.column and (ins.column - 1) or nil
-    ui_util.smart_open_file(path, line, col, true)
+    ui_util.smart_open_file(path, line, col, false)
 end
 
 -- ── Winbar (sticky function header) ────────────────────────────────────────
