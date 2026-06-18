@@ -102,7 +102,7 @@ end
 ---@param chunks easydap.DebugView.Chunk[]
 local function _fmt_stackframe(data, chunks)
     local hl = data.greyout and "NonText" or (data.is_current and "Special" or nil)
-    chunks[#chunks + 1] = { data.name, hl }
+    chunks[#chunks + 1] = { str_util.crop_for_ui(data.name, config.debug_value_max_len, true), hl }
 end
 
 ---@param data easydap.DebugView.ItemData
@@ -117,7 +117,7 @@ local function _fmt_variable(data, chunks)
     local base_hl = data.greyout and "NonText" or nil
     chunks[#chunks + 1] = { data.name, base_hl or "@variable" }
     chunks[#chunks + 1] = { ": ", base_hl or "NonText" }
-    local val = str_util.crop_string_for_ui(tostring(data.value or ""):gsub("\n", "⏎"), config.debug_value_max_len)
+    local val = str_util.crop_for_ui(tostring(data.value or ""):gsub("\n", "⏎"), config.debug_value_max_len)
     chunks[#chunks + 1] = { val, base_hl or "@string" }
 end
 
@@ -126,7 +126,7 @@ end
 local function _fmt_expression(data, chunks)
     chunks[#chunks + 1] = { data.name, "@function" }
     chunks[#chunks + 1] = { " = ", "NonText" }
-    local val = str_util.crop_string_for_ui(tostring(data.value or ""):gsub("\n", "⏎"), config.debug_value_max_len)
+    local val = str_util.crop_for_ui(tostring(data.value or ""):gsub("\n", "⏎"), config.debug_value_max_len)
     chunks[#chunks + 1] = { val, (data.is_na or data.greyout) and "NonText" or "@string" }
 end
 
@@ -1217,12 +1217,13 @@ function DebugView:_setup_keymaps(bufnr)
         elseif d.kind == "breakpoint" and d.bp_kind == "source" and d.bp_source and d.bp_line then
             inputwin.open({ prompt = "Condition (empty to clear): ", default = d.condition or "" }, function(cond)
                 if cond == nil then return end
-                inputwin.open({ prompt = "Hit condition (empty to clear): ", default = d.hit_condition or "" }, function(hit)
-                    if hit == nil then return end
-                    breakpoints.patch(d.bp_source, d.bp_line, { condition = cond, hit_condition = hit })
-                    local sess = manager.session()
-                    if sess then sess:sync_breakpoints(d.bp_source) end
-                end)
+                inputwin.open({ prompt = "Hit condition (empty to clear): ", default = d.hit_condition or "" },
+                    function(hit)
+                        if hit == nil then return end
+                        breakpoints.patch(d.bp_source, d.bp_line, { condition = cond, hit_condition = hit })
+                        local sess = manager.session()
+                        if sess then sess:sync_breakpoints(d.bp_source) end
+                    end)
             end)
         elseif d.kind == "breakpoint" and d.bp_kind == "exception_type" and d.bp_ex_name then
             local _modes = { "always", "unhandled", "userUnhandled", "never" }

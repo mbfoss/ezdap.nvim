@@ -163,7 +163,7 @@ local function _render_variables(frame, variables)
 			end
 		end
 		if best then
-			local text = str_util.crop_string_for_ui(tostring(dbg[name]), _max_size)
+			local text = str_util.crop_for_ui(tostring(dbg[name]), _max_size)
 			_set_extmark(path, best.sr, best.ec, text)
 		end
 	end
