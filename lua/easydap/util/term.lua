@@ -44,9 +44,10 @@ end
 --- termopen handles all output rendering including ANSI colours.
 ---@param cmd   string|string[]
 ---@param opts  easydap.SpawnOpts
----@return number?,string?
+---@return number? job_id,number? pid, string? error
 local function _start_job(cmd, opts)
     local job_id
+    local exited
     local start_ok, job_id_or_err = pcall(function()
         return vim.fn.jobstart(cmd, {
             term      = true,
@@ -56,6 +57,7 @@ local function _start_job(cmd, opts)
             on_stderr = opts.on_stderr and (opts.line_buffered and _wrap_line_buffered(opts.on_stderr) or opts.on_stderr),
             on_exit   = function(_, code)
                 job_id = -1
+                exited = true
                 vim.schedule(function()
                     if opts.on_exit then opts.on_exit(code) end
                 end)
@@ -64,19 +66,23 @@ local function _start_job(cmd, opts)
     end)
 
     if not start_ok then
-        return nil, tostring(job_id_or_err)
+        return nil, nil, tostring(job_id_or_err)
     end
 
     job_id = job_id_or_err
     if job_id < 0 then
         local program = type(cmd) == "table" and tostring(cmd[0]) or tostring(cmd)
-        return nil, (start_ok and "Invalid command:" .. program)
+        return nil, nil, (start_ok and "Invalid command:" .. program)
     end
 
     if job_id == 0 then
-        return nil, (start_ok and "Invalid arguments")
+        return nil, nil, (start_ok and "Invalid arguments")
     end
-    return job_id
+    local pid = 0
+    if not exited then
+        pid = vim.fn.jobpid(job_id)
+    end
+    return job_id, pid
 end
 
 --- Spawn a command in a terminal buffer.
@@ -109,7 +115,7 @@ function M.spawn(cmd, opts, bufnr)
     local saved_win = vim.api.nvim_get_current_win()
     vim.api.nvim_set_current_win(spawn_win)
 
-    local job_id, job_err = _start_job(cmd, opts)
+    local job_id, job_pid, job_err = _start_job(cmd, opts)
 
     vim.api.nvim_set_current_win(saved_win)
     vim.api.nvim_win_close(spawn_win, true)
@@ -121,8 +127,6 @@ function M.spawn(cmd, opts, bufnr)
         end
         return nil, job_err
     end
-
-    local pid_ok, pid_or_err = pcall(vim.fn.jobpid, job_id)
 
     if own_buf then
         vim.bo[bufnr].buflisted = true
@@ -140,7 +144,7 @@ function M.spawn(cmd, opts, bufnr)
 
     return { ---@type easydap.SpawnHandle
         bufnr = bufnr,
-        pid   = pid_ok and pid_or_err or 0,
+        pid   = job_pid or 0,
         stop  = function()
             vim.fn.jobstop(job_id)
         end,
