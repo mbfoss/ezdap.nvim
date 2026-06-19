@@ -122,6 +122,8 @@ function M.spawn(cmd, opts, bufnr)
         return nil, job_err
     end
 
+    local pid_ok, pid_or_err = pcall(vim.fn.jobpid, job_id)
+
     if own_buf then
         vim.bo[bufnr].buflisted = true
     end
@@ -138,7 +140,7 @@ function M.spawn(cmd, opts, bufnr)
 
     return { ---@type easydap.SpawnHandle
         bufnr = bufnr,
-        pid   = vim.fn.jobpid(job_id),
+        pid   = pid_ok and pid_or_err or 0,
         stop  = function()
             vim.fn.jobstop(job_id)
         end,
