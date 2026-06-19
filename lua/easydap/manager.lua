@@ -209,6 +209,8 @@ M.breakpoint = {}
 ---Find an existing source breakpoint in `file` whose currently displayed line
 ---(the adapter-resolved line if the session moved it, else the stored line) is
 ---`row`. Returns its stored line, which is the registry key to operate on.
+---A breakpoint the adapter relocated elsewhere has no sign at its stored line
+---anymore, so it does not match there — toggling acts on what is actually shown.
 ---@param file string
 ---@param row  integer
 ---@return integer?
@@ -219,7 +221,22 @@ local function _existing_bp_line(file, row)
         if bp.column == nil then
             local st    = M.bp_status(bp.internal_id)
             local shown = (st and st.line) or bp.line
-            if shown == row or bp.line == row then return bp.line end
+            if shown == row then return bp.line end
+        end
+    end
+end
+
+---Find a breakpoint stored at `row` that the adapter has relocated elsewhere.
+---Returns the line it is now shown at, or nil.
+---@param file string
+---@param row  integer
+---@return integer?
+local function _moved_bp_target(file, row)
+    local bps = require("easydap.dap.breakpoints")
+    for _, bp in ipairs(bps.for_source(file)) do
+        if bp.column == nil and bp.line == row then
+            local st = M.bp_status(bp.internal_id)
+            if st and st.line and st.line ~= bp.line then return st.line end
         end
     end
 end
@@ -234,6 +251,15 @@ function M.breakpoint.toggle()
     if existing then
         bps.remove(file, existing)
     else
+        -- This line is the stored origin of a breakpoint the adapter relocated
+        -- elsewhere; adding here would just be relocated to the same spot, so
+        -- jump to where it is actually shown instead of toggling.
+        local moved_to = _moved_bp_target(file, row)
+        if moved_to then
+            local col = vim.api.nvim_win_get_cursor(0)[2]
+            vim.api.nvim_win_set_cursor(0, { moved_to, col })
+            return
+        end
         bps.add(file, row)
     end
     _sync_bp(file)
