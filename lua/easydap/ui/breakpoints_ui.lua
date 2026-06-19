@@ -2,8 +2,8 @@
 ---Subscribes to breakpoints.on_change and keeps the marks in sync.
 ---
 ---Line breakpoints are gutter signs. Column breakpoints render an inline glyph
----right before their column instead. Both groups drive the extmarks module
----directly (the signs module only ever places marks in the gutter at column 0).
+---right before their column instead. Both drive the extmarks module directly
+---(the signs module only ever places marks in the gutter at column 0).
 
 local extmarks    = require("easydap.ui.extmarks")
 local breakpoints = require("easydap.dap.breakpoints")
@@ -14,18 +14,10 @@ local M           = {}
 
 ---@type easydap.ui.extmarks.GroupFunctions?
 local _group
--- Origin markers live in their own group so they can reuse bp.internal_id as the
--- extmark id (extmark ids must be positive, and would collide within one group).
----@type easydap.ui.extmarks.GroupFunctions?
-local _moved_group
 local _init_done
 
 local _BP_HL      = "EasydapBreakpoint"
 vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
-
--- Dimmed marker left at the original line when the adapter moves a breakpoint.
-local _MOVED_HL = "EasydapBreakpointMoved"
-vim.api.nvim_set_hl(0, _MOVED_HL, { link = "NonText", default = true })
 
 ---Glyph per sign name, resolved locally now that `_group` is a raw extmarks
 ---group with no `define_sign`. Populated in `init` from `config.signs`.
@@ -52,9 +44,8 @@ local function _sign_name(bp, st)
 end
 
 local function _refresh()
-    if not _group or not _moved_group then return end
+    if not _group then return end
     _group.remove_extmarks()
-    _moved_group.remove_extmarks()
     for _, bp in ipairs(breakpoints.all()) do
         if bp.source ~= "" then
             assert(bp.internal_id > 0, "breakpoint internal_id must be positive")
@@ -80,13 +71,6 @@ local function _refresh()
                 opts.sign_hl_group = _BP_HL
             end
             _group.set_file_extmark(bp.internal_id, bp.source, lnum, col, opts, { name = name })
-            -- When the adapter moved the breakpoint, leave a dimmed copy of the
-            -- same glyph in the gutter at its origin. Column breakpoints are
-            -- inline-only, so they get no gutter origin marker.
-            if not bp.column and st and st.line and st.line ~= bp.line then
-                _moved_group.set_file_extmark(bp.internal_id, bp.source, bp.line, 0,
-                    { sign_text = glyph, sign_hl_group = _MOVED_HL }, { name = name })
-            end
         end
     end
 end
@@ -107,7 +91,6 @@ function M.init()
         { "disabled_logpoint",        s.disabled_logpoint },
     }
     _group       = extmarks.define_group("breakpoints", { priority = 10 })
-    _moved_group = extmarks.define_group("breakpoints_moved", { priority = 10 })
     for _, d in ipairs(defs) do
         _glyphs[d[1]] = d[2]
     end
