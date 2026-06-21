@@ -96,33 +96,48 @@ require("easydap").setup({
 
 ## Usage
 
-A debug session is started by handing easydap a *task*:
+easydap does not run tasks by itself. It is a debug engine meant to be driven
+either by a task runner or directly from your own plugin. Both start a session
+by handing easydap a *task*.
+
+### From a task runner
+
+A task runner calls the task entry point, passing a run context and a completion
+callback:
 
 ```lua
-require("easydap").run({
-  adapter = "codelldb",
-  request = "launch",
-  command = { "./a.out", "--verbose" },
-  cwd     = vim.fn.getcwd(),
-})
+---@param task    easydap.Task      the task to run (fields below)
+---@param ctx     easydap.RunCtx    run context: { tasks, add_bufnr, report }
+---@param on_done fun(ok: boolean)  called when the session ends
+---@return fun()                    handle that stops the run
+require("easydap.task").start(task, ctx, on_done)
 ```
 
-`run` is the single entry point for starting a session. It resolves the adapter,
-derives the DAP launch/attach arguments from the task fields, starts the
-session, and opens the debug view. Control the running session with the
-[`:Debug` commands](#commands). (`setup` must have been called first.)
+easydap resolves the adapter, derives the DAP launch/attach arguments from the
+task fields, starts the session, and opens the debug view. It registers the
+session's REPL, program output, and terminal buffers through `ctx.add_bufnr` so
+the runner can surface them in its own UI, sends progress to `ctx.report`, and
+calls `on_done(ok)` when the run ends.
+
+[easytasks.nvim](https://github.com/mbfoss/easytasks.nvim) is the reference
+runner and registers easydap as its default debug backend, so installing both
+and calling `setup` is all the wiring needed:
 
 ```lua
----@param task     table              the debug task (fields below)
----@param ctx?     easydap.RunCtx     run context from a task runner (optional)
----@param on_done? fun(ok: boolean)   called when the session ends (optional)
----@return fun()                      handle that stops the run
-require("easydap").run(task, ctx, on_done)
+require("easytasks").setup()   -- debug_backend defaults to "easydap"
+require("easydap").setup()
 ```
 
-`ctx` and `on_done` are optional. A task runner passes them to integrate the
-session into its UI (see [With a task runner](#with-a-task-runner)); standalone,
-omit them.
+A `debug` task is then defined in your task file:
+
+```toml
+[tasks.debug-app]
+type    = "debug"
+adapter = "codelldb"
+request = "launch"
+command = ["./a.out", "--verbose"]
+cwd     = "${workspaceFolder}"
+```
 
 ### Task fields
 
@@ -147,9 +162,9 @@ are convenience fields. You do not normally write `request_args` by hand: each
 adapter maps these generic fields into the DAP `launch`/`attach` body for you
 (through its `derive_launch_args` / `derive_attach_args`), so the same task
 definition works across adapters even though they name their arguments
-differently. In the task above, the `program` and its arguments the adapter
-expects are derived from `command`. The mapping is per adapter — an adapter only
-translates the fields that make sense for it.
+differently. In the `debug-app` task above, the `program` and its arguments the
+adapter expects are derived from `command`. The mapping is per adapter — an
+adapter only translates the fields that make sense for it.
 
 Set `request_args` only when you need an adapter-specific field that the
 convenience fields do not cover. It is deep-merged over the derived body and
@@ -159,39 +174,27 @@ the rest.
 Starter task templates for each built-in adapter are available in
 `require("easydap.templates")`.
 
-### With a task runner
+### From your own plugin
 
-`run` is enough on its own, but a task runner adds task definitions stored in
-files and surfaces the session's REPL, program output, and terminal buffers in
-its UI. A runner calls `run(task, ctx, on_done)`, where `ctx` (an
-`easydap.RunCtx`) provides `add_bufnr` and `report`, and `on_done` fires when the
-session ends.
-
-[easytasks.nvim](https://github.com/mbfoss/easytasks.nvim) is the reference
-runner and registers easydap as its default debug backend, so installing both
-and calling `setup` is all the wiring needed:
+Without a task runner, you supply the run context yourself. `add_bufnr` and
+`report` may be no-ops; `on_done` is called when the session ends:
 
 ```lua
-require("easytasks").setup()   -- debug_backend defaults to "easydap"
-require("easydap").setup()
+require("easydap.task").start({
+  adapter = "codelldb",
+  request = "launch",
+  command = { "./a.out", "--verbose" },
+  cwd     = vim.fn.getcwd(),
+}, {
+  tasks     = {},
+  add_bufnr = function(bufnr, label, priority) end,  -- REPL / output / terminal buffers
+  report    = function(message) end,                 -- progress messages
+}, function(ok) end)
 ```
 
-The same task is then defined in your task file instead of in Lua:
-
-```toml
-[tasks.debug-app]
-type    = "debug"
-adapter = "codelldb"
-request = "launch"
-command = ["./a.out", "--verbose"]
-cwd     = "${workspaceFolder}"
-```
-
-### Direct API
-
-For full control — for example from your own plugin — start a session from a
-config table with `manager.start`. `request_args` is sent verbatim as the DAP
-`launch`/`attach` body:
+For full control over the raw DAP config — skipping the task-field derivation
+entirely — start a session with `manager.start`. `request_args` is sent verbatim
+as the DAP `launch`/`attach` body:
 
 ```lua
 local manager  = require("easydap.manager")
@@ -340,12 +343,14 @@ restored when entering one.
 `require("easydap")`:
 
 - `setup(opts)` — configure and register commands.
-- `run(task, ctx?, on_done?)` — start a session from a task. `ctx`/`on_done` are optional (used by task runners).
 - `open_debug_view()` / `debug_view()` — the debug panel.
 - `open_disassembly_view()` / `disassembly_view()` — the disassembly pane.
+
+`require("easydap.task")` is the task entry point: `start(task, ctx, on_done)`
+resolves the adapter, derives the DAP request, and runs the session. Call it
+from a task runner or your own plugin.
 
 `require("easydap.manager")` is the single dependency surface for commands and
 UI. It owns the active session and exposes `start`, `session`, `sessions`,
 `select_session`, the `debug.*`, `breakpoint.*`, and `panel.*` command tables,
 and the session signals.
-</invoke>

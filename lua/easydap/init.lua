@@ -246,26 +246,6 @@ function M.open_disassembly_view()
     M.disassembly_view():open()
 end
 
----Run a debug task. This is the public entry point for starting a session.
----
----`ctx` and `on_done` are optional. A task runner passes them to wire the
----session's REPL/output/terminal buffers and a completion callback into its own
----UI; omit them to run the task standalone (the debug view still opens by
----itself). Any missing `ctx` field falls back to a no-op.
----@param task     table              the debug task (adapter, request, command, …)
----@param ctx?     easydap.RunCtx     run context from a task runner
----@param on_done? fun(ok: boolean)   called when the session ends (ok=false on failure)
----@return fun()                      handle that cancels/stops the run
-function M.run(task, ctx, on_done)
-    ctx = ctx or {}
-    local run_ctx = {
-        tasks     = ctx.tasks or {},
-        add_bufnr = ctx.add_bufnr or function() end,
-        report    = ctx.report or function() end,
-    }
-    return require("easydap.task").start(task, run_ctx, on_done or function() end)
-end
-
 ---@param opts? easydap.Config
 function M.setup(opts)
     local config = require("easydap.config")
