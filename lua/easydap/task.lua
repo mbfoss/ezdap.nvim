@@ -2,18 +2,18 @@
 ---@field label string  shown in vim.ui.select
 ---@field task  table   the template data to encode and insert
 
----@class easydap.RunCtx
----@field tasks      table<string,table>
+---@class easydap.TaskCallback
 ---@field add_bufnr  fun(bufnr: integer, label?: string, priority?: integer)
 ---@field report     fun(message: string)
-
+---@field on_done    fun(ok: boolean)
+---@
 ---@class easydap.BufEntry
 ---@field bufnr    integer
 ---@field label    string
 ---@field priority integer  higher = shown preferentially when added (default 0)
 
 ---@class easydap.TaskTypeDef
----@field start     fun(task: table, ctx: easydap.RunCtx, on_done: fun(ok: boolean)): fun()
+---@field start     fun(task: table, ctx: easydap.TaskCallback): fun()
 ---@field dispose   (fun(bufnrs: easydap.BufEntry[]))?  optional cleanup called when the run is disposed
 ---@field schema    table?
 ---@field templates (easydap.TaskTemplate[]|(fun(): easydap.TaskTemplate[]))?
@@ -37,24 +37,28 @@ local function _unique_buf_name(base)
 end
 
 ---@param task    table
----@param ctx     easydap.RunCtx
----@param on_done fun(ok: boolean)
+---@param callbacks easydap.TaskCallback
 ---@return fun()
-M.start     = function(task, ctx, on_done)
-    _run_counter   = _run_counter + 1
-    local run_key  = (task.name or "debug") .. "#" .. _run_counter
+M.start     = function(task, callbacks)
+    local add_bufnr = callbacks.add_bufnr or function() end
+    local report    = callbacks.report or function() end
+    local on_done   = callbacks.on_done or function() end
 
-    local manager  = require("easydap.manager")
-    local adapters = require("easydap.adapters")
+
+    _run_counter    = _run_counter + 1
+    local run_key   = (task.name or "debug") .. "#" .. _run_counter
+
+    local manager   = require("easydap.manager")
+    local adapters  = require("easydap.adapters")
 
     -- Resolve named adapter config and build request_args via one of two paths:
     --   1. task.request_args is set  → use verbatim as the DAP launch/attach arguments
     --   2. task.request_args absent  → call config.derive_request_args(config, task, request)
     --      to derive args from the generic task fields (command, args, cwd, env, …)
     -- Fallback when neither is available: use the adapter's base launch/attach args.
-    local base     = adapters[task.adapter]
+    local base      = adapters[task.adapter]
     if not base then
-        ctx.report("unknown DAP adapter: " .. tostring(task.adapter))
+        report("unknown DAP adapter: " .. tostring(task.adapter))
         on_done(false)
         return function() end
     end
@@ -67,7 +71,7 @@ M.start     = function(task, ctx, on_done)
     if request == "launch" and base.derive_launch_args then
         local ok, result = pcall(base.derive_launch_args, task)
         if not ok then
-            ctx.report("failed to build launch args, " .. tostring(result))
+            report("failed to build launch args, " .. tostring(result))
             on_done(false)
             return function() end
         end
@@ -75,7 +79,7 @@ M.start     = function(task, ctx, on_done)
     elseif request == "attach" and base.derive_attach_args then
         local ok, result = pcall(base.derive_attach_args, task)
         if not ok then
-            ctx.report("failed to build attach args, " .. tostring(result))
+            report("failed to build attach args, " .. tostring(result))
             on_done(false)
             return function() end
         end
@@ -104,7 +108,7 @@ M.start     = function(task, ctx, on_done)
             manager.complete(text, col, cb)
         end,
     })
-    ctx.add_bufnr(repl:bufnr(), "REPL", -1)
+    add_bufnr(repl:bufnr(), "REPL", -1)
 
     -- Output buffer: created on first non-console output event.
     local out_buf = nil ---@type integer?
@@ -124,7 +128,7 @@ M.start     = function(task, ctx, on_done)
                 _unique_buf_name("easydap://" .. run_key .. "/output"))
 
             vim.api.nvim_buf_set_var(out_buf, "easytasks_autoscroll", true)
-            ctx.add_bufnr(out_buf, "Output")
+            add_bufnr(out_buf, "Output")
         end
         if not vim.api.nvim_buf_is_valid(out_buf) then return end
         vim.bo[out_buf].modifiable = true
@@ -137,7 +141,7 @@ M.start     = function(task, ctx, on_done)
     local unsub_progress ---@type fun()
 
     ---@type easydap.AdapterSetupCtx
-    local _setup_ctx    = { add_bufnr = ctx.add_bufnr, report = ctx.report }
+    local _setup_ctx    = { add_bufnr = add_bufnr, report = report }
 
     local function _run_setup(cb)
         if not config.setup then return cb(nil) end
@@ -177,7 +181,7 @@ M.start     = function(task, ctx, on_done)
                 -- The terminal buffer already has a term:// name; just make it listed.
                 sess:on("run_in_terminal", function(bufnr)
                     vim.bo[bufnr].buflisted = true
-                    ctx.add_bufnr(bufnr, "Terminal", 10)
+                    add_bufnr(bufnr, "Terminal", 10)
                 end)
 
                 local unsub
@@ -191,7 +195,7 @@ M.start     = function(task, ctx, on_done)
                     vim.api.nvim_buf_set_name(buf,
                         _unique_buf_name("easydap://" .. run_key .. "/dap-messages"))
                     vim.api.nvim_buf_set_var(buf, "easytasks_autoscroll", true)
-                    ctx.add_bufnr(buf, "DAP Messages", -3)
+                    add_bufnr(buf, "DAP Messages", -3)
 
                     unsub = manager.on_raw_message:subscribe(function(sid, direction, msg)
                         if sid ~= id then return end
@@ -232,7 +236,7 @@ M.start     = function(task, ctx, on_done)
                 end
             end,
             on_progress = function(message)
-                ctx.report(message)
+                report(message)
             end,
         })
     end)
