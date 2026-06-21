@@ -564,7 +564,11 @@ end
 
 function M.breakpoint.list()
     local bps   = require("easydap.dap.breakpoints")
-    local items = vim.tbl_map(function(bp)
+    local cur_path = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p")
+    local cur_line = vim.api.nvim_win_get_cursor(0)[1]
+    local initial ---@type integer?
+    local items   = {}
+    for i, bp in ipairs(bps.all()) do
         ---@cast bp easydap.dap.SourceBreakpoint
         local icon = bp.disabled and "○"
             or bp.log_message and "◆"
@@ -575,13 +579,17 @@ function M.breakpoint.list()
         if bp.condition     then label = label .. "  [" .. bp.condition .. "]" end
         if bp.hit_condition then label = label .. "  [hits:" .. bp.hit_condition .. "]" end
         if bp.log_message   then label = label .. "  [log: " .. bp.log_message .. "]" end
-        return { label = label, data = { filepath = bp.source, lnum = bp.line, bp = bp } }
-    end, bps.all())
+        if not initial and bp.line == cur_line and vim.fn.fnamemodify(bp.source, ":p") == cur_path then
+            initial = i
+        end
+        items[i] = { label = label, data = { filepath = bp.source, lnum = bp.line, bp = bp } }
+    end
     if #items == 0 then vim.notify("[dap] no breakpoints", vim.log.levels.INFO); return end
     select.open({
         prompt         = "Go to breakpoint",
         enable_preview = true,
         items          = items,
+        initial        = initial,
     }, function(data)
         if not data then return end
         require("easydap.util.ui_util").smart_open_file(data.bp.source, data.bp.line)
@@ -882,22 +890,34 @@ function M.debug.frame()
     local frames = thread.stack_frames or {}
     if #frames == 0 then vim.notify("[dap] no stack frames available", vim.log.levels.WARN); return end
     local cur_frame = sess:current_stack_frame()
-    local items = vim.tbl_map(function(f)
-        local loc    = f.source and f.source.path
+    ---@param f easydap.dap.proto.StackFrame
+    ---@return string
+    local function frame_key(f)
+        local loc = f.source and f.source.path
             and ("  " .. vim.fn.fnamemodify(f.source.path, ":~:.") .. ":" .. (f.line or "?"))
             or  ""
-        local marker = (cur_frame and f.id == cur_frame.id) and "  *" or ""
-        local data   = { frame = f }
+        return f.name .. loc
+    end
+    local cur_key = cur_frame and frame_key(cur_frame) or nil
+    local initial ---@type integer?
+    local items   = {}
+    for i, f in ipairs(frames) do
+        -- Match the active frame by its rendered string, not its id.
+        local key    = frame_key(f)
+        local is_cur = cur_key ~= nil and not initial and key == cur_key
+        if is_cur then initial = i end
+        local data = { frame = f }
         if f.source and f.source.path then
             data.filepath = f.source.path
             data.lnum     = f.line
         end
-        return { label = f.name .. loc .. marker, data = data }
-    end, frames)
+        items[i] = { label = key .. (is_cur and "  *" or ""), data = data }
+    end
     select.open({
         prompt         = "Select frame",
         enable_preview = true,
         items          = items,
+        initial        = initial,
     }, function(data)
         if data then M.select_frame(data.frame.id) end
     end)

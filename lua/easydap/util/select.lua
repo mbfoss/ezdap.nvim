@@ -39,6 +39,7 @@ local _antiflicker_delay = 200
 ---@field items (easydap.select.Item|string)[]  -- a bare string == { label = s, data = s }
 ---@field enable_preview boolean?
 ---@field previewer easydap.select.Previewer?  -- defaults to the built-in file previewer
+---@field initial integer?  -- 1-based index of the item to pre-select (cursor starts on it)
 ---@field height_ratio number?
 ---@field width_ratio number?
 ---@field list_wrap boolean?
@@ -279,6 +280,8 @@ local _active_picker = nil
 ---@field async_preview_context integer
 ---@field async_preview_cancel fun()?
 ---@field preview_timer table?
+---@field _source_items easydap.select.ListItem[]
+---@field _initial integer?
 local Picker = {}
 Picker.__index = Picker
 
@@ -312,6 +315,8 @@ function Picker:init(opts, callback)
         label = (tostring(label):gsub("\n", " "))
         table.insert(self._source_items, { label = label, data = data })
     end
+
+    self._initial = type(opts.initial) == "number" and opts.initial or nil
 
     if _active_picker and not _active_picker.closed then
         _active_picker:close()
@@ -489,8 +494,20 @@ function Picker:run_filter()
     end
 
     self:render_list()
+
+    -- `initial` pre-selects a row by index, honoured only on the first
+    -- (empty-query) render where the list order still matches the supplied
+    -- items; once the user types, the best fuzzy match leads at row 1.
+    local target = 1
+    if self._initial then
+        if #self.list_items > 0 then
+            target = _clamp(self._initial, 1, #self.list_items)
+        end
+        self._initial = nil
+    end
+
     if #self.list_items > 0 and self.lwin and vim.api.nvim_win_is_valid(self.lwin) then
-        vim.api.nvim_win_set_cursor(self.lwin, { 1, 0 })
+        vim.api.nvim_win_set_cursor(self.lwin, { target, 0 })
     end
     self:render_cursor()
     self:render_position()
