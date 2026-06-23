@@ -14,9 +14,9 @@ local _initialized = false
 ---breakpoint source paths.
 ---@return table
 local function _collect()
-    local store = require("easydap.store")
-    local bps   = require("easydap.dap.breakpoints")
-    local exprs = require("easydap.ui.expressions")
+    local store       = require("easydap.store")
+    local bps         = require("easydap.dap.breakpoints")
+    local exprs       = require("easydap.ui.expressions")
     local breakpoints = bps.get_data()
     for _, bp in ipairs(breakpoints.source) do bp.source = store.relativize(bp.source) end
     return { breakpoints = breakpoints, expressions = exprs.get_data() }
@@ -32,10 +32,10 @@ end
 ---Restore breakpoints/expressions for the current project, absolutizing
 ---breakpoint source paths. Clears them when the cwd is not in a project.
 local function _load()
-    local store = require("easydap.store")
-    local bps   = require("easydap.dap.breakpoints")
-    local exprs = require("easydap.ui.expressions")
-    local data  = store.read() or {}
+    local store       = require("easydap.store")
+    local bps         = require("easydap.dap.breakpoints")
+    local exprs       = require("easydap.ui.expressions")
+    local data        = store.read() or {}
     local breakpoints = data.breakpoints
     if type(breakpoints) == "table" and type(breakpoints.source) == "table" then
         for _, bp in ipairs(breakpoints.source) do bp.source = store.absolutize(bp.source) end
@@ -136,6 +136,7 @@ local function _register_user_commands()
         "stop", "terminate", "terminate_all",
         "session", "thread", "terminate_thread", "frame",
         "inspect", "disassemble",
+        "project",
     }
 
     usercmd.register_user_cmd("Debug", function(_, args, _)
@@ -186,6 +187,8 @@ local function _register_user_commands()
             cmd.debug.terminate_thread()
         elseif sub == "frame" then
             cmd.debug.frame()
+        elseif sub == "project" then
+            M.project_info()
         elseif sub == "breakpoint" then
             local def = usercmd.get_subcommand("breakpoint")
             if def then def.run("breakpoint", { unpack(args, 2) }, {}) end
@@ -284,6 +287,26 @@ function M.run(arg)
 
     vim.notify("[easydap] run: expected a path to a Lua file, e.g. :Debug run debug.lua",
         vim.log.levels.WARN)
+end
+
+---Report whether the cwd is inside a project and, if so, the resolved root and
+---data file (and whether that file exists on disk yet). Echoed to the command
+---line rather than notified, so it reads as a status query.
+function M.project_info()
+    local store = require("easydap.store")
+    local root  = store.root()
+    if not root then
+        vim.api.nvim_echo({
+            { "[easydap] ",                        "Title" },
+            { "not in a project (no root marker)", "WarningMsg" },
+        }, false, {})
+        return
+    end
+    local chunks = {
+        { "[easydap] project: ", "Title" },
+        { root,                  "Directory" },
+    }
+    vim.api.nvim_echo(chunks, false, {})
 end
 
 ---@param opts? easydap.Config

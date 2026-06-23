@@ -56,7 +56,7 @@ end
 
 ---Absolute path of the data file, or nil when the cwd is not in a project.
 ---@return string|nil path
-local function _data_path()
+function M.data_path()
     local root = M.root()
     if not root then return nil end
     return vim.fs.joinpath(root, config.data_filename or _default_filename)
@@ -90,7 +90,7 @@ end
 ---when the file is missing or unreadable.
 ---@return table|nil data
 function M.read()
-    local path = _data_path()
+    local path = M.data_path()
     if not path then return nil end
     local ok, content = fsutil.read_content(path)
     if not ok then return nil end
@@ -105,7 +105,7 @@ end
 ---@return boolean ok
 ---@return string? err
 function M.write(data)
-    local path = _data_path()
+    local path = M.data_path()
     if not path then return true end
     if _is_empty(data) then
         os.remove(path)
