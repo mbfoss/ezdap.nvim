@@ -6,13 +6,26 @@ local _debug_view
 local _disassembly_view
 local _initialized = false
 
+-- Persistence seam: the engine deals in absolute source paths; on-disk state
+-- uses project-relative paths for portability. The path conversion lives here,
+-- never in the engine.
+
+---Push current breakpoints/expressions into the store cache, relativizing
+---breakpoint source paths. Does not flush.
+local function _save_state()
+    local store = require("easydap.store")
+    local bps   = require("easydap.dap.breakpoints")
+    local exprs = require("easydap.ui.expressions")
+    local data  = bps.get_data()
+    for _, bp in ipairs(data.source) do bp.source = store.relativize(bp.source) end
+    store.set("breakpoints", data)
+    store.set("expressions", exprs.get_data())
+end
+
 local function _save()
     local store = require("easydap.store")
     if not store.in_project() then return end
-    local bps   = require("easydap.dap.breakpoints")
-    local exprs = require("easydap.ui.expressions")
-    store.set("breakpoints", bps.get_data())
-    store.set("expressions", exprs.get_data())
+    _save_state()
     store.flush()
 end
 
@@ -20,7 +33,11 @@ local function _load()
     local store = require("easydap.store")
     local bps   = require("easydap.dap.breakpoints")
     local exprs = require("easydap.ui.expressions")
-    bps.restore(store.get("breakpoints"))
+    local data  = store.get("breakpoints")
+    if type(data) == "table" and type(data.source) == "table" then
+        for _, bp in ipairs(data.source) do bp.source = store.absolutize(bp.source) end
+    end
+    bps.restore(data)
     exprs.restore(store.get("expressions"))
 end
 
@@ -205,14 +222,15 @@ local function _init()
     })
 
     local store = require("easydap.store")
-    store.on_project_leave_pre:subscribe(function()
-        local bps   = require("easydap.dap.breakpoints")
-        local exprs = require("easydap.ui.expressions")
-        store.set("breakpoints", bps.get_data())
-        store.set("expressions", exprs.get_data())
-    end)
+    store.on_project_leave_pre:subscribe(_save_state)
     store.on_project_enter:subscribe(function() _load() end)
     store.on_project_leave:subscribe(function() _clear() end)
+
+    -- Persist on change (debounced) so breakpoints/expressions survive a crash,
+    -- not just a clean exit. _save() no-ops when not in a project.
+    local save = require("easydap.util.throttle").debounce_wrap(1000, _save)
+    require("easydap.dap.breakpoints").on_change:subscribe(save)
+    require("easydap.ui.expressions").on_change:subscribe(save)
 
     require("easydap.ui.breakpoints_ui").init()
     require("easydap.ui.debugline_ui").init()

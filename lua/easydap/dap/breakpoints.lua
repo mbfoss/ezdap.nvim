@@ -44,10 +44,13 @@ local Signal = require("easydap.util.Signal")
 ---@field disabled    boolean
 
 ---@class easydap.dap.BreakpointData
----@field source             table[]                    stripped easydap.dap.SourceBreakpoint records
----@field functions          easydap.dap.FunctionBreakpoint[]
----@field exception_names    easydap.dap.ExceptionNameBreakpoint[]?
----@field exception_filters  table<string,boolean>?     filter → disabled
+---Serialized form as the engine produces/consumes it: `internal_id` stripped
+---(regenerated on restore) and `source` paths absolute. The persistence layer
+---relativizes paths on the way to disk and re-absolutizes on the way back.
+---@field source             table[]                  stripped source records (no internal_id; absolute path)
+---@field functions          table[]                  stripped function records (no internal_id)
+---@field exception_names    table[]?                 stripped exception-name records (no internal_id)
+---@field exception_filters  table<string,boolean>?   filter → disabled
 
 ---@alias easydap.dap.BreakpointChangeKind "source" | "function" | "exception_filter" | "exception_type" | "restore"
 
@@ -136,7 +139,6 @@ end
 ---@param opts   { column?: integer, condition?: string, hit_condition?: string, log_message?: string, disabled?: boolean }?
 ---@return easydap.dap.SourceBreakpoint?
 function M.add(source, line, opts)
-    if not require("easydap.store").require_project("breakpoint") then return nil end
     opts = opts or {}
     for _, bp in ipairs(_source_bps) do
         if _matches(bp, source, line, opts.column) then
@@ -178,7 +180,6 @@ function M.patch(source, line, opts)
         if _matches(b, source, line, column) then bp = b; break end
     end
     if not bp then
-        if not require("easydap.store").require_project("breakpoint") then return nil end
         bp = {
             internal_id = _new_id(), source = source, line = line, column = column,
             disabled = false,
@@ -257,7 +258,6 @@ end
 ---@param opts { disabled?: boolean }?
 ---@return easydap.dap.FunctionBreakpoint?
 function M.add_function(name, opts)
-    if not require("easydap.store").require_project("function breakpoint") then return nil end
     opts = opts or {}
     for _, bp in ipairs(_function_bps) do
         if bp.name == name then
@@ -342,7 +342,6 @@ end
 ---@param break_mode easydap.dap.ExceptionBreakMode?  defaults to "always"
 ---@return easydap.dap.ExceptionNameBreakpoint?
 function M.add_exception_name(name, break_mode)
-    if not require("easydap.store").require_project("exception breakpoint") then return nil end
     break_mode = break_mode or "always"
     for _, bp in ipairs(_exception_name_bps) do
         if bp.name == name then
@@ -459,18 +458,45 @@ end
 
 -- ── Persistence ────────────────────────────────────────────────────────────
 
+---Build the serialized breakpoint set: fresh records with `internal_id` stripped.
+---Source paths are absolute, exactly as the engine holds them; rewriting them for
+---portable storage (and back) is the persistence layer's job, not the engine's.
 ---@return easydap.dap.BreakpointData
 function M.get_data()
+    local sources = {}
+    for _, bp in ipairs(_source_bps) do
+        sources[#sources + 1] = {
+            source        = bp.source,
+            line          = bp.line,
+            column        = bp.column,
+            condition     = bp.condition,
+            hit_condition = bp.hit_condition,
+            log_message   = bp.log_message,
+            disabled      = bp.disabled,
+        }
+    end
+    local functions = {}
+    for _, bp in ipairs(_function_bps) do
+        functions[#functions + 1] = { name = bp.name, disabled = bp.disabled }
+    end
+    local exception_names = {}
+    for _, bp in ipairs(_exception_name_bps) do
+        exception_names[#exception_names + 1] = {
+            name = bp.name, break_mode = bp.break_mode, disabled = bp.disabled,
+        }
+    end
     local exc_states = {}
     for _, bp in ipairs(_exception_bps) do exc_states[bp.filter] = bp.disabled end
     return {
-        source            = vim.list_extend({}, _source_bps),
-        functions         = vim.list_extend({}, _function_bps),
-        exception_names   = _exception_name_bps,
+        source            = sources,
+        functions         = functions,
+        exception_names   = exception_names,
         exception_filters = exc_states,
     }
 end
 
+---Source paths are expected to be absolute; the persistence layer resolves them
+---before calling restore.
 ---@param data easydap.dap.BreakpointData?
 function M.restore(data)
     _source_bps              = (type(data) == "table" and data.source)          or {}

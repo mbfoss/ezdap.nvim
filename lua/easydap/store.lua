@@ -111,14 +111,36 @@ function M.in_project()
     return _cached_root ~= nil
 end
 
----Guard for mutating operations that require a project root.
----Notifies and returns false when not in a project.
----@param  what string  short label of the thing being set, e.g. "breakpoint"
----@return boolean ok
-function M.require_project(what)
-    if M.in_project() then return true end
-    vim.notify("[easydap] cannot set " .. what .. " — not in a project root", vim.log.levels.WARN)
-    return false
+---The current project root, or nil when the cwd is not inside a project.
+---@return string|nil
+function M.root()
+    _init()
+    return _cached_root
+end
+
+---Convert an absolute path to one relative to the project root, for portable
+---storage. Paths outside the project (or when there is no project) are kept
+---absolute so they still resolve when restored.
+---@param  path string
+---@return string
+function M.relativize(path)
+    local root = M.root()
+    if not root then return path end
+    local prefix = root .. "/"
+    if path:sub(1, #prefix) == prefix then
+        return path:sub(#prefix + 1)
+    end
+    return path
+end
+
+---Resolve a stored path back to absolute against the project root.
+---Already-absolute paths pass through unchanged.
+---@param  path string
+---@return string
+function M.absolutize(path)
+    local root = M.root()
+    if not root or path:sub(1, 1) == "/" then return path end
+    return vim.fs.joinpath(root, path)
 end
 
 ---Load a namespace from the project cache. Returns nil when not in a project.
