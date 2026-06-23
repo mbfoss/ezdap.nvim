@@ -15,7 +15,7 @@ local M = {}
 ---Context passed to `config.setup()` so the adapter can report progress and
 ---register terminal buffers with the task runner.
 ---@class easydap.AdapterSetupCtx
----@field add_bufnr fun(bufnr: integer, label?: string, priority?: integer, autoscroll?: boolean)
+---@field add_bufnr fun(bufnr: integer, opts?: easydap.AddBufOpts)
 ---@field report    fun(message: string)
 
 ---@class easydap.dap.Config
@@ -112,7 +112,7 @@ local function _debugpy_setup(config, ctx, callback)
         }
     )
     if not handle then return callback("failed to start debugpy adapter") end
-    ctx.add_bufnr(handle.bufnr, "debugpy", -2)
+    ctx.add_bufnr(handle.bufnr, { label = "debugpy", priority = -2 })
     config.port = port
     vim.defer_fn(function() done(nil, { handle = handle }) end, 500)
 end
@@ -436,7 +436,7 @@ M["js-debug"] = {
             end,
         })
         if not handle then return callback("failed to start js-debug server") end
-        ctx.add_bufnr(handle.bufnr, "js-debug server", -2)
+        ctx.add_bufnr(handle.bufnr, { label = "js-debug server", priority = -2 })
         ctx.report("js-debug: waiting for server port")
         vim.defer_fn(function()
             if not resolved_port then

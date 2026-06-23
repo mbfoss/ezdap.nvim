@@ -1,8 +1,14 @@
+---Presentation options for a buffer registered with the run host.
+---@class easydap.AddBufOpts
+---@field label?      string   tab label (defaults to the buffer name)
+---@field priority?   integer  higher = surfaced preferentially when added (default 0)
+---@field autoscroll? boolean  keep the buffer pinned to its last line while shown
+
 ---@class easydap.TaskCallback
----@field add_bufnr  fun(bufnr: integer, label?: string, priority?: integer, autoscroll?: boolean)
+---@field add_bufnr  fun(bufnr: integer, opts?: easydap.AddBufOpts)
 ---@field report     fun(message: string)
 ---@field on_done    fun(ok: boolean)
----@
+
 ---@class easydap.BufEntry
 ---@field bufnr    integer
 ---@field label    string
@@ -103,7 +109,7 @@ M.start     = function(task, callbacks)
             manager.complete(text, col, cb)
         end,
     })
-    add_bufnr(repl:bufnr(), "REPL", -1)
+    add_bufnr(repl:bufnr(), { label = "REPL", priority = -1 })
 
     -- Output buffer: created on first non-console output event.
     local out_buf = nil ---@type integer?
@@ -122,7 +128,7 @@ M.start     = function(task, callbacks)
             vim.api.nvim_buf_set_name(out_buf,
                 _unique_buf_name("easydap://" .. run_key .. "/output"))
 
-            add_bufnr(out_buf, "Output", 0, true)
+            add_bufnr(out_buf, { label = "Output", priority = 0, autoscroll = true })
         end
         if not vim.api.nvim_buf_is_valid(out_buf) then return end
         vim.bo[out_buf].modifiable = true
@@ -175,7 +181,7 @@ M.start     = function(task, callbacks)
                 -- The terminal buffer already has a term:// name; just make it listed.
                 sess:on("run_in_terminal", function(bufnr)
                     vim.bo[bufnr].buflisted = true
-                    add_bufnr(bufnr, "Terminal", 10)
+                    add_bufnr(bufnr, { label = "Terminal", priority = 10 })
                 end)
 
                 local unsub
@@ -188,7 +194,7 @@ M.start     = function(task, callbacks)
                     vim.bo[buf].modifiable = false
                     vim.api.nvim_buf_set_name(buf,
                         _unique_buf_name("easydap://" .. run_key .. "/dap-messages"))
-                    add_bufnr(buf, "DAP Messages", -3, true)
+                    add_bufnr(buf, { label = "DAP Messages", priority = -3, autoscroll = true })
 
                     unsub = manager.on_raw_message:subscribe(function(sid, direction, msg)
                         if sid ~= id then return end

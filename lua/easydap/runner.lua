@@ -29,15 +29,19 @@ local M = {}
 ---@field request_args?    table                   sent verbatim in the launch/attach request (overrides the generic fields)
 ---@field raw_messages?    boolean                 capture raw DAP protocol messages in a dedicated buffer
 
----A live run: the task name, a cancel function, and the buffers the task
----spawned (REPL, Output, Terminal, DAP messages).
+---A run: a unique id (used as its panel group), the task name, a cancel
+---function, the buffers it spawned (REPL, Output, Terminal, DAP messages), and
+---whether it has finished. Runs are tracked together so tasks can run in parallel.
 ---@class easydap.runner.Run
+---@field id     string
 ---@field name   string
 ---@field cancel fun()
 ---@field bufnrs integer[]
+---@field done   boolean
 
----@type easydap.runner.Run?
-local _active
+---@type easydap.runner.Run[]
+local _runs    = {}
+local _counter = 0
 
 ---@param msg string
 local function _warn(msg) vim.notify("[easydap] " .. msg, vim.log.levels.WARN) end
@@ -79,11 +83,12 @@ local function _report_bufnr()
     return _report_buf
 end
 
----Show the report page in the run panel. Priority -1 keeps it visible during
----setup (REPL/adapter-log pages do not outrank it) while real program output
----(Output 0, Terminal 10) surfaces over it once it arrives.
+---Show the shared report page in the run panel. Group-less, so it renders before
+---any run group. Priority -1 keeps it visible during setup (REPL/adapter-log
+---pages do not outrank it) while real program output (Output 0, Terminal 10)
+---surfaces over it once it arrives.
 local function _report_open()
-    _get_panel():add(_report_bufnr(), "Report", -1, true)
+    _get_panel():add(_report_bufnr(), { label = "Report", priority = -1, autoscroll = true })
 end
 
 ---Append timestamped lines to the report buffer. The panel autoscrolls the page
@@ -104,9 +109,31 @@ local function _report(msg)
     vim.bo[buf].modifiable = false
 end
 
----Run a single debug task. Cancels the previous active run first. The returned
----handle is also stored as the active run (see `M.active`). Returns nil when
----`task` is not a valid task table.
+---Drop any finished run of the same name from the panel and wipe its buffers, so
+---re-running a task replaces its own previous run. Live runs and finished runs of
+---other tasks are left untouched, so parallel runs accumulate as separate groups.
+---@param name string
+local function _clear_finished(name)
+    local kept = {}
+    for _, r in ipairs(_runs) do
+        if r.done and r.name == name then
+            _get_panel():remove_group(r.id)
+            for _, b in ipairs(r.bufnrs) do
+                if vim.api.nvim_buf_is_valid(b) then
+                    pcall(vim.api.nvim_buf_delete, b, { force = true })
+                end
+            end
+        else
+            kept[#kept + 1] = r
+        end
+    end
+    _runs = kept
+end
+
+---Run a debug task. Tasks may run in parallel: each run gets its own panel group
+---and is tracked alongside the others (it does not cancel them). Re-running a
+---task replaces its own previous finished run. Returns nil when `task` is not a
+---valid task table.
 ---@param task easydap.Task
 ---@return easydap.runner.Run?
 function M.run(task)
@@ -114,54 +141,100 @@ function M.run(task)
         _err("run: expected a task table with an `adapter` field")
         return
     end
-    if _active then _active.cancel() end
 
     task      = vim.deepcopy(task)
     task.name = task.name or "debug"
 
-    _get_panel():reset()
+    _clear_finished(task.name)
+
+    _counter = _counter + 1
+    ---@type easydap.runner.Run
+    local run = {
+        id     = task.name .. "#" .. _counter,
+        name   = task.name,
+        cancel = function() end,
+        bufnrs = {},
+        done   = false,
+    }
+    _runs[#_runs + 1] = run
+
     _report_open()
     _report("▶ " .. task.name)
 
-    ---@type easydap.runner.Run
-    local run = { name = task.name, cancel = function() end, bufnrs = {} }
-
     local cancel = require("easydap.task").start(task, {
-        add_bufnr = function(bufnr, label, priority, autoscroll)
+        add_bufnr = function(bufnr, opts)
+            opts = opts or {}
             run.bufnrs[#run.bufnrs + 1] = bufnr
-            _get_panel():add(bufnr, label, priority, autoscroll)
+            _get_panel():add(bufnr, {
+                label       = opts.label,
+                priority    = opts.priority,
+                autoscroll  = opts.autoscroll,
+                group       = run.id,
+                group_label = run.name,
+            })
         end,
         report    = _report,
         on_done   = function(ok)
-            if _active == run then _active = nil end
+            run.done = true
             _report((ok and "✓ " or "✗ ") .. task.name .. (ok and " finished" or " failed"))
         end,
     })
 
     run.cancel = cancel
-    _active    = run
     return run
 end
 
----Load a Lua file and run the single task it returns (or that its returned
----function produces). Reports a clear error for every failure mode instead of
----throwing: missing/empty path, non-`.lua` path, file not found, load or
----runtime error, or a file that does not return a task.
+---Prompt to pick one of the Lua files directly in `dir`, then run it, using
+---easydap's own fuzzy picker with a preview of each file. Runs the sole file
+---outright when there is only one, and warns when there are none.
+---@param dir string  absolute directory path
+local function _run_from_dir(dir)
+    local files = vim.fn.globpath(dir, "*.lua", true, true) ---@type string[]
+    if #files == 0 then
+        _warn("run: no Lua files in " .. dir)
+        return
+    end
+    if #files == 1 then
+        return M.run_file(files[1])
+    end
+
+    local items = {}
+    for _, f in ipairs(files) do
+        items[#items + 1] = { label = vim.fn.fnamemodify(f, ":t"), data = { filepath = f } }
+    end
+    require("easydap.util.select").open({
+        prompt         = "Debug task",
+        items          = items,
+        enable_preview = true,
+    }, function(data)
+        if data and data.filepath then M.run_file(data.filepath) end
+    end)
+end
+
+---Run a task from a path. A directory opens a picker of the Lua files in it (see
+---`_run_from_dir`); a Lua file is loaded and the single task it returns (or that
+---its returned function produces) is run. Reports a clear error for every failure
+---mode instead of throwing: missing/empty path, path not found, non-`.lua` file,
+---load or runtime error, or a file that does not return a task.
 ---@param path string
 function M.run_file(path)
     if type(path) ~= "string" or path == "" then
-        _warn("run: no file path given (usage: run('path/to/task.lua'))")
+        _warn("run: no path given (usage: run('path/to/task.lua' or a folder))")
         return
     end
 
     local resolved = vim.fn.fnamemodify(vim.fn.expand(path), ":p")
-    if not resolved:match("%.lua$") then
-        _warn("run: not a Lua file: " .. resolved)
+    ---@diagnostic disable-next-line: undefined-field
+    local stat     = vim.uv.fs_stat(resolved)
+    if not stat then
+        _warn("run: path not found: " .. resolved)
         return
     end
-    ---@diagnostic disable-next-line: undefined-field
-    if not vim.uv.fs_stat(resolved) then
-        _warn("run: file not found: " .. resolved)
+    if stat.type == "directory" then
+        return _run_from_dir(resolved)
+    end
+    if not resolved:match("%.lua$") then
+        _warn("run: not a Lua file: " .. resolved)
         return
     end
 
@@ -189,17 +262,32 @@ function M.run_file(path)
     M.run(task)
 end
 
----Cancel the active run, if any. Stops its sessions, or aborts a run still in
----adapter setup (before any session exists, where `:Debug stop` has nothing to
----act on yet).
+---Cancel every live run. Stops their sessions, or aborts a run still in adapter
+---setup (before any session exists, where `:Debug stop` has nothing to act on yet).
 function M.cancel()
-    if _active then _active.cancel() end
+    for _, r in ipairs(_runs) do
+        if not r.done then r.cancel() end
+    end
 end
 
----The currently active run, or nil.
+---The most recently started live run, or nil.
 ---@return easydap.runner.Run?
 function M.active()
-    return _active
+    for i = #_runs, 1, -1 do
+        if not _runs[i].done then return _runs[i] end
+    end
+    return nil
+end
+
+---Show or hide the run panel. Hosted buffers persist while hidden, so toggling
+---it back restores the same tabs. No-op (with a hint) before the first run, when
+---there is no panel yet.
+function M.toggle_panel()
+    if not _panel then
+        _warn("run panel: nothing to show yet (run a task first)")
+        return
+    end
+    _panel:toggle()
 end
 
 return M

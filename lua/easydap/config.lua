@@ -11,18 +11,18 @@
 ---@field disabled_logpoint        string  logpoint, disabled
 
 ---@class easydap.Config
----@field data_filename string
----@field antiflicker_delay    integer   milliseconds to wait before clearing stale UI (inline vars, DebugView) to avoid flicker during step-through
----@field debug_value_max_len  integer   max characters shown for variable/expression values in DebugView before truncating
 ---@field root_markers         string[]  filenames/dirs whose presence identifies a project root
+---@field data_filename string
+---@field debug_value_max_len  integer   max characters shown for variable/expression values in DebugView before truncating
+---@field antiflicker_delay    integer   milliseconds to wait before clearing stale UI (inline vars, DebugView) to avoid flicker during step-through
 ---@field signs easydap.Signs
 
 ---@type easydap.Config
 local M = {
-	data_filename = ".easydap.json",
-	antiflicker_delay   = 200,
-	debug_value_max_len = 70,
 	root_markers        = { ".git" },
+	data_filename = ".easydap.json",
+	debug_value_max_len = 70,
+	antiflicker_delay   = 200,
 	signs = {
 		debug_frame              = "▶",
 		active_breakpoint        = "●",

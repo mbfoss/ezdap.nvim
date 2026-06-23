@@ -21,7 +21,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 **Command surface / active session** — [manager.lua](lua/easydap/manager.lua)
 - Owns the "which session is active" concept that keymaps and UI subscribe to.
 - Wraps the session-id-explicit `dap/client` with active-session helpers and
-  exposes user-facing command tables: `M.debug.*`, `M.breakpoint.*`, `M.panel.*`.
+  exposes user-facing command tables: `M.debug.*`, `M.breakpoint.*`, `M.view.*`.
 - Re-exports client signals so consumers depend only on `manager`, never `client`.
 
 **DAP core** — [lua/easydap/dap/](lua/easydap/dap/)

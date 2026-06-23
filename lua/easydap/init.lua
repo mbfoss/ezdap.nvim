@@ -136,7 +136,7 @@ local function _register_user_commands()
         "stop", "terminate", "terminate_all",
         "session", "thread", "terminate_thread", "frame",
         "inspect", "disassemble",
-        "project",
+        "project", "panel",
     }
 
     usercmd.register_user_cmd("Debug", function(_, args, _)
@@ -144,7 +144,7 @@ local function _register_user_commands()
         if sub == "run" then
             M.run(args[2])
         elseif sub == "view" then
-            cmd.panel.toggle()
+            cmd.view.toggle()
         elseif sub == "continue" then
             cmd.debug.continue()
         elseif sub == "continue_all" then
@@ -189,6 +189,8 @@ local function _register_user_commands()
             cmd.debug.frame()
         elseif sub == "project" then
             M.project_info()
+        elseif sub == "panel" then
+            require("easydap.runner").toggle_panel()
         elseif sub == "breakpoint" then
             local def = usercmd.get_subcommand("breakpoint")
             if def then def.run("breakpoint", { unpack(args, 2) }, {}) end
@@ -272,7 +274,7 @@ function M.open_disassembly_view()
 end
 
 ---Run a debug task standalone (without easytasks):
----  • string → path to a Lua file returning a single task
+---  • string → a Lua file returning a single task, or a folder to pick one from
 ---  • table  → run a task directly
 ---@param arg string|easydap.Task
 function M.run(arg)
@@ -285,7 +287,7 @@ function M.run(arg)
         return runner.run(arg)
     end
 
-    vim.notify("[easydap] run: expected a path to a Lua file, e.g. :Debug run debug.lua",
+    vim.notify("[easydap] run: expected a Lua file or folder, e.g. :Debug run debug.lua",
         vim.log.levels.WARN)
 end
 

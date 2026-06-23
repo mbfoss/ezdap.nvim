@@ -909,11 +909,11 @@ function M.debug.frame()
     end)
 end
 
--- ── Panel ─────────────────────────────────────────────────────────────────
+-- ── Debug view ─────────────────────────────────────────────────────────────
 
-M.panel = {}
+M.view = {}
 
-function M.panel.toggle()
+function M.view.toggle()
     require("easydap").open_debug_view()
 end
 
