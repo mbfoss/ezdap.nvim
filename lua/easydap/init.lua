@@ -113,6 +113,7 @@ local function _register_user_commands()
     })
 
     local _debug_subs = {
+        "run",
         "breakpoint",
         "view", "continue", "continue_all",
         "step_over", "next", "step_in", "step_out", "step_back",
@@ -126,7 +127,9 @@ local function _register_user_commands()
 
     usercmd.register_user_cmd("Debug", function(_, args, _)
         local sub = args[1]
-        if sub == "view" then
+        if sub == "run" then
+            M.run(args[2])
+        elseif sub == "view" then
             cmd.panel.toggle()
         elseif sub == "continue" then
             cmd.debug.continue()
@@ -183,6 +186,9 @@ local function _register_user_commands()
             if rest[1] == "breakpoint" then
                 local def = usercmd.get_subcommand("breakpoint")
                 return def and def.complete({ unpack(rest, 2) }, arg_lead) or {}
+            end
+            if rest[1] == "run" and #rest == 1 then
+                return vim.fn.getcompletion(arg_lead, "file")
             end
             return {}
         end,
@@ -244,6 +250,24 @@ end
 ---Open the disassembly pane for the active session's current frame.
 function M.open_disassembly_view()
     M.disassembly_view():open()
+end
+
+---Run a debug task standalone (without easytasks):
+---  • string → path to a Lua file returning a single task
+---  • table  → run a task directly
+---@param arg string|easydap.Task
+function M.run(arg)
+    local runner = require("easydap.runner")
+
+    if type(arg) == "string" then
+        return runner.run_file(arg)
+    end
+    if type(arg) == "table" then
+        return runner.run(arg)
+    end
+
+    vim.notify("[easydap] run: expected a path to a Lua file, e.g. :Debug run debug.lua",
+        vim.log.levels.WARN)
 end
 
 ---@param opts? easydap.Config
