@@ -96,6 +96,8 @@ function M.init()
     end
 
     breakpoints.on_change:subscribe(_refresh)
+    -- Adapter-verified status is session-scoped; repaint signs when it changes.
+    manager.on_breakpoint_updated:subscribe(function() _refresh() end)
     manager.on_active_changed:subscribe(function() _refresh() end)
 
     extmarks.on_synced:subscribe(function(file)

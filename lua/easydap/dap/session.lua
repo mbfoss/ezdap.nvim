@@ -130,6 +130,17 @@ local breakpoints = require("easydap.dap.breakpoints")
 ---@field _handle_adapter_request  fun(self: easydap.dap.Session, command: string, args: table, respond: easydap.dap.RespondFn)
 ---@field _on_continued            fun(self: easydap.dap.Session, body: easydap.dap.proto.ContinuedEventBody)
 ---@field _on_close                fun(self: easydap.dap.Session)
+---@field _bp_unsub                (fun())?                       unsubscribe from breakpoints.on_change
+---@field _bp_sync_pending         easydap.dap.BpSyncPending?     coalesced pending breakpoint syncs
+---@field _on_breakpoints_changed  fun(self: easydap.dap.Session, kind: easydap.dap.BreakpointChangeKind, path: string?)
+---@field _flush_bp_sync           fun(self: easydap.dap.Session)
+
+---Coalesced set of breakpoint syncs queued for the next tick.
+---@class easydap.dap.BpSyncPending
+---@field sources     table<string, true>   per-file source syncs
+---@field all_sources boolean               sync every source (overrides `sources`)
+---@field fn          boolean               re-sync function breakpoints
+---@field exc         boolean               re-sync exception breakpoints
 
 local M = {}
 
@@ -163,12 +174,22 @@ function M.new(conn, config)
         _listeners            = {},
         _stop_cb              = nil,
         _stopping             = false,
+        _bp_unsub             = nil,
+        _bp_sync_pending      = nil,
         report                = function(_, msg) vim.notify(msg, vim.log.levels.WARN) end,
     }, Session)
 
     conn.on_event   = function(event, body) self:_handle_event(event, body) end
     conn.on_request = function(cmd, args, respond) self:_handle_adapter_request(cmd, args, respond) end
     conn.on_close   = function() self:_on_close() end
+
+    -- Keep the adapter in sync with the global breakpoint registry: any change to
+    -- the desired set pushes the affected breakpoints to this session's adapter.
+    -- The initial sync is handled by the _on_initialized handshake instead, so
+    -- changes before initialization are ignored (see _on_breakpoints_changed).
+    self._bp_unsub = breakpoints.on_change:subscribe(function(kind, path)
+        self:_on_breakpoints_changed(kind, path)
+    end)
 
     return self
 end
@@ -442,7 +463,6 @@ function Session:_sync_one_source(source, cb)
         if err then
             self:report("[dap] setBreakpoints failed: " .. err)
         elseif body and body.breakpoints then
-            local changed = false
             for i, upd in ipairs(body.breakpoints) do
                 local bp = active_bps[i]
                 if bp then
@@ -457,11 +477,9 @@ function Session:_sync_one_source(source, cb)
                     }
                     self._bp_status[bp.internal_id] = st
                     if upd.id then self._adapter_id_map[upd.id] = bp.internal_id end
-                    changed = true
                     self:_emit("breakpoint_updated", bp, st)
                 end
             end
-            if changed then breakpoints.notify_change("source") end
         end
         cb()
     end)
@@ -785,7 +803,6 @@ function Session:_on_breakpoint_event(body)
     }
     self._bp_status[bp_id] = st
     if bp then
-        breakpoints.notify_change(bp.source and "source" or "function")
         self:_emit("breakpoint_updated", bp, st)
     end
 end
@@ -870,6 +887,7 @@ end
 
 ---@return nil
 function Session:_on_close()
+    if self._bp_unsub then self._bp_unsub(); self._bp_unsub = nil end
     local cb = self._stop_cb
     self._stop_cb = nil
     if self.state ~= "terminated" then
@@ -1634,6 +1652,46 @@ function Session:completions(arguments, cb)
     end)
 end
 
+---React to a change in the global breakpoint registry by queueing a re-sync.
+---Bursts (e.g. clear-all, project restore) are coalesced into a single flush on
+---the next tick. Ignored until the session is initialized — the handshake does
+---the initial push, and the adapter is not ready for setBreakpoints before then.
+---@param kind easydap.dap.BreakpointChangeKind
+---@param path string?   affected source file for "source" changes (nil = all)
+function Session:_on_breakpoints_changed(kind, path)
+    if not self._initialized then return end
+    local p = self._bp_sync_pending
+    if not p then
+        p = { sources = {}, all_sources = false, fn = false, exc = false }
+        self._bp_sync_pending = p
+        vim.schedule(function() self:_flush_bp_sync() end)
+    end
+    if kind == "source" then
+        if path then p.sources[path] = true else p.all_sources = true end
+    elseif kind == "function" then
+        p.fn = true
+    elseif kind == "exception_filter" or kind == "exception_type" then
+        p.exc = true
+    elseif kind == "restore" then
+        p.all_sources, p.fn, p.exc = true, true, true
+    end
+end
+
+---Flush the coalesced breakpoint syncs queued by _on_breakpoints_changed.
+---@return nil
+function Session:_flush_bp_sync()
+    local p = self._bp_sync_pending
+    self._bp_sync_pending = nil
+    if not p then return end
+    if p.all_sources then
+        self:sync_breakpoints()
+    else
+        for path in pairs(p.sources) do self:sync_breakpoints(path) end
+    end
+    if p.fn  then self:sync_function_breakpoints() end
+    if p.exc then self:sync_exception_breakpoints() end
+end
+
 ---Re-sync breakpoints for a specific source (or all sources) to the adapter.
 ---@param source string|nil  filepath, or nil for all
 ---@param cb     fun()?
@@ -1662,7 +1720,6 @@ function Session:sync_function_breakpoints(cb)
         if err then
             self:report("[dap] setFunctionBreakpoints failed: " .. err)
         elseif body and body.breakpoints then
-            local changed = false
             for i, upd in ipairs(body.breakpoints) do
                 local bp = active[i]
                 if bp then
@@ -1670,11 +1727,9 @@ function Session:sync_function_breakpoints(cb)
                     local st   = { verified = upd.verified, message = upd.message, hits = prev and prev.hits or 0 }
                     self._bp_status[bp.internal_id] = st
                     if upd.id then self._adapter_id_map[upd.id] = bp.internal_id end
-                    changed = true
                     self:_emit("breakpoint_updated", bp, st)
                 end
             end
-            if changed then breakpoints.notify_change("function") end
         end
         if cb then cb() end
     end)

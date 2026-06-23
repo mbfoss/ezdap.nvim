@@ -67,6 +67,8 @@ M.on_raw_message       = Signal.new() ---@type easydap.util.Signal<fun(id:number
 M.on_selection_changed = Signal.new() ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session)>
 ---Fires after a variable value is successfully changed by the user: (id, sess)
 M.on_variable_changed  = Signal.new() ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session)>
+---Fires when a breakpoint's adapter-verified status changes: (id, bp, status)
+M.on_breakpoint_updated = Signal.new() ---@type easydap.util.Signal<fun(id:number, bp:table, status:easydap.dap.BpStatus)>
 
 -- ── Session registry ───────────────────────────────────────────────────────
 
@@ -160,6 +162,9 @@ local function _register_session(sess, opts, progress)
     end)
     sess:on("variable_changed", function()
         M.on_variable_changed:emit(id, sess)
+    end)
+    sess:on("breakpoint_updated", function(bp, status)
+        M.on_breakpoint_updated:emit(id, bp, status)
     end)
 
     sess:on("start_debugging", function(child_config)

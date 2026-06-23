@@ -23,6 +23,7 @@ M.on_session_updated  = client.on_session_updated  ---@type easydap.util.Signal<
 M.on_session_stopped  = client.on_session_stopped  ---@type easydap.util.Signal<fun(id:number, info:easydap.client.SessionInfo)>
 M.on_raw_message      = client.on_raw_message      ---@type easydap.util.Signal<fun(id:number, direction:"in"|"out", msg:table)>
 M.on_variable_changed = client.on_variable_changed ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session)>
+M.on_breakpoint_updated = client.on_breakpoint_updated ---@type easydap.util.Signal<fun(id:number, bp:table, status:easydap.dap.BpStatus)>
 
 ---@param id number
 ---@return easydap.dap.Session?
@@ -197,16 +198,15 @@ local function _cursor_location()
     return file, vim.api.nvim_win_get_cursor(0)[1]
 end
 
----@param file string
----@param cb   fun()?
-local function _sync_bp(file, cb)
-    local sess = M.session()
-    if sess then
-        sess:sync_breakpoints(file, cb)
-    elseif cb then
-        cb()
-    end
-end
+-- Live sessions now push breakpoint changes themselves by subscribing to
+-- breakpoints.on_change (see session.lua), so the commands below only mutate the
+-- registry — no explicit per-command sync is needed.
+
+---Internal-id → file for breakpoints whose cursor should follow the adapter if
+---it relocates them on the next sync. Populated when the user adds a breakpoint;
+---consumed once by the on_breakpoint_updated handler below.
+---@type table<integer, string>
+local _pending_follow = {}
 
 -- ── Breakpoints ───────────────────────────────────────────────────────────
 
@@ -260,6 +260,16 @@ local function _follow_if_moved(file, bp)
     vim.api.nvim_win_set_cursor(win, { st.line, col })
 end
 
+-- Once the active session reports where it bound a freshly-added breakpoint,
+-- follow the cursor there (consumed one-shot per internal_id).
+M.on_breakpoint_updated:subscribe(function(id, bp)
+    if id ~= M.active_id() or not bp then return end
+    local file = _pending_follow[bp.internal_id]
+    if not file then return end
+    _pending_follow[bp.internal_id] = nil
+    _follow_if_moved(file, bp)
+end)
+
 function M.breakpoint.toggle()
     local file, row = _cursor_location()
     if not file then return end
@@ -269,7 +279,6 @@ function M.breakpoint.toggle()
     local existing = _existing_bp_line(file, row)
     if existing then
         bps.remove(file, existing)
-        _sync_bp(file)
     else
         -- This line is the stored origin of a breakpoint the adapter relocated
         -- elsewhere; adding here would just be relocated to the same spot, so
@@ -280,10 +289,10 @@ function M.breakpoint.toggle()
             vim.api.nvim_win_set_cursor(0, { moved_to, col })
             return
         end
+        -- The registry change pushes to the adapter on its own; arm the follow so
+        -- the cursor tracks the breakpoint if the adapter relocates it.
         local bp = bps.add(file, row)
-        _sync_bp(file, function()
-            if bp then _follow_if_moved(file, bp) end
-        end)
+        if bp and M.session() then _pending_follow[bp.internal_id] = file end
     end
 end
 
@@ -316,7 +325,6 @@ local function _toggle_column_bp(file, row, column)
     else
         bps.add(file, row, { column = column })
     end
-    _sync_bp(file)
 end
 
 ---Set a column breakpoint on the current line. With a running session that
@@ -373,7 +381,6 @@ function M.breakpoint.add(condition)
     if not file then return end
     local bps = require("easydap.dap.breakpoints")
     bps.add(file, row, { condition = condition })
-    _sync_bp(file)
 end
 
 function M.breakpoint.remove()
@@ -384,7 +391,6 @@ function M.breakpoint.remove()
     local existing = _existing_bp_line(file, row)
     if existing then
         bps.remove(file, existing)
-        _sync_bp(file)
     end
 end
 
@@ -393,7 +399,6 @@ function M.breakpoint.clear_file()
     if not file then return end
     local bps = require("easydap.dap.breakpoints")
     for _, bp in ipairs(bps.for_source(file)) do bps.remove(file, bp.line, bp.column) end
-    _sync_bp(file)
 end
 
 function M.breakpoint.clear_all()
@@ -401,14 +406,11 @@ function M.breakpoint.clear_all()
     local file = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
     for _, bp in ipairs(bps.for_source(file)) do bps.remove(file, bp.line, bp.column) end
     for _, bp in ipairs(bps.function_breakpoints()) do bps.remove_function(bp.name) end
-    _sync_bp(file)
 end
 
 function M.breakpoint.clear_fn()
     local bps  = require("easydap.dap.breakpoints")
-    local sess = M.session()
     for _, bp in ipairs(bps.function_breakpoints()) do bps.remove_function(bp.name) end
-    if sess then sess:sync_function_breakpoints() end
 end
 
 function M.breakpoint.enable()
@@ -421,7 +423,6 @@ function M.breakpoint.enable()
     end
     if not found then vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return end
     bps.patch(file, row, { disabled = false })
-    _sync_bp(file)
 end
 
 function M.breakpoint.disable()
@@ -434,21 +435,14 @@ function M.breakpoint.disable()
     end
     if not found then vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return end
     bps.patch(file, row, { disabled = true })
-    _sync_bp(file)
 end
 
 function M.breakpoint.enable_all()
-    local bps  = require("easydap.dap.breakpoints")
-    local sess = M.session()
-    bps.enable_all()
-    if sess then sess:sync_breakpoints() end
+    require("easydap.dap.breakpoints").enable_all()
 end
 
 function M.breakpoint.disable_all()
-    local bps  = require("easydap.dap.breakpoints")
-    local sess = M.session()
-    bps.disable_all()
-    if sess then sess:sync_breakpoints() end
+    require("easydap.dap.breakpoints").disable_all()
 end
 
 function M.breakpoint.condition()
@@ -464,7 +458,6 @@ function M.breakpoint.condition()
                 function(hit)
                     if hit == nil then return end
                     bps.patch(file, row, { condition = cond, hit_condition = hit })
-                    _sync_bp(file)
                 end)
         end)
 end
@@ -479,7 +472,6 @@ function M.breakpoint.logpoint()
         function(input)
             if input == nil then return end
             bps.patch(file, row, { log_message = input })
-            _sync_bp(file)
         end)
 end
 
@@ -490,8 +482,6 @@ function M.breakpoint.fn(name)
         local found = false
         for _, bp in ipairs(bps.function_breakpoints()) do if bp.name == n then found = true; break end end
         if found then bps.remove_function(n) else bps.add_function(n) end
-        local sess = M.session()
-        if sess then sess:sync_function_breakpoints() end
     end
     if name and name ~= "" then
         _toggle(name)
@@ -517,8 +507,6 @@ function M.breakpoint.exception_filter()
     }, function(bp)
         if not bp then return end
         bps.set_exception_enabled(bp.filter, bp.disabled)
-        local sess = M.session()
-        if sess then sess:sync_exception_breakpoints() end
     end)
 end
 
@@ -534,8 +522,6 @@ function M.breakpoint.exception_type(name, break_mode)
                 and ("[dap] exception breakpoint added: " .. n .. " (" .. result.break_mode .. ")")
                 or  ("[dap] exception breakpoint removed: " .. n),
             vim.log.levels.INFO)
-        local sess = M.session()
-        if sess then sess:sync_exception_breakpoints() end
     end
     local function _pick_mode(n)
         select.open({ prompt = "Break mode for " .. n .. ": ", items = _modes }, function(mode)

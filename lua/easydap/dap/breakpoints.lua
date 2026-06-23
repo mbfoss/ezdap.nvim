@@ -1,6 +1,11 @@
 ---@brief Global breakpoint registry.
----All breakpoints are stored here independent of any session.
----Sessions call sync helpers when they need to push state to an adapter.
+---All breakpoints are stored here independent of any session. This registry only
+---tracks the *desired* breakpoint set; adapter-verified status (verified flag,
+---bound line, hit count) is session-scoped (see easydap.dap.BpStatus) and is
+---surfaced through the session's "breakpoint_updated" event, not through here.
+---
+---`on_change` fires whenever the desired set changes; live sessions subscribe to
+---push the change to their adapter, and UI subscribes to repaint.
 
 local Signal = require("easydap.util.Signal")
 
@@ -48,8 +53,10 @@ local Signal = require("easydap.util.Signal")
 
 local M = {}
 
----Fires whenever any breakpoint is added, removed, or its state changes.
-M.on_change = Signal.new() ---@type easydap.util.Signal<fun(kind: easydap.dap.BreakpointChangeKind)>
+---Fires when the desired breakpoint set changes and adapters must re-sync.
+---`path` is the affected source file for "source" changes (nil = all sources;
+---not applicable to function/exception/restore kinds).
+M.on_change = Signal.new() ---@type easydap.util.Signal<fun(kind: easydap.dap.BreakpointChangeKind, path: string?)>
 
 ---@type easydap.dap.SourceBreakpoint[]
 local _source_bps = {}
@@ -95,7 +102,7 @@ function M.add(source, line, opts)
             bp.hit_condition = opts.hit_condition
             bp.log_message   = opts.log_message
             bp.disabled      = opts.disabled or false
-            M.on_change:emit("source")
+            M.on_change:emit("source", source)
             return bp
         end
     end
@@ -111,7 +118,7 @@ function M.add(source, line, opts)
         disabled      = opts.disabled or false,
     }
     _source_bps[#_source_bps + 1] = bp
-    M.on_change:emit("source")
+    M.on_change:emit("source", source)
     return bp
 end
 
@@ -140,7 +147,7 @@ function M.patch(source, line, opts)
     if opts.hit_condition ~= nil then bp.hit_condition = opts.hit_condition ~= "" and opts.hit_condition or nil end
     if opts.log_message   ~= nil then bp.log_message   = opts.log_message   ~= "" and opts.log_message   or nil end
     if opts.disabled      ~= nil then bp.disabled      = opts.disabled                                          end
-    M.on_change:emit("source")
+    M.on_change:emit("source", source)
     return bp
 end
 
@@ -152,7 +159,7 @@ function M.remove(source, line, column)
     for i, bp in ipairs(_source_bps) do
         if _matches(bp, source, line, column) then
             table.remove(_source_bps, i)
-            M.on_change:emit("source")
+            M.on_change:emit("source", source)
             return true
         end
     end
@@ -168,7 +175,7 @@ function M.toggle(source, line, opts)
     for i, bp in ipairs(_source_bps) do
         if _matches(bp, source, line, opts.column) then
             table.remove(_source_bps, i)
-            M.on_change:emit("source")
+            M.on_change:emit("source", source)
             return nil
         end
     end
@@ -406,12 +413,6 @@ function M.disable_all()
         if not bp.disabled then bp.disabled = true; changed = true end
     end
     if changed then M.on_change:emit("source") end
-end
-
----Notify listeners that breakpoint state was mutated externally (e.g. verified by adapter).
----@param kind easydap.dap.BreakpointChangeKind
-function M.notify_change(kind)
-    M.on_change:emit(kind)
 end
 
 -- ── Persistence ────────────────────────────────────────────────────────────

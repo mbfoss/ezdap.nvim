@@ -389,6 +389,12 @@ function DebugView:_setup_subs()
     self._subs[#self._subs + 1] = breakpoints.on_change:subscribe(function()
         self:_load_breakpoints()
     end)
+
+    -- Adapter-verified status (verified flag, bound line, hits) is session-scoped
+    -- and arrives via this event rather than the registry's on_change.
+    self._subs[#self._subs + 1] = manager.on_breakpoint_updated:subscribe(function()
+        self:_load_breakpoints()
+    end)
 end
 
 function DebugView:teardown()
@@ -1128,11 +1134,7 @@ function DebugView:_setup_keymaps(bufnr)
             end)
         elseif under(_roots.breakpoints) then
             inputwin.open({ prompt = "Function breakpoint: " }, function(name)
-                if name and name ~= "" then
-                    breakpoints.add_function(name)
-                    local sess = manager.session()
-                    if sess then sess:sync_function_breakpoints() end
-                end
+                if name and name ~= "" then breakpoints.add_function(name) end
             end)
         elseif cur.data and cur.data.kind == "variable" then
             self:_toggle_data_breakpoint(cur)
@@ -1156,8 +1158,6 @@ function DebugView:_setup_keymaps(bufnr)
                 breakpoints.remove_function(d.name)
             elseif d.bp_kind == "exception_type" and d.bp_ex_name then
                 breakpoints.remove_exception_name(d.bp_ex_name)
-                local sess = manager.session()
-                if sess then sess:sync_exception_breakpoints() end
             elseif d.bp_kind == "data" and d.bp_data_id then
                 local sess = manager.session()
                 if sess then sess:remove_data_breakpoint(d.bp_data_id) end
@@ -1179,20 +1179,16 @@ function DebugView:_setup_keymaps(bufnr)
         local cur = self._tree:get_cursor_item()
         if not cur or not cur.data or cur.data.kind ~= "breakpoint" then return end
         local d = cur.data
-        local sess = manager.session()
         if d.bp_kind == "source" and d.bp_source and d.bp_line then
             breakpoints.patch(d.bp_source, d.bp_line, { disabled = not d.disabled })
-            if sess then sess:sync_breakpoints(d.bp_source) end
         elseif d.bp_kind == "function" then
             breakpoints.add_function(d.name, { disabled = not d.disabled })
-            if sess then sess:sync_function_breakpoints() end
         elseif d.bp_kind == "exception_filter" and d.bp_filter then
             breakpoints.set_exception_enabled(d.bp_filter, d.disabled)
-            if sess then sess:sync_exception_breakpoints() end
         elseif d.bp_kind == "exception_type" and d.bp_ex_name then
             breakpoints.set_exception_name_enabled(d.bp_ex_name, d.disabled)
-            if sess then sess:sync_exception_breakpoints() end
         elseif d.bp_kind == "data" and d.bp_data_id then
+            local sess = manager.session()
             if sess then sess:set_data_breakpoint_enabled(d.bp_data_id, d.disabled) end
         end
     end)
@@ -1224,8 +1220,6 @@ function DebugView:_setup_keymaps(bufnr)
                     function(hit)
                         if hit == nil then return end
                         breakpoints.patch(d.bp_source, d.bp_line, { condition = cond, hit_condition = hit })
-                        local sess = manager.session()
-                        if sess then sess:sync_breakpoints(d.bp_source) end
                     end)
             end)
         elseif d.kind == "breakpoint" and d.bp_kind == "exception_type" and d.bp_ex_name then
@@ -1239,8 +1233,6 @@ function DebugView:_setup_keymaps(bufnr)
             }, function(mode)
                 if not mode then return end
                 breakpoints.add_exception_name(d.bp_ex_name, mode)
-                local sess = manager.session()
-                if sess then sess:sync_exception_breakpoints() end
             end)
         elseif d.kind == "variable" and self._active_sess then
             local parent = self._tree:get_parent_item(cur.id)
