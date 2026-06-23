@@ -44,10 +44,17 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 - [templates.lua](lua/easydap/templates.lua) — starter task templates (LLDB, CodeLLDB, …).
 
 **Persistence** — [store.lua](lua/easydap/store.lua)
-- Project-scoped: root is cwd when it directly contains a `root_markers` entry
-  (default `.git`). Namespaces merge into a single data file at the root (`.easydap.json` by default).
-  Writes are deferred; `flush()` persists. Breakpoints and expressions are saved
-  on `VimLeavePre` and project-leave, restored on project-enter.
+- A thin path + read/write helper. The project root is the nearest ancestor of
+  the cwd (cwd included) holding a `root_markers` entry (default `.git`); all
+  project state lives in a single JSON file at that root (`.easydap.json` by
+  default). `root()` (cached, `invalidate()` after a cwd change), `relativize`/
+  `absolutize` (portable project-relative paths), and `read`/`write` (write
+  removes the file when the payload is empty). The store knows nothing about
+  *what* is stored.
+- The lifecycle lives in [init.lua](lua/easydap/init.lua): it owns the autocmds
+  (`DirChangedPre`/`VimLeavePre` save, `DirChanged` re-resolves the root and
+  reloads/clears) and the breakpoint/expression payloads, converting source
+  paths at the persistence seam.
 
 **UI** — [lua/easydap/ui/](lua/easydap/ui/)
 - `DebugView.lua` — the main debug panel (tree of sessions/frames/scopes/

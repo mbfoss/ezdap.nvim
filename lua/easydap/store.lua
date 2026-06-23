@@ -1,126 +1,69 @@
 ---@brief Project-scoped persistence for easydap.nvim.
----Project root is the cwd when it directly contains a root marker from config.
----All namespaces are merged into a single data file at the project root.
----Writes are deferred; flush() persists the cache to disk.
+---
+---The project root is the nearest ancestor of the cwd (cwd included) that
+---contains one of `config.root_markers` (default `.git`). All project state
+---lives in a single JSON file at that root (`config.data_filename`).
+---
+---This module is a thin path + read/write helper: it locates the root, converts
+---paths to/from a portable project-relative form, and reads/writes the data
+---file. It knows nothing about *what* is stored — the lifecycle (when to save,
+---load and clear) and the breakpoint/expression payloads live in init.lua.
 
-local M                      = {}
+local M = {}
 
-local Signal                 = require("easydap.util.Signal")
-local fsutil                 = require("easydap.util.fsutil")
-local config                 = require("easydap.config")
+local fsutil               = require("easydap.util.fsutil")
+local config               = require("easydap.config")
 
-local _cached_root           = nil ---@type string|nil
-local _cache                 = {} ---@type table<string, any>
-local _initialized           = false
-local _default_data_filename = ".easydap.json"
+local _default_filename    = ".easydap.json"
+local _root                = nil ---@type string|nil
+local _root_resolved       = false
 
---- Emitted with the root path just before the cwd leaves a project (cache still intact).
---- Subscribe here to push in-memory state into the cache before it is flushed to disk.
-M.on_project_leave_pre       = Signal.new() ---@type easydap.util.Signal<fun(root: string)>
-
---- Emitted with the root path after the cwd enters a project.
-M.on_project_enter           = Signal.new() ---@type easydap.util.Signal<fun(root: string)>
-
---- Emitted after the cwd leaves a project.
-M.on_project_leave           = Signal.new() ---@type easydap.util.Signal<fun()>
-
----Returns true when the table holds no data — empty, or only (nested) empty tables.
+---True when a table holds no data — empty, or only (recursively) empty tables.
 ---@param  tbl table
 ---@return boolean
 local function _is_empty(tbl)
     for _, v in pairs(tbl) do
-        if type(v) ~= "table" then return false end
-        if not _is_empty(v) then return false end
+        if type(v) ~= "table" or not _is_empty(v) then return false end
     end
     return true
 end
 
+---Walk up from the cwd until a directory holding a root marker is found.
 ---@return string|nil root
 local function _find_root()
     local markers = config.root_markers
     if not markers or #markers == 0 then return nil end
     local cwd = vim.fn.getcwd() --[[@as string]]
-    for _, marker in ipairs(markers) do
-        ---@diagnostic disable-next-line: undefined-field
-        if vim.uv.fs_stat(vim.fs.joinpath(cwd, marker)) then
-            return cwd
-        end
-    end
-    return nil
-end
-
----@param root string
-local function _warm(root)
-    _cache            = {}
-    _cached_root      = root
-    local filename    = config.data_filename or _default_data_filename
-    local path        = vim.fs.joinpath(root, filename)
-    local ok, content = fsutil.read_content(path)
-    if not ok then return end
-    local dec_ok, data = pcall(vim.json.decode, content, { luanil = { object = true, array = true } })
-    if dec_ok and type(data) == "table" then
-        _cache = data
-    end
-end
-
-local function _flush_cache()
-    if not _cached_root then return end
-    if _is_empty(_cache) then return end
-    local filename        = config.data_filename or _default_data_filename
-    local path            = vim.fs.joinpath(_cached_root, filename)
-    local ok, json_or_err = pcall(vim.json.encode, _cache)
-    if not ok then return end
-    fsutil.write_content(path, json_or_err)
-end
-
-local function _init()
-    if _initialized then return end
-    _initialized = true
-
-    vim.api.nvim_create_autocmd("DirChangedPre", {
-        callback = function()
-            if not _cached_root then return end
-            M.on_project_leave_pre:emit(_cached_root)
-            _flush_cache()
-        end,
-        desc = "easydap: flush project store before cwd change",
-    })
-    vim.api.nvim_create_autocmd("DirChanged", {
-        callback = function()
-            local was_in_project = _cached_root ~= nil
-            _cached_root         = nil
-            _cache               = {}
-            local root           = _find_root()
-            if root then
-                _warm(root)
-                M.on_project_enter:emit(root)
-            elseif was_in_project then
-                M.on_project_leave:emit()
-            end
-        end,
-        desc = "easydap: warm project store after cwd change",
-    })
-
-    local root = _find_root()
-    if root then _warm(root) end
-end
-
----@return boolean
-function M.in_project()
-    _init()
-    return _cached_root ~= nil
+    local marker = vim.fs.find(markers, { path = cwd, upward = true, limit = 1 })[1]
+    return marker and vim.fs.dirname(marker) or nil
 end
 
 ---The current project root, or nil when the cwd is not inside a project.
+---The result is cached; call invalidate() after a cwd change.
 ---@return string|nil
 function M.root()
-    _init()
-    return _cached_root
+    if not _root_resolved then
+        _root          = _find_root()
+        _root_resolved = true
+    end
+    return _root
 end
 
----Convert an absolute path to one relative to the project root, for portable
----storage. Paths outside the project (or when there is no project) are kept
----absolute so they still resolve when restored.
+---Drop the cached root so the next root() recomputes it. Call after a cwd change.
+function M.invalidate()
+    _root, _root_resolved = nil, false
+end
+
+---Absolute path of the data file, or nil when the cwd is not in a project.
+---@return string|nil path
+local function _data_path()
+    local root = M.root()
+    if not root then return nil end
+    return vim.fs.joinpath(root, config.data_filename or _default_filename)
+end
+
+---Make an absolute path relative to the project root, for portable storage.
+---Paths outside the project (or when there is no project) pass through unchanged.
 ---@param  path string
 ---@return string
 function M.relativize(path)
@@ -143,38 +86,36 @@ function M.absolutize(path)
     return vim.fs.joinpath(root, path)
 end
 
----Load a namespace from the project cache. Returns nil when not in a project.
----@param  namespace string
----@return table|nil
-function M.get(namespace)
-    _init()
-    return _cache[namespace]
+---Read and decode the project data file. Returns nil when not in a project, or
+---when the file is missing or unreadable.
+---@return table|nil data
+function M.read()
+    local path = _data_path()
+    if not path then return nil end
+    local ok, content = fsutil.read_content(path)
+    if not ok then return nil end
+    local dec_ok, data = pcall(vim.json.decode, content, { luanil = { object = true, array = true } })
+    if dec_ok and type(data) == "table" then return data end
+    return nil
 end
 
----Update a namespace in the in-memory cache. No-op when not in a project.
----Call flush() to persist.
----@param namespace string
----@param data      table
-function M.set(namespace, data)
-    _init()
-    if not _cached_root then return end
-    _cache[namespace] = data
-end
-
----Persist all cached namespaces to the project data file.
----No-op when not in a project.
+---Encode and write the project data file. No-op when not in a project. When
+---`data` holds nothing, any existing file is removed rather than left stale.
+---@param  data table
 ---@return boolean ok
 ---@return string? err
-function M.flush()
-    if not _cached_root then return true end
-    if _is_empty(_cache) then return true end
-    local filename = config.data_filename or _default_data_filename
-    local path = vim.fs.joinpath(_cached_root, filename)
-    local ok, json_or_err = pcall(vim.json.encode, _cache)
-    if not ok then
-        return false, "json encode failed: " .. tostring(json_or_err)
+function M.write(data)
+    local path = _data_path()
+    if not path then return true end
+    if _is_empty(data) then
+        os.remove(path)
+        return true
     end
-    return fsutil.write_content(path, json_or_err)
+    local ok, json = pcall(vim.json.encode, data)
+    if not ok then
+        return false, "json encode failed: " .. tostring(json)
+    end
+    return fsutil.write_content(path, json)
 end
 
 return M
