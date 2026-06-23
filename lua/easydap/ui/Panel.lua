@@ -119,11 +119,14 @@ end
 -- ── Buffer display ────────────────────────────────────────────────────────
 
 ---Display `bufnr` in the panel window and refresh the winbar. Pins terminal and
----autoscroll buffers to their last line.
+---autoscroll buffers to their last line. The window is `winfixbuf` so stray edits
+---or jumps cannot hijack it; the lock is lifted only for our own tab switch.
 ---@param bufnr integer
 function Panel:_set_buf(bufnr)
     if not self:is_open() or not vim.api.nvim_buf_is_valid(bufnr) then return end
+    vim.wo[self._win].winfixbuf = false
     vim.api.nvim_win_set_buf(self._win, bufnr)
+    vim.wo[self._win].winfixbuf = true
     self._active = bufnr
     self:_attach(bufnr)
     if vim.bo[bufnr].buftype == "terminal" then
