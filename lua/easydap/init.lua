@@ -139,7 +139,7 @@ local function _register_user_commands()
         "project", "panel",
     }
 
-    usercmd.register_user_cmd("Debug", function(_, args, _)
+    usercmd.register_user_cmd("Debug", function(_, args, opts)
         local sub = args[1]
         if sub == "run" then
             M.run(args[2])
@@ -192,14 +192,17 @@ local function _register_user_commands()
         elseif sub == "panel" then
             local runner = require("easydap.runner")
             local action = args[2]
-            if action == nil or action == "" or action == "toggle" then
-                runner.panel_toggle()
-            elseif action == "jump" then
-                runner.panel_jump(tonumber(args[3]))
+            -- A count prefix selects a tab: `:2Debug panel` / `:2Debug panel jump`
+            -- both jump to tab 2 (count is 0 when none is given).
+            local count  = opts.count > 0 and opts.count or nil
+            if action == "jump" then
+                runner.panel_jump(count or tonumber(args[3]))
             elseif action == "next" then
                 runner.panel_next()
             elseif action == "previous" or action == "prev" then
                 runner.panel_prev()
+            elseif action == nil or action == "" or action == "toggle" then
+                if count then runner.panel_jump(count) else runner.panel_toggle() end
             else
                 vim.notify("[easydap] unknown panel command: " .. tostring(action), vim.log.levels.WARN)
             end
@@ -211,6 +214,7 @@ local function _register_user_commands()
         end
     end, {
         desc = "easydap commands",
+        count = true,
         subcommand_fn = function(_, rest, arg_lead)
             if #rest == 0 then return _debug_subs end
             if rest[1] == "breakpoint" then
