@@ -33,6 +33,9 @@ easydap can be used on its own or as the debug backend for
 - Neovim ≥ 0.10
 - A DAP adapter for the language you want to debug (see [Adapters](#adapters)).
 
+Run `:checkhealth easydap` to verify your Neovim version, confirm `setup()` ran,
+and see which built-in adapters are available on your system.
+
 ## Installation
 
 Any plugin manager works. easydap has no Lua dependencies.

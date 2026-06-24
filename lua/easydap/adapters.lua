@@ -229,32 +229,6 @@ M.codelldb = {
     end,
 }
 
-M["lldb-dap"] = {
-    command = "lldb-dap",
-
-    derive_launch_args = function(task)
-        local program, extra_args = _split_command(task)
-        local args = {
-            type    = "lldb-dap",
-            program = program,
-            args    = extra_args,
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { type = "lldb-dap", pid = 0 }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-}
-
 M.gdb = {
     command            = { "gdb", "--interpreter=dap" },
     derive_launch_args = function(task)
@@ -514,7 +488,7 @@ M["php-debug-adapter"] = {
 -- because the js-based adapter embeds them inside the program table, not at the top level.
 local _lua_debugger_adapter_js = vim.fs.joinpath(
     vim.fn.stdpath("data"), "mason", "packages",
-    "local-lua-debugger-vscode", "extension", "debugAdapter.js"
+    "local-lua-debugger-vscode", "extension", "extension", "debugAdapter.js"
 )
 M["local-lua-debugger"] = {
     command            = { "node", _lua_debugger_adapter_js },
