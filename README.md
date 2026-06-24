@@ -1,84 +1,250 @@
 # easydap.nvim
 
-A Debug Adapter Protocol (DAP) client for Neovim.
+A Debug Adapter Protocol (DAP) client for Neovim. It spawns and manages adapter
+processes, tracks sessions and breakpoints, and renders a tree-based debug UI.
 
-easydap speaks the DAP wire protocol directly. It does not depend on
-`nvim-dap`. It manages adapter processes, tracks debug sessions and
-breakpoints, and renders a tree-based debug UI.
+easydap can be used on its own or as the debug backend for
+[easytasks.nvim](https://github.com/mbfoss/easytasks.nvim).
+
+## Features
+
+- Pure-Lua DAP runtime — Content-Length framing, request/response correlation,
+  and event dispatch implemented in-tree.
+- Manages adapter lifecycle: stdio-pipe and TCP-socket adapters, plus adapters
+  that need a server spawned first (debugpy, js-debug, …).
+- Full breakpoint surface: line, column, conditional, hit-condition, logpoints,
+  function breakpoints, exception filters/types, and data breakpoints
+  (watchpoints).
+- Multiple concurrent sessions and threads, with an "active session" concept the
+  UI and keymaps follow automatically.
+- Tree-based **debug view**: sessions → threads/frames → scopes → variables,
+  plus watch expressions and a breakpoint list.
+- Gutter signs, inline variable values, a current-line highlight, an integrated
+  REPL, and a disassembly view.
+- Stepping the full menu: step over/in/out, step-into-targets, jump-to-cursor,
+  restart frame, reverse-continue / step-back (when the adapter supports it).
+- A run **panel** that pages between a run's report, REPL, program output,
+  terminal, and raw-DAP-message buffers.
+- Per-project persistence of breakpoints and watch expressions in a single JSON
+  file at the project root.
 
 ## Requirements
 
-- Neovim >= 0.10
-- A DAP-capable debug adapter for your language (see [Adapters](#adapters))
+- Neovim ≥ 0.10
+- A DAP adapter for the language you want to debug (see [Adapters](#adapters)).
 
 ## Installation
 
-Install with any plugin manager, then call `setup`.
+Any plugin manager works. easydap has no Lua dependencies.
 
-Neovim's built-in package manager (`vim.pack`, requires Neovim >= 0.12):
-
-```lua
-vim.pack.add({
-  { src = "https://github.com/mbfoss/easydap.nvim" },
-})
-require("easydap").setup()
-```
-
-Pin to a branch or tag with `version`:
-
-```lua
-vim.pack.add({
-  { src = "https://github.com/mbfoss/easydap.nvim", version = "main" },
-})
-require("easydap").setup()
-```
-
-lazy.nvim:
+**[lazy.nvim](https://github.com/folke/lazy.nvim)**
 
 ```lua
 {
   "mbfoss/easydap.nvim",
-  config = function()
-    require("easydap").setup()
-  end,
+  opts = {},               -- calls require("easydap").setup(opts)
 }
 ```
 
-As a native package (`:h packages`, requires Neovim >= 0.10):
+**[mini.deps](https://github.com/echasnovski/mini.deps)**
 
-```sh
-git clone https://github.com/mbfoss/easydap.nvim \
-  ~/.config/nvim/pack/plugins/start/easydap.nvim
+```lua
+add("mbfoss/easydap.nvim")
+require("easydap").setup()
 ```
 
-Then call `setup` in your config:
+**Built-in packages (`:h packages`)**
+
+Clone into `pack/*/opt/` (or `start/`) and call `setup` from your config:
 
 ```lua
 require("easydap").setup()
 ```
 
-Clone into `pack/plugins/opt/` instead to load it on demand with
-`:packadd easydap.nvim` (call `setup` after the `packadd`).
+## Quick start
+
+1. Define a debug task as a Lua file that returns a task table:
+
+   ```lua
+   -- debug.lua
+   return {
+     name    = "debug app",
+     adapter = "codelldb",      -- a key from require("easydap.adapters")
+     request = "launch",
+     command = { "./a.out", "--flag" },
+     cwd     = vim.fn.getcwd(),
+     stop_on_entry = false,
+   }
+   ```
+
+2. Set a breakpoint on the current line, then start the task:
+
+   ```vim
+   :Debug breakpoint toggle
+   :Debug run debug.lua
+   ```
+
+   Pass a directory instead of a file to pick from the `*.lua` tasks in it:
+
+   ```vim
+   :Debug run ./debug
+   ```
+
+3. The debug view opens automatically on the first session. Step through with
+   `:Debug step_over`, `:Debug step_in`, `:Debug continue`, and inspect values in
+   the tree.
+
+You can also run a task table directly from Lua:
+
+```lua
+require("easydap").run({ name = "tests", adapter = "delve", request = "launch" })
+```
+
+## Task fields
+
+A task is a plain table consumed by the runtime; adapters translate these
+generic fields into a DAP `launch`/`attach` request.
+
+| Field             | Type                     | Notes |
+| ----------------- | ------------------------ | ----- |
+| `name`            | `string`                 | Defaults to `"debug"`; also the run/panel group name. |
+| `adapter`         | `string`                 | **Required.** A key in `require("easydap.adapters")`. |
+| `request`         | `"launch"` \| `"attach"` | Defaults to the adapter's default. |
+| `command`         | `string` \| `string[]`   | Program to debug; `[program, arg1, …]` shorthand allowed. |
+| `cwd`             | `string`                 | Working directory. |
+| `env`             | `table<string,string>`   | Merged into the process environment. |
+| `clear_env`       | `boolean`                | Pass `env` verbatim without merging the process environment. |
+| `host` / `port`   | `string` / `integer`     | Attach targets (required for the `remote` adapter). |
+| `run_in_terminal` | `boolean`                | Use the DAP `runInTerminal` flow. |
+| `stop_on_entry`   | `boolean`                | Break at program entry. |
+| `request_args`    | `table`                  | Sent verbatim in the launch/attach body; overrides the generic fields. |
+| `raw_messages`    | `boolean`                | Capture raw DAP protocol traffic in a dedicated buffer. |
+
+When `request_args` is omitted, the adapter's `derive_launch_args` /
+`derive_attach_args` builds the request from the generic fields above. When you
+need full control, set `request_args` and it is forwarded unchanged.
+
+## Adapters
+
+Built-in adapter definitions live in
+[`adapters.lua`](lua/easydap/adapters.lua) as a plain `name -> config` table:
+
+| Name | Tooling |
+| ---- | ------- |
+| `debugpy`, `debugpy-module`, `debugpy-remote` | Python (debugpy) |
+| `codelldb` | C/C++/Rust (CodeLLDB) |
+| `lldb`, `lldb-dap` | C/C++/Rust (lldb-dap) |
+| `gdb` | C/C++ (`gdb --interpreter=dap`) |
+| `delve` | Go (`dlv dap`) |
+| `netcoredbg` | .NET |
+| `js-debug` | JavaScript / TypeScript (js-debug) |
+| `bash-debug-adapter` | Bash |
+| `php-debug-adapter` | PHP (Xdebug) |
+| `local-lua-debugger` | Lua (local-lua-debugger-vscode) |
+| `java-debug-server` | Java (external debug server, e.g. nvim-jdtls) |
+| `remote` | Generic TCP attach to a running DAP server |
+
+Most adapters expect their binary on your `PATH` (`codelldb`, `delve`,
+`netcoredbg`, `gdb`, `bash-debug-adapter`, …). The Node-script adapters
+(`js-debug`, `local-lua-debugger`) have no standard executable, so point their
+`command` at the script — see [Adding or overriding adapters](#adding-or-overriding-adapters).
+
+### Adding or overriding adapters
+
+The adapters table is mutable — add your own or tweak a built-in directly:
+
+```lua
+local adapters = require("easydap.adapters")
+
+-- New adapter
+adapters.myadapter = {
+  command = { "my-dap-server", "--stdio" },
+  derive_launch_args = function(task)
+    return { program = task.command, args = {} }
+  end,
+}
+
+-- Override a built-in field
+adapters.codelldb.command = "/opt/codelldb/codelldb"
+
+-- Node-script adapters: point `command` at the script (no PATH binary exists)
+adapters["js-debug"].command = { "node", "/path/to/js-debug/src/dapDebugServer.js" }
+adapters["local-lua-debugger"].command     = { "node", "/path/to/extension/debugAdapter.js" }
+adapters["local-lua-debugger"].command_env = { LUA_PATH = "/path/to/debugger/?.lua;;" }
+```
+
+Key adapter-config fields: `command` (string or argv), `host`/`port` (for TCP
+adapters), `request`, `derive_launch_args` / `derive_attach_args`, and a
+`setup`/`teardown` pair for adapters that must spawn a server first. See the
+`easydap.dap.Config` annotation in [`adapters.lua`](lua/easydap/adapters.lua).
+
+## Commands
+
+Everything is under the `:Debug` command (with completion).
+
+**Session & stepping**
+
+| Command | Action |
+| ------- | ------ |
+| `:Debug run {file\|dir}` | Run a task from a Lua file, or pick from a directory. |
+| `:Debug view` | Toggle the debug view. |
+| `:Debug continue` / `continue_all` | Continue the active session / all sessions. |
+| `:Debug step_over` (`next`) / `step_in` / `step_out` | Step. |
+| `:Debug step_into_targets` | Step into a chosen call on the current line. |
+| `:Debug step_back` / `reverse_continue` | Reverse execution (adapter permitting). |
+| `:Debug jump_to_cursor` | Set the next statement to the line under the cursor. |
+| `:Debug restart_frame` | Restart the selected stack frame. |
+| `:Debug pause` / `restart` | Pause / restart the session. |
+| `:Debug stop` (`terminate`) / `terminate_all` | Stop the active session / all. |
+| `:Debug session` / `thread` / `frame` | Pick the active session / thread / frame. |
+| `:Debug terminate_thread` | Pick and terminate a thread. |
+| `:Debug inspect` | Hover-evaluate the word under the cursor. |
+| `:Debug exception_info` | Show details of the current exception. |
+| `:Debug disassemble` | Open the disassembly view for the current frame. |
+| `:Debug panel [toggle\|next\|previous\|jump N]` | Control the run panel (`:N Debug panel` jumps to tab N). |
+| `:Debug project` | Show the resolved project root. |
+
+**Breakpoints** — `:Debug breakpoint {sub}` (also reachable as `:Debug breakpoint`):
+
+| Subcommand | Action |
+| ---------- | ------ |
+| `toggle` / `add [cond]` / `remove` | Line breakpoint at the cursor. |
+| `column` | Column breakpoint (picks valid columns when a session is live). |
+| `condition` / `logpoint` | Set condition + hit-condition / log message. |
+| `enable` / `disable` / `enable_all` / `disable_all` | Toggle enabled state. |
+| `clear_file` / `clear_fn` / `clear_all` | Bulk removal. |
+| `fn [name]` | Toggle a function breakpoint. |
+| `exception_filter` | Toggle an adapter-provided exception filter. |
+| `exception_type [name] [mode]` | Break on a named exception type. |
+| `data [name]` / `data_clear` / `data_list` | Data breakpoints (watchpoints). |
+| `list` | Pick from all breakpoints (with preview) and jump to one. |
+
+## Debug view
+
+The debug view is a tree of the live debug state. It opens automatically when a
+session starts, or with `:Debug view`. In-view keymaps (press `g?` for this
+list):
+
+| Key    | Action |
+| ------ | ------ |
+| `<CR>` | Select session / switch frame / jump to breakpoint source |
+| `K`    | Show full value / frame details / exception info / breakpoint details |
+| `i`    | Add watch expression, function breakpoint, or data breakpoint |
+| `d`    | Remove watch expression or breakpoint |
+| `r`    | Rename watch expression |
+| `x`    | Toggle breakpoint enabled/disabled |
+| `c`    | Change variable value / breakpoint condition / break mode / access type |
 
 ## Configuration
 
-`setup` takes an optional table that is merged over the defaults.
+`setup(opts)` merges over the defaults in [`config.lua`](lua/easydap/config.lua):
 
 ```lua
 require("easydap").setup({
-  -- Project data file (breakpoints, watch expressions), written at the project root.
-  data_filename = ".easydap.json",
-
-  -- Milliseconds to wait before clearing stale UI during step-through (reduces flicker).
-  antiflicker_delay = 200,
-
-  -- Max characters shown for a value in the debug view before truncating.
-  debug_value_max_len = 70,
-
-  -- Filenames/dirs whose presence marks a project root.
-  root_markers = { ".git" },
-
-  -- Gutter sign glyphs.
+  root_markers        = { ".git" },   -- identifies the project root
+  data_filename       = ".easydap.json",
+  debug_value_max_len = 70,           -- truncate variable/expression values past this
+  antiflicker_delay   = 200,          -- ms before clearing stale UI during step-through
   signs = {
     debug_frame              = "▶",
     active_breakpoint        = "●",
@@ -94,263 +260,50 @@ require("easydap").setup({
 })
 ```
 
-## Usage
-
-easydap does not run tasks by itself. It is a debug engine meant to be driven
-either by a task runner or directly from your own plugin. Both start a session
-by handing easydap a *task*.
-
-### From a task runner
-
-A task runner calls the task entry point, passing a run context and a completion
-callback:
-
-```lua
----@param task    easydap.Task      the task to run (fields below)
----@param ctx     easydap.RunCtx    run context: { tasks, add_bufnr, report }
----@param on_done fun(ok: boolean)  called when the session ends
----@return fun()                    handle that stops the run
-require("easydap.task").start(task, ctx, on_done)
-```
-
-easydap resolves the adapter, derives the DAP launch/attach arguments from the
-task fields, starts the session, and opens the debug view. It registers the
-session's REPL, program output, and terminal buffers through `ctx.add_bufnr` so
-the runner can surface them in its own UI, sends progress to `ctx.report`, and
-calls `on_done(ok)` when the run ends.
-
-[easytasks.nvim](https://github.com/mbfoss/easytasks.nvim) is the reference
-runner and registers easydap as its default debug backend, so installing both
-and calling `setup` is all the wiring needed:
-
-```lua
-require("easytasks").setup()   -- debug_backend defaults to "easydap"
-require("easydap").setup()
-```
-
-A `debug` task is then defined in your task file:
-
-```toml
-[tasks.debug-app]
-type    = "debug"
-adapter = "codelldb"
-request = "launch"
-command = ["./a.out", "--verbose"]
-cwd     = "${workspaceFolder}"
-```
-
-### Task fields
-
-A debug task uses these fields:
-
-| Field             | Description                                                       |
-| ----------------- | ----------------------------------------------------------------- |
-| `adapter`         | Adapter name (required), e.g. `codelldb`, `delve`, `debugpy`.     |
-| `request`         | `"launch"` or `"attach"`. Defaults to the adapter's request.      |
-| `command`         | Program to debug, with its arguments. String path, or `[program, arg1, ...]`. |
-| `cwd`             | Working directory for the debugged program.                      |
-| `env`             | Environment variables (merged with the process env).             |
-| `clear_env`       | Pass `env` verbatim without merging.                             |
-| `run_in_terminal` | Ask the adapter to spawn an integrated terminal for stdio.       |
-| `stop_on_entry`   | Pause at the program entry point.                                |
-| `host` / `port`   | DAP server address (attach only; required for the `remote` adapter). |
-| `request_args`    | DAP request body, merged over the derived args (takes precedence). |
-| `raw_messages`    | Capture raw DAP traffic in a dedicated buffer.                   |
-
-`command`, `cwd`, `env`, `clear_env`, `run_in_terminal`, and `stop_on_entry`
-are convenience fields. You do not normally write `request_args` by hand: each
-adapter maps these generic fields into the DAP `launch`/`attach` body for you
-(through its `derive_launch_args` / `derive_attach_args`), so the same task
-definition works across adapters even though they name their arguments
-differently. In the `debug-app` task above, the `program` and its arguments the
-adapter expects are derived from `command`. The mapping is per adapter — an
-adapter only translates the fields that make sense for it.
-
-Set `request_args` only when you need an adapter-specific field that the
-convenience fields do not cover. It is deep-merged over the derived body and
-wins on conflict, so you can override a single derived value without restating
-the rest.
-
-Starter task templates for each built-in adapter are available in
-`require("easydap.templates")`.
-
-### From your own plugin
-
-Without a task runner, you supply the run context yourself. `add_bufnr` and
-`report` may be no-ops; `on_done` is called when the session ends:
-
-```lua
-require("easydap.task").start({
-  adapter = "codelldb",
-  request = "launch",
-  command = { "./a.out", "--verbose" },
-  cwd     = vim.fn.getcwd(),
-}, {
-  tasks     = {},
-  add_bufnr = function(bufnr, label, priority) end,  -- REPL / output / terminal buffers
-  report    = function(message) end,                 -- progress messages
-}, function(ok) end)
-```
-
-For full control over the raw DAP config — skipping the task-field derivation
-entirely — start a session with `manager.start`. `request_args` is sent verbatim
-as the DAP `launch`/`attach` body:
-
-```lua
-local manager  = require("easydap.manager")
-local adapters = require("easydap.adapters")
-
-manager.start(vim.tbl_extend("force", adapters.codelldb, {
-  request      = "launch",
-  request_args = { program = vim.fn.getcwd() .. "/a.out", args = {} },
-}))
-```
-
-## Adapters
-
-Built-in adapter definitions live in `require("easydap.adapters")`, a plain
-`name -> config` table. Add or override entries directly:
-
-```lua
-local adapters = require("easydap.adapters")
-
--- Override a field on a built-in adapter
-adapters.codelldb.command = "/opt/codelldb/codelldb"
-
--- Add a new adapter
-adapters.my_adapter = {
-  command = "my-dap-server",
-  derive_launch_args = function(task) return { program = task.command } end,
-}
-```
-
-| Name                 | Target                                            |
-| -------------------- | ------------------------------------------------- |
-| `codelldb`           | C / C++ / Rust (CodeLLDB)                          |
-| `lldb`, `lldb-dap`   | C / C++ / Rust (lldb-dap)                          |
-| `gdb`                | C / C++ (gdb `--interpreter=dap`)                  |
-| `delve`              | Go (`dlv dap`)                                     |
-| `debugpy`            | Python file                                        |
-| `debugpy-module`     | Python module                                      |
-| `debugpy-remote`     | Attach to a remote debugpy process                |
-| `js-debug`           | Node.js / JavaScript / TypeScript                 |
-| `netcoredbg`         | .NET                                              |
-| `java-debug-server`  | Java (external debug server, e.g. nvim-jdtls)     |
-| `bash-debug-adapter` | Bash                                              |
-| `php-debug-adapter`  | PHP (Xdebug)                                       |
-| `local-lua-debugger` | Lua                                               |
-| `remote`             | Generic TCP attach to any DAP server              |
-
-## Commands
-
-All commands are under `:Debug`.
-
-### Session control
-
-| Command                     | Action                                            |
-| --------------------------- | ------------------------------------------------- |
-| `:Debug view`               | Toggle the debug view panel.                      |
-| `:Debug continue`           | Continue the active session.                      |
-| `:Debug continue_all`       | Continue all sessions.                             |
-| `:Debug step_over` / `next` | Step over.                                         |
-| `:Debug step_in`            | Step in.                                           |
-| `:Debug step_out`           | Step out.                                          |
-| `:Debug step_into_targets`  | Step into a chosen call on the current line.       |
-| `:Debug step_back`          | Step back (adapters that support reverse debugging). |
-| `:Debug reverse_continue`   | Reverse continue.                                  |
-| `:Debug jump_to_cursor`     | Set the next statement to the line under the cursor. |
-| `:Debug restart_frame`      | Restart the selected stack frame.                  |
-| `:Debug pause`              | Pause the running program.                         |
-| `:Debug restart`            | Restart the session.                               |
-| `:Debug stop` / `terminate` | Stop the active session.                           |
-| `:Debug terminate_all`      | Stop all sessions.                                 |
-
-### Inspection
-
-| Command                  | Action                                               |
-| ------------------------ | ---------------------------------------------------- |
-| `:Debug inspect`         | Evaluate the word under the cursor in a float.       |
-| `:Debug exception_info`  | Show details of the current exception.               |
-| `:Debug disassemble`     | Open the disassembly pane for the current frame.     |
-| `:Debug session`         | Pick the active session.                             |
-| `:Debug thread`          | Pick the selected thread.                            |
-| `:Debug terminate_thread`| Terminate a chosen thread.                           |
-| `:Debug frame`           | Pick the selected stack frame.                       |
-
-### Breakpoints
-
-Breakpoint commands are under `:Debug breakpoint`.
-
-| Command                              | Action                                          |
-| ------------------------------------ | ----------------------------------------------- |
-| `:Debug breakpoint toggle`           | Toggle a breakpoint on the current line.        |
-| `:Debug breakpoint add [condition]`  | Add a (conditional) breakpoint.                 |
-| `:Debug breakpoint remove`           | Remove the breakpoint at the cursor.            |
-| `:Debug breakpoint column`           | Set a column breakpoint on the current line.    |
-| `:Debug breakpoint condition`        | Set the condition / hit condition.              |
-| `:Debug breakpoint logpoint`         | Turn the breakpoint into a logpoint.            |
-| `:Debug breakpoint enable` / `disable` | Enable / disable the breakpoint at the cursor. |
-| `:Debug breakpoint enable_all` / `disable_all` | Enable / disable all breakpoints.     |
-| `:Debug breakpoint clear_file`       | Remove all breakpoints in the current file.     |
-| `:Debug breakpoint clear_all`        | Remove all source and function breakpoints.     |
-| `:Debug breakpoint clear_fn`         | Remove all function breakpoints.                |
-| `:Debug breakpoint fn [name]`        | Toggle a function breakpoint.                   |
-| `:Debug breakpoint exception_filter` | Toggle an adapter-provided exception filter.    |
-| `:Debug breakpoint exception_type [name] [mode]` | Break on a named exception type.    |
-| `:Debug breakpoint data [name]`      | Toggle a data breakpoint (watchpoint).          |
-| `:Debug breakpoint data_clear`       | Remove all data breakpoints.                    |
-| `:Debug breakpoint data_list`        | List data breakpoints.                          |
-| `:Debug breakpoint list`             | Pick a breakpoint and jump to its source.       |
-
-## Debug view
-
-The debug view is a tree of sessions, threads, stack frames, scopes,
-variables, watch expressions, and breakpoints. Open it with `:Debug view` or
-`require("easydap").open_debug_view()`.
-
-Keymaps inside the panel (`g?` shows this list):
-
-| Key    | Action                                                              |
-| ------ | ------------------------------------------------------------------ |
-| `<CR>` | Select session / switch frame / jump to breakpoint source.         |
-| `K`    | Show full value, frame details, exception info, or breakpoint info. |
-| `i`    | Add watch expression, function breakpoint, or data breakpoint.     |
-| `d`    | Remove watch expression or breakpoint.                             |
-| `r`    | Rename a watch expression.                                         |
-| `x`    | Toggle breakpoint enabled / disabled.                              |
-| `c`    | Change a variable value, breakpoint condition, or break mode.      |
-
-## Features
-
-- Multiple concurrent debug sessions with an active-session model.
-- Source, conditional, log, function, data, and exception breakpoints.
-- Watch expressions and an interactive REPL.
-- Inline variable values shown as virtual text at their source lines.
-- Gutter signs for breakpoints and the current execution position.
-- Disassembly view with instruction-level stepping.
-- Reverse debugging (step back, reverse continue) where the adapter supports it.
-
 ## Persistence
 
-State is scoped to a project. The project root is the current working directory
-when it directly contains a [`root_markers`](#configuration) entry (`.git` by
-default). Breakpoints and watch expressions are written to the data file at the
-root (`.easydap.json` by default), saved on exit and when leaving a project, and
-restored when entering one.
+Breakpoints and watch expressions are saved per project to a single JSON file
+(`.easydap.json` by default) at the nearest ancestor directory containing a
+`root_markers` entry. State is persisted on `cwd` change and on exit, and
+restored when you return to a project. Source paths are stored project-relative
+so the file stays portable. Add it to your `.gitignore` if you don't want to
+share it.
 
-## API
+## Suggested keymaps
 
-`require("easydap")`:
+easydap sets no global keymaps — wire the commands to whatever you prefer:
 
-- `setup(opts)` — configure and register commands.
-- `open_debug_view()` / `debug_view()` — the debug panel.
-- `open_disassembly_view()` / `disassembly_view()` — the disassembly pane.
+```lua
+local map = vim.keymap.set
+map("n", "<F5>",  "<Cmd>Debug continue<CR>",          { desc = "Debug: continue" })
+map("n", "<F9>",  "<Cmd>Debug breakpoint toggle<CR>", { desc = "Debug: toggle breakpoint" })
+map("n", "<F10>", "<Cmd>Debug step_over<CR>",         { desc = "Debug: step over" })
+map("n", "<F11>", "<Cmd>Debug step_in<CR>",           { desc = "Debug: step in" })
+map("n", "<F12>", "<Cmd>Debug step_out<CR>",          { desc = "Debug: step out" })
+map("n", "<leader>du", "<Cmd>Debug view<CR>",         { desc = "Debug: toggle view" })
+map("n", "<leader>di", "<Cmd>Debug inspect<CR>",      { desc = "Debug: inspect" })
+```
 
-`require("easydap.task")` is the task entry point: `start(task, ctx, on_done)`
-resolves the adapter, derives the DAP request, and runs the session. Call it
-from a task runner or your own plugin.
+For richer integration, the `require("easydap.manager")` module exposes the same
+actions as Lua functions (`manager.debug.*`, `manager.breakpoint.*`,
+`manager.view.*`) along with session signals you can subscribe to.
 
-`require("easydap.manager")` is the single dependency surface for commands and
-UI. It owns the active session and exposes `start`, `session`, `sessions`,
-`select_session`, the `debug.*`, `breakpoint.*`, and `panel.*` command tables,
-and the session signals.
+## Architecture
+
+The code is layered — higher layers depend on lower ones, communicating through
+`Signal` pub/sub rather than back-references:
+
+- **Public API** — [`init.lua`](lua/easydap/init.lua): `setup`, `run`, the debug
+  view, and the `:Debug` command surface.
+- **Command surface** — [`manager.lua`](lua/easydap/manager.lua): the active-session
+  concept and the user-facing `debug` / `breakpoint` / `view` command tables.
+- **DAP core** — [`lua/easydap/dap/`](lua/easydap/dap/): `client` (session
+  registry), `session` (one DAP session), `connection` + `transport` (the wire),
+  and `breakpoints` (the global registry).
+- **Adapters & tasks** — [`adapters.lua`](lua/easydap/adapters.lua),
+  [`task.lua`](lua/easydap/task.lua), [`runner.lua`](lua/easydap/runner.lua).
+- **UI** — [`lua/easydap/ui/`](lua/easydap/ui/): the debug view, signs, inline
+  values, REPL, disassembly, and run panel.
+
+See [CLAUDE.md](CLAUDE.md) for a fuller breakdown.
+```
