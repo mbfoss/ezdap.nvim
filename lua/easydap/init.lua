@@ -126,7 +126,7 @@ local function _register_user_commands()
     })
 
     local _debug_subs = {
-        "run",
+        "run", "rerun",
         "breakpoint",
         "view", "continue", "continue_all",
         "step_over", "next", "step_in", "step_out", "step_back",
@@ -143,6 +143,8 @@ local function _register_user_commands()
         local sub = args[1]
         if sub == "run" then
             M.run(args[2])
+        elseif sub == "rerun" then
+            M.rerun()
         elseif sub == "view" then
             cmd.view.toggle()
         elseif sub == "continue" then
@@ -311,6 +313,11 @@ function M.run(arg)
 
     vim.notify("[easydap] run: expected a Lua file or folder, e.g. :Debug run debug.lua",
         vim.log.levels.WARN)
+end
+
+---Re-run the most recently run task from scratch. Warns when nothing has run yet.
+function M.rerun()
+    require("easydap.runner").rerun()
 end
 
 ---Report whether the cwd is inside a project and, if so, the resolved root and

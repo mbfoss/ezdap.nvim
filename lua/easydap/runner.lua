@@ -43,6 +43,10 @@ local M = {}
 local _runs    = {}
 local _counter = 0
 
+---The most recently run task, kept so `rerun()` can re-launch it from scratch.
+---@type easydap.Task?
+local _last_task
+
 ---@param msg string
 local function _warn(msg) vim.notify("[easydap] " .. msg, vim.log.levels.WARN) end
 
@@ -144,6 +148,7 @@ function M.run(task)
 
     task      = vim.deepcopy(task)
     task.name = task.name or "debug"
+    _last_task = task
 
     _clear_finished(task.name)
 
@@ -184,6 +189,19 @@ function M.run(task)
     return run
 end
 
+---Re-launch the most recently run task from scratch. Unlike `:Debug restart`
+---(a DAP restart request on the live session), this works after the session has
+---ended and for adapters without restart support, and re-reads nothing from disk.
+---Warns when no task has been run yet.
+---@return easydap.runner.Run?
+function M.rerun()
+    if not _last_task then
+        _warn("rerun: nothing to re-run yet (run a task first)")
+        return
+    end
+    return M.run(_last_task)
+end
+
 ---Prompt to pick one of the Lua files directly in `dir`, then run it, using
 ---easydap's own fuzzy picker with a preview of each file. Runs the sole file
 ---outright when there is only one, and warns when there are none.
@@ -194,10 +212,6 @@ local function _run_from_dir(dir)
         _warn("run: no Lua files in " .. dir)
         return
     end
-    if #files == 1 then
-        return M.run_file(files[1])
-    end
-
     local items = {}
     for _, f in ipairs(files) do
         items[#items + 1] = { label = vim.fn.fnamemodify(f, ":t"), data = { filepath = f } }

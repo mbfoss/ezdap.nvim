@@ -184,6 +184,7 @@ Everything is under the `:Debug` command (with completion).
 | Command | Action |
 | ------- | ------ |
 | `:Debug run {file\|dir}` | Run a task from a Lua file, or pick from a directory. |
+| `:Debug rerun` | Re-run the most recently run task from scratch. |
 | `:Debug view` | Toggle the debug view. |
 | `:Debug continue` / `continue_all` | Continue the active session / all sessions. |
 | `:Debug step_over` (`next`) / `step_in` / `step_out` | Step. |
