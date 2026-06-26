@@ -860,11 +860,27 @@ function M.debug.exception_info()
     end)
 end
 
----@param expr? string  defaults to word under cursor
+---Return the active visual selection as one string (multi-line selections join
+---with newlines), leaving visual mode, or nil when not in a visual mode. Works
+---when called from an `x`-mode `<Cmd>Debug inspect<CR>` mapping, where the mode
+---is still visual at dispatch time.
+---@return string?
+local function _visual_selection()
+    local mode = vim.fn.mode()
+    if not mode:match("^[vV\22]") then return nil end
+    local region = vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = mode })
+    -- Drop the selection so the hover float isn't anchored to a stale region.
+    vim.api.nvim_feedkeys(
+        vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+    if vim.tbl_isempty(region) then return nil end
+    return table.concat(region, "\n")
+end
+
+---@param expr? string  defaults to the visual selection, else the word under cursor
 function M.debug.inspect(expr)
-    expr = expr or vim.fn.expand("<cword>")
+    expr = expr or _visual_selection() or vim.fn.expand("<cword>")
     if not expr or expr == "" then
-        vim.notify("[dap] no word under cursor", vim.log.levels.WARN)
+        vim.notify("[dap] nothing to inspect", vim.log.levels.WARN)
         return
     end
     M.evaluate(expr, "hover", function(body, err)

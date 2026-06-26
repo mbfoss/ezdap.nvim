@@ -196,7 +196,7 @@ Everything is under the `:Debug` command (with completion).
 | `:Debug stop` (`terminate`) / `terminate_all` | Stop the active session / all. |
 | `:Debug session` / `thread` / `frame` | Pick the active session / thread / frame. |
 | `:Debug terminate_thread` | Pick and terminate a thread. |
-| `:Debug inspect` | Hover-evaluate the word under the cursor. |
+| `:Debug inspect` | Hover-evaluate the word under the cursor, or the visual selection when invoked from visual mode. |
 | `:Debug exception_info` | Show details of the current exception. |
 | `:Debug disassemble` | Open the disassembly view for the current frame. |
 | `:Debug panel [toggle\|next\|previous\|jump N]` | Control the run panel (`:N Debug panel` jumps to tab N). |
@@ -279,7 +279,7 @@ map("n", "<F10>", "<Cmd>Debug step_over<CR>",         { desc = "Debug: step over
 map("n", "<F11>", "<Cmd>Debug step_in<CR>",           { desc = "Debug: step in" })
 map("n", "<F12>", "<Cmd>Debug step_out<CR>",          { desc = "Debug: step out" })
 map("n", "<leader>du", "<Cmd>Debug view<CR>",         { desc = "Debug: toggle view" })
-map("n", "<leader>di", "<Cmd>Debug inspect<CR>",      { desc = "Debug: inspect" })
+map({ "n", "x" }, "<leader>di", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
 ```
 
 For richer integration, the `require("easydap.manager")` module exposes the same
