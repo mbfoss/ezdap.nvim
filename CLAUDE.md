@@ -89,3 +89,5 @@ Module-scope `local` variables are prefixed with `_`, except:
 - class type names like `MyType`
 
 Inside a class, private members are prefixed with `_`.
+
+Function local variable names should NOT begin with `_`. 
