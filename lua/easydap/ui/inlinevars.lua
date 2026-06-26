@@ -209,30 +209,21 @@ local function _render_variables(frame, variables)
 
 	walk(scope_node)
 
-	-- pick one occurrence per variable: prefer the closest one at or before the
-	-- execution line (it has actually run, so its value is meaningful there), and
-	-- only fall back to the nearest occurrence after the line when none precedes.
+	-- pick one occurrence per variable: the closest at/before the execution line,
+	-- falling back to the closest after it. The score keeps every at/before-line
+	-- occurrence ahead of every after-line one (n bounds any in-buffer distance).
+	local n = vim.api.nvim_buf_line_count(bufnr)
 	---@type table<string, {sr:number, ec:number}>
 	local best_by_name = {}
 	for name, positions in pairs(occurrences) do
-		local before, before_dist = nil, math.huge
-		local after, after_dist = nil, math.huge
+		local best, best_score = nil, math.huge
 		for _, pos in ipairs(positions) do
-			if pos.sr <= target_row then
-				local dist = target_row - pos.sr
-				if dist < before_dist then
-					before_dist = dist
-					before = pos
-				end
-			else
-				local dist = pos.sr - target_row
-				if dist < after_dist then
-					after_dist = dist
-					after = pos
-				end
+			local d = pos.sr - target_row
+			local score = d <= 0 and -d or n + d
+			if score < best_score then
+				best, best_score = pos, score
 			end
 		end
-		local best = before or after
 		if best then best_by_name[name] = best end
 	end
 
