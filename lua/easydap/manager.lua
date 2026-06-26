@@ -3,12 +3,12 @@
 ---The DAP client (dap/client.lua) is session-id-explicit; this module wraps it
 ---with the active-session notion that keymaps and UI subscribe to.
 
-local select  = require("easydap.util.select")
-local client   = require("easydap.dap.client")
-local Signal   = require("easydap.util.Signal")
-local inputwin   = require("easydap.util.inputwin")
+local select            = require("easydap.util.select")
+local client            = require("easydap.dap.client")
+local Signal            = require("easydap.util.Signal")
+local inputwin          = require("easydap.util.inputwin")
 
-local M = {}
+local M                 = {}
 
 -- ── Re-exported types ─────────────────────────────────────────────────────
 ---@alias easydap.manager.SessionInfo easydap.client.SessionInfo
@@ -17,13 +17,19 @@ local M = {}
 -- ── Re-exported client signals ─────────────────────────────────────────────
 -- Consumers import only manager; client is an implementation detail.
 
-M.on_session_added    = client.on_session_added    ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session, info:easydap.client.SessionInfo)>
-M.on_session_removed  = client.on_session_removed  ---@type easydap.util.Signal<fun(id:number)>
-M.on_session_updated  = client.on_session_updated  ---@type easydap.util.Signal<fun(id:number, info:easydap.client.SessionInfo)>
-M.on_session_stopped  = client.on_session_stopped  ---@type easydap.util.Signal<fun(id:number, info:easydap.client.SessionInfo)>
-M.on_raw_message      = client.on_raw_message      ---@type easydap.util.Signal<fun(id:number, direction:"in"|"out", msg:table)>
-M.on_variable_changed = client.on_variable_changed ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session)>
-M.on_breakpoint_updated = client.on_breakpoint_updated ---@type easydap.util.Signal<fun(id:number, bp:table, status:easydap.dap.BpStatus)>
+M.on_session_added      = client
+    .on_session_added ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session, info:easydap.client.SessionInfo)>
+M.on_session_removed    = client.on_session_removed ---@type easydap.util.Signal<fun(id:number)>
+M.on_session_updated    = client
+    .on_session_updated ---@type easydap.util.Signal<fun(id:number, info:easydap.client.SessionInfo)>
+M.on_session_stopped    = client
+    .on_session_stopped ---@type easydap.util.Signal<fun(id:number, info:easydap.client.SessionInfo)>
+M.on_raw_message        = client
+    .on_raw_message ---@type easydap.util.Signal<fun(id:number, direction:"in"|"out", msg:table)>
+M.on_variable_changed   = client
+    .on_variable_changed ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session)>
+M.on_breakpoint_updated = client
+    .on_breakpoint_updated ---@type easydap.util.Signal<fun(id:number, bp:table, status:easydap.dap.BpStatus)>
 
 ---@param id number
 ---@return easydap.dap.Session?
@@ -44,7 +50,7 @@ M.on_active_changed    = Signal.new() ---@type easydap.util.Signal<fun(id:number
 M.on_selection_changed = Signal.new() ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session)>
 
 ---@type number?
-local _active_id = nil
+local _active_id       = nil
 
 ---@param id number?
 local function _set_active(id)
@@ -72,7 +78,9 @@ end)
 client.on_session_removed:subscribe(function(id)
     if _active_id ~= id then return end
     local new_id
-    for k in pairs(client.sessions()) do new_id = k; break end
+    for k in pairs(client.sessions()) do
+        new_id = k; break
+    end
     _set_active(new_id)
 end)
 
@@ -120,7 +128,9 @@ local function _with_capability(capability, label, fn)
     local id = _active_id
     if not id then return end
     local sess = M.session()
-    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    end
     if not sess:capable(capability) then
         vim.notify("[dap] adapter does not support " .. label, vim.log.levels.ERROR)
         return
@@ -128,21 +138,28 @@ local function _with_capability(capability, label, fn)
     fn(sess, id)
 end
 
-function M.continue()     if _active_id then client.continue(_active_id) end end
-function M.next()         if _active_id then client.next(_active_id, M.granularity()) end end
-function M.step_in()      if _active_id then client.step_in(_active_id, M.granularity()) end end
-function M.step_out()     if _active_id then client.step_out(_active_id, M.granularity()) end end
+function M.continue() if _active_id then client.continue(_active_id) end end
+
+function M.next() if _active_id then client.next(_active_id, M.granularity()) end end
+
+function M.step_in() if _active_id then client.step_in(_active_id, M.granularity()) end end
+
+function M.step_out() if _active_id then client.step_out(_active_id, M.granularity()) end end
+
 function M.step_back()
     _with_capability("supportsStepBack", "step back", function(_, id)
         client.step_back(id, M.granularity())
     end)
 end
+
 function M.reverse_continue()
     _with_capability("supportsStepBack", "reverse continue", function(_, id)
         client.reverse_continue(id)
     end)
 end
-function M.pause()        if _active_id then client.pause(_active_id) end end
+
+function M.pause() if _active_id then client.pause(_active_id) end end
+
 function M.restart()
     _with_capability("supportsRestartRequest", "restart", function(_, id)
         client.restart(id)
@@ -150,7 +167,8 @@ function M.restart()
 end
 
 ---@param cb fun()?
-function M.stop(cb)       if _active_id then client.stop(_active_id, cb) end end
+function M.stop(cb) if _active_id then client.stop(_active_id, cb) end end
+
 ---@param cb fun()?
 function M.disconnect(cb) if _active_id then client.disconnect(_active_id, cb) end end
 
@@ -168,7 +186,9 @@ end
 ---@param column integer
 ---@param cb     fun(targets: table[])
 function M.complete(text, column, cb)
-    if not _active_id then cb({}); return end
+    if not _active_id then
+        cb({}); return
+    end
     client.complete(_active_id, text, column, cb)
 end
 
@@ -176,7 +196,9 @@ end
 ---@param context string
 ---@param cb      fun(body: table?, err: string?)
 function M.evaluate(expr, context, cb)
-    if not _active_id then cb(nil, "no active session"); return end
+    if not _active_id then
+        cb(nil, "no active session"); return
+    end
     client.evaluate(_active_id, expr, context, cb)
 end
 
@@ -190,7 +212,7 @@ local function _cursor_location()
         vim.notify("[dap] current buffer is not a regular buffer", vim.log.levels.WARN)
         return nil, 0
     end
-    local file  = vim.api.nvim_buf_get_name(bufnr)
+    local file = vim.api.nvim_buf_get_name(bufnr)
     if file == "" then
         vim.notify("[dap] current buffer has no file path", vim.log.levels.WARN)
         return nil, 0
@@ -202,11 +224,23 @@ end
 -- breakpoints.on_change (see session.lua), so the commands below only mutate the
 -- registry — no explicit per-command sync is needed.
 
----Internal-id → file for breakpoints whose cursor should follow the adapter if
----it relocates them on the next sync. Populated when the user adds a breakpoint;
----consumed once by the on_breakpoint_updated handler below.
----@type table<integer, string>
+---Cursor-follow records, keyed by breakpoint internal_id. Armed when the user
+---adds a source breakpoint while a session is live; consumed one-shot by the
+---on_breakpoint_updated handler below once the adapter reports where it bound the
+---breakpoint. Each record pins the exact context the breakpoint was added in
+---(window, file, line) so a late-arriving update only moves the cursor while the
+---user is still parked there — it never yanks them once they have moved on.
+---@class easydap.manager.PendingFollow
+---@field win  integer  window the breakpoint was added from
+---@field file string   source file that window must still show
+---@field line integer  line it was added at; the cursor must still sit here
+---@type table<integer, easydap.manager.PendingFollow>
 local _pending_follow = {}
+
+-- A follow is keyed to the active session's binding; once the active session
+-- changes any armed follow is stale, so drop them all rather than risk acting on
+-- the wrong session's resolved line.
+M.on_active_changed:subscribe(function() _pending_follow = {} end)
 
 -- ── Breakpoints ───────────────────────────────────────────────────────────
 
@@ -247,29 +281,6 @@ local function _moved_bp_target(file, row)
     end
 end
 
----Follow the cursor to where `bp` actually ended up after a sync, if the
----adapter relocated it and the window is still sitting on the same buffer.
----@param file string
----@param bp   easydap.dap.SourceBreakpoint
-local function _follow_if_moved(file, bp)
-    local st = M.bp_status(bp.internal_id)
-    if not (st and st.line and st.line ~= bp.line) then return end
-    local win = vim.api.nvim_get_current_win()
-    if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)) ~= file then return end
-    local col = vim.api.nvim_win_get_cursor(win)[2]
-    vim.api.nvim_win_set_cursor(win, { st.line, col })
-end
-
--- Once the active session reports where it bound a freshly-added breakpoint,
--- follow the cursor there (consumed one-shot per internal_id).
-M.on_breakpoint_updated:subscribe(function(id, bp)
-    if id ~= M.active_id() or not bp then return end
-    local file = _pending_follow[bp.internal_id]
-    if not file then return end
-    _pending_follow[bp.internal_id] = nil
-    _follow_if_moved(file, bp)
-end)
-
 function M.breakpoint.toggle()
     local file, row = _cursor_location()
     if not file then return end
@@ -292,7 +303,13 @@ function M.breakpoint.toggle()
         -- The registry change pushes to the adapter on its own; arm the follow so
         -- the cursor tracks the breakpoint if the adapter relocates it.
         local bp = bps.add(file, row)
-        if bp and M.session() then _pending_follow[bp.internal_id] = file end
+        if bp and M.session() then
+            _pending_follow[bp.internal_id] = {
+                win  = vim.api.nvim_get_current_win(),
+                file = file,
+                line = row,
+            }
+        end
     end
 end
 
@@ -318,7 +335,9 @@ local function _toggle_column_bp(file, row, column)
     local bps    = require("easydap.dap.breakpoints")
     local exists = false
     for _, bp in ipairs(bps.for_source(file)) do
-        if bp.line == row and bp.column == column then exists = true; break end
+        if bp.line == row and bp.column == column then
+            exists = true; break
+        end
     end
     if exists then
         bps.remove(file, row, column)
@@ -341,7 +360,7 @@ function M.breakpoint.column()
 
     -- If a column bp already exists at this position, clear it directly so
     -- existing bps can always be removed even when a session is active.
-    local bps_mod = require("easydap.dap.breakpoints")
+    local bps_mod    = require("easydap.dap.breakpoints")
     for _, bp in ipairs(bps_mod.for_source(file)) do
         if bp.line == row and bp.column == col then
             _toggle_column_bp(file, row, col)
@@ -364,7 +383,9 @@ function M.breakpoint.column()
                 cols[#cols + 1] = c
             end
         end
-        if #cols == 0 then _toggle_column_bp(file, row, cursor_col); return end
+        if #cols == 0 then
+            _toggle_column_bp(file, row, cursor_col); return
+        end
         local nearest = cols[1]
         for _, c in ipairs(cols) do
             if math.abs(c - cursor_col) < math.abs(nearest - cursor_col) then
@@ -409,7 +430,7 @@ function M.breakpoint.clear_all()
 end
 
 function M.breakpoint.clear_fn()
-    local bps  = require("easydap.dap.breakpoints")
+    local bps = require("easydap.dap.breakpoints")
     for _, bp in ipairs(bps.function_breakpoints()) do bps.remove_function(bp.name) end
 end
 
@@ -419,9 +440,13 @@ function M.breakpoint.enable()
     local bps   = require("easydap.dap.breakpoints")
     local found = false
     for _, bp in ipairs(bps.for_source(file)) do
-        if bp.line == row then found = true; break end
+        if bp.line == row then
+            found = true; break
+        end
     end
-    if not found then vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return end
+    if not found then
+        vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return
+    end
     bps.patch(file, row, { disabled = false })
 end
 
@@ -431,9 +456,13 @@ function M.breakpoint.disable()
     local bps   = require("easydap.dap.breakpoints")
     local found = false
     for _, bp in ipairs(bps.for_source(file)) do
-        if bp.line == row then found = true; break end
+        if bp.line == row then
+            found = true; break
+        end
     end
-    if not found then vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return end
+    if not found then
+        vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return
+    end
     bps.patch(file, row, { disabled = true })
 end
 
@@ -450,7 +479,11 @@ function M.breakpoint.condition()
     if not file then return end
     local bps = require("easydap.dap.breakpoints")
     local bp
-    for _, b in ipairs(bps.for_source(file)) do if b.line == row then bp = b; break end end
+    for _, b in ipairs(bps.for_source(file)) do
+        if b.line == row then
+            bp = b; break
+        end
+    end
     inputwin.open({ prompt = "Condition (empty to clear): ", default = bp and bp.condition or "" },
         function(cond)
             if cond == nil then return end
@@ -467,7 +500,11 @@ function M.breakpoint.logpoint()
     if not file then return end
     local bps = require("easydap.dap.breakpoints")
     local bp
-    for _, b in ipairs(bps.for_source(file)) do if b.line == row then bp = b; break end end
+    for _, b in ipairs(bps.for_source(file)) do
+        if b.line == row then
+            bp = b; break
+        end
+    end
     inputwin.open({ prompt = "Log message (empty to clear): ", default = bp and bp.log_message or "" },
         function(input)
             if input == nil then return end
@@ -480,7 +517,11 @@ function M.breakpoint.fn(name)
     local bps = require("easydap.dap.breakpoints")
     local function _toggle(n)
         local found = false
-        for _, bp in ipairs(bps.function_breakpoints()) do if bp.name == n then found = true; break end end
+        for _, bp in ipairs(bps.function_breakpoints()) do
+            if bp.name == n then
+                found = true; break
+            end
+        end
         if found then bps.remove_function(n) else bps.add_function(n) end
     end
     if name and name ~= "" then
@@ -519,8 +560,8 @@ function M.breakpoint.exception_type(name, break_mode)
         local result = bps.toggle_exception_name(n, mode)
         vim.notify(
             result
-                and ("[dap] exception breakpoint added: " .. n .. " (" .. result.break_mode .. ")")
-                or  ("[dap] exception breakpoint removed: " .. n),
+            and ("[dap] exception breakpoint added: " .. n .. " (" .. result.break_mode .. ")")
+            or ("[dap] exception breakpoint removed: " .. n),
             vim.log.levels.INFO)
     end
     local function _pick_mode(n)
@@ -531,7 +572,9 @@ function M.breakpoint.exception_type(name, break_mode)
     if name and name ~= "" then
         local existing
         for _, bp in ipairs(bps.exception_name_breakpoints()) do
-            if bp.name == name then existing = bp; break end
+            if bp.name == name then
+                existing = bp; break
+            end
         end
         if existing then
             _toggle(name)
@@ -549,11 +592,11 @@ function M.breakpoint.exception_type(name, break_mode)
 end
 
 function M.breakpoint.list()
-    local bps   = require("easydap.dap.breakpoints")
+    local bps      = require("easydap.dap.breakpoints")
     local cur_path = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p")
     local cur_line = vim.api.nvim_win_get_cursor(0)[1]
     local initial ---@type integer?
-    local items   = {}
+    local items    = {}
     for i, bp in ipairs(bps.all()) do
         ---@cast bp easydap.dap.SourceBreakpoint
         local icon = bp.disabled and "○"
@@ -562,15 +605,17 @@ function M.breakpoint.list()
             or "●"
         local label = icon .. " " .. vim.fn.fnamemodify(bp.source, ":~:.") .. ":" .. bp.line
         if bp.column then label = label .. ":" .. bp.column end
-        if bp.condition     then label = label .. "  [" .. bp.condition .. "]" end
+        if bp.condition then label = label .. "  [" .. bp.condition .. "]" end
         if bp.hit_condition then label = label .. "  [hits:" .. bp.hit_condition .. "]" end
-        if bp.log_message   then label = label .. "  [log: " .. bp.log_message .. "]" end
+        if bp.log_message then label = label .. "  [log: " .. bp.log_message .. "]" end
         if not initial and bp.line == cur_line and vim.fn.fnamemodify(bp.source, ":p") == cur_path then
             initial = i
         end
         items[i] = { label = label, data = { filepath = bp.source, lnum = bp.line, bp = bp } }
     end
-    if #items == 0 then vim.notify("[dap] no breakpoints", vim.log.levels.INFO); return end
+    if #items == 0 then
+        vim.notify("[dap] no breakpoints", vim.log.levels.INFO); return
+    end
     select.open({
         prompt         = "Go to breakpoint",
         enable_preview = true,
@@ -625,7 +670,9 @@ end
 ---@param name? string  defaults to the word under the cursor (prompted)
 function M.breakpoint.data(name)
     local sess = M.session()
-    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    end
     if not sess:capable("supportsDataBreakpoints") then
         vim.notify("[dap] adapter does not support data breakpoints", vim.log.levels.WARN)
         return
@@ -643,16 +690,22 @@ end
 ---Remove all data breakpoints on the active session.
 function M.breakpoint.data_clear()
     local sess = M.session()
-    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    end
     sess:clear_data_breakpoints()
 end
 
 ---List data breakpoints on the active session; selecting one removes it.
 function M.breakpoint.data_list()
     local sess = M.session()
-    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    end
     local bps = sess:data_breakpoints()
-    if #bps == 0 then vim.notify("[dap] no data breakpoints", vim.log.levels.INFO); return end
+    if #bps == 0 then
+        vim.notify("[dap] no data breakpoints", vim.log.levels.INFO); return
+    end
     select.open({
         prompt = "Remove data breakpoint",
         items  = vim.tbl_map(function(bp)
@@ -669,17 +722,27 @@ end
 
 M.debug = {}
 
-function M.debug.continue()      M.continue()           end
-function M.debug.continue_all()  client.continue_all()  end
-function M.debug.step_over()     M.next()               end
-function M.debug.step_in()       M.step_in()            end
-function M.debug.step_out()      M.step_out()           end
-function M.debug.step_back()     M.step_back()          end
+function M.debug.continue() M.continue() end
+
+function M.debug.continue_all() client.continue_all() end
+
+function M.debug.step_over() M.next() end
+
+function M.debug.step_in() M.step_in() end
+
+function M.debug.step_out() M.step_out() end
+
+function M.debug.step_back() M.step_back() end
+
 function M.debug.reverse_continue() M.reverse_continue() end
-function M.debug.pause()         M.pause()              end
-function M.debug.restart()       M.restart()            end
-function M.debug.stop()          M.stop()               end
-function M.debug.terminate_all() client.quit()          end
+
+function M.debug.pause() M.pause() end
+
+function M.debug.restart() M.restart() end
+
+function M.debug.stop() M.stop() end
+
+function M.debug.terminate_all() client.quit() end
 
 ---Step into a specific call on the current line. Prompts when the line has
 ---multiple call targets; falls back to a plain step-in when unsupported or
@@ -687,11 +750,17 @@ function M.debug.terminate_all() client.quit()          end
 function M.debug.step_into_targets()
     if not _active_id then return end
     local sess = M.session()
-    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    end
     local frame = sess:current_stack_frame()
-    if not frame then vim.notify("[dap] no selected frame", vim.log.levels.WARN); return end
+    if not frame then
+        vim.notify("[dap] no selected frame", vim.log.levels.WARN); return
+    end
     client.step_in_targets(_active_id, frame.id, function(targets, _)
-        if not targets or #targets == 0 then M.step_in(); return end
+        if not targets or #targets == 0 then
+            M.step_in(); return
+        end
         if #targets == 1 then
             client.step_in(_active_id, M.granularity(), targets[1].id)
             return
@@ -710,7 +779,9 @@ end
 function M.debug.jump_to_cursor()
     _with_capability("supportsGotoTargetsRequest", "jump to cursor", function(_, id)
         local path = vim.api.nvim_buf_get_name(0)
-        if path == "" then vim.notify("[dap] current buffer has no file", vim.log.levels.WARN); return end
+        if path == "" then
+            vim.notify("[dap] current buffer has no file", vim.log.levels.WARN); return
+        end
         local line = vim.api.nvim_win_get_cursor(0)[1]
         ---@type easydap.dap.proto.Source
         local source = { path = path, name = vim.fn.fnamemodify(path, ":t") }
@@ -740,7 +811,9 @@ end
 function M.debug.restart_frame()
     _with_capability("supportsRestartFrame", "restart frame", function(sess, id)
         local frame = sess:current_stack_frame()
-        if not frame then vim.notify("[dap] no selected frame", vim.log.levels.WARN); return end
+        if not frame then
+            vim.notify("[dap] no selected frame", vim.log.levels.WARN); return
+        end
         client.restart_frame(id, frame.id)
     end)
 end
@@ -807,11 +880,13 @@ function M.debug.inspect(expr)
         for _, line in ipairs(vim.split(body.result or "", "\n", { plain = true })) do
             lines[#lines + 1] = line
         end
-        vim.lsp.util.open_floating_preview(lines, "plaintext", {
-            border = "rounded",
-            title  = expr,
-            focus_id = "easydap_inspect",
-        })
+        if #lines > 0 then
+            vim.lsp.util.open_floating_preview(lines, "plaintext", {
+                border   = "rounded",
+                title    = expr,
+                focus_id = "easydap_inspect",
+            })
+        end
     end)
 end
 
@@ -821,7 +896,9 @@ function M.debug.disassemble() require("easydap").open_disassembly_view() end
 function M.debug.session()
     local sessions = client.sessions()
     local ids      = vim.tbl_keys(sessions)
-    if #ids == 0 then vim.notify("[dap] no active sessions", vim.log.levels.WARN); return end
+    if #ids == 0 then
+        vim.notify("[dap] no active sessions", vim.log.levels.WARN); return
+    end
     table.sort(ids)
     local active = _active_id
     select.open({
@@ -839,9 +916,13 @@ end
 
 function M.debug.thread()
     local sess = M.session()
-    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    end
     local threads = sess.threads
-    if #threads == 0 then vim.notify("[dap] no threads available", vim.log.levels.WARN); return end
+    if #threads == 0 then
+        vim.notify("[dap] no threads available", vim.log.levels.WARN); return
+    end
     select.open({
         prompt = "Select thread",
         items  = vim.tbl_map(function(t)
@@ -856,7 +937,9 @@ end
 function M.debug.terminate_thread()
     _with_capability("supportsTerminateThreadsRequest", "terminate thread", function(sess, id)
         local threads = sess.threads
-        if #threads == 0 then vim.notify("[dap] no threads available", vim.log.levels.WARN); return end
+        if #threads == 0 then
+            vim.notify("[dap] no threads available", vim.log.levels.WARN); return
+        end
         select.open({
             prompt = "Terminate thread",
             items  = vim.tbl_map(function(t)
@@ -870,18 +953,24 @@ end
 
 function M.debug.frame()
     local sess = M.session()
-    if not sess then vim.notify("[dap] no active session", vim.log.levels.WARN); return end
+    if not sess then
+        vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    end
     local thread = sess:current_thread()
-    if not thread then vim.notify("[dap] no selected thread", vim.log.levels.WARN); return end
+    if not thread then
+        vim.notify("[dap] no selected thread", vim.log.levels.WARN); return
+    end
     local frames = thread.stack_frames or {}
-    if #frames == 0 then vim.notify("[dap] no stack frames available", vim.log.levels.WARN); return end
+    if #frames == 0 then
+        vim.notify("[dap] no stack frames available", vim.log.levels.WARN); return
+    end
     local cur_frame = sess:current_stack_frame()
     ---@param f easydap.dap.proto.StackFrame
     ---@return string
     local function frame_key(f)
         local loc = f.source and f.source.path
             and ("  " .. vim.fn.fnamemodify(f.source.path, ":~:.") .. ":" .. (f.line or "?"))
-            or  ""
+            or ""
         return f.name .. loc
     end
     local cur_key = cur_frame and frame_key(cur_frame) or nil
