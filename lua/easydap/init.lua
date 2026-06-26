@@ -54,6 +54,30 @@ local function _load()
     exprs.restore(data.expressions)
 end
 
+-- Whether we've already warned, in the current rootless stretch, that project
+-- state can't be persisted. Reset on every cwd change so a later rootless period
+-- warns afresh.
+local _warned_rootless = false
+
+---Warn — once per rootless stretch — that the breakpoint/expression set just
+---changed but won't be persisted, because the cwd is not inside a project. No-op
+---inside a project, or while nothing is set (so it never fires on an empty
+---startup/restore).
+local function _warn_if_unpersisted()
+    if _warned_rootless then return end
+    if require("easydap.store").root() then return end
+    local bps   = require("easydap.dap.breakpoints")
+    local exprs = require("easydap.ui.expressions")
+    if #bps.all() == 0 and #bps.function_breakpoints() == 0
+        and #bps.exception_name_breakpoints() == 0 and #exprs.all() == 0 then
+        return
+    end
+    _warned_rootless = true
+    vim.notify(
+        "[easydap] not in a project (no root marker); breakpoints and watch expressions won't be persisted",
+        vim.log.levels.WARN)
+end
+
 local function _register_user_commands()
     local cmd      = require("easydap.manager")
     local usercmd  = require("easydap.util.usercmd")
@@ -269,10 +293,14 @@ local function _init()
     vim.api.nvim_create_autocmd("DirChanged", {
         callback = function()
             store.invalidate()
+            _warned_rootless = false
             _load()
         end,
         desc = "easydap: restore project state after cwd change",
     })
+
+    require("easydap.dap.breakpoints").on_change:subscribe(_warn_if_unpersisted)
+    require("easydap.ui.expressions").on_change:subscribe(_warn_if_unpersisted)
 
     require("easydap.ui.breakpoints_ui").init()
     require("easydap.ui.debugline_ui").init()
