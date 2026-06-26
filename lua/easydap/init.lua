@@ -178,7 +178,9 @@ local function _register_user_commands()
         elseif sub == "terminate_all" then
             cmd.debug.terminate_all()
         elseif sub == "inspect" then
-            cmd.debug.inspect()
+            -- A `'<,'>` range (e.g. `:'<,'>Debug inspect` from visual mode) sets
+            -- opts.range > 0; inspect then reads the `'<`/`'>` marks.
+            cmd.debug.inspect(nil, opts.range and opts.range > 0)
         elseif sub == "disassemble" then
             cmd.debug.disassemble()
         elseif sub == "session" then
@@ -216,7 +218,10 @@ local function _register_user_commands()
         end
     end, {
         desc = "easydap commands",
-        count = true,
+        -- `range` (not `count`) so `:'<,'>Debug inspect` from visual mode is
+        -- accepted instead of erroring with E16; a leading count (`:2Debug
+        -- panel`) still arrives via opts.count.
+        range = true,
         subcommand_fn = function(_, rest, arg_lead)
             if #rest == 0 then return _debug_subs end
             if rest[1] == "breakpoint" then

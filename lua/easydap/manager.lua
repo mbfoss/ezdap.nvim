@@ -861,24 +861,36 @@ function M.debug.exception_info()
 end
 
 ---Return the active visual selection as one string (multi-line selections join
----with newlines), leaving visual mode, or nil when not in a visual mode. Works
----when called from an `x`-mode `<Cmd>Debug inspect<CR>` mapping, where the mode
----is still visual at dispatch time.
+---with newlines), or nil when there is none. Handles both ways inspect reaches
+---visual text:
+---  * still in visual mode — e.g. an `x`-mode `<Cmd>Debug inspect<CR>` mapping,
+---    where the selection lives in the `v`/`.` positions; visual mode is left
+---    afterwards so the hover float isn't anchored to a stale region.
+---  * `from_range` true — `:'<,'>Debug inspect` has already returned to normal
+---    mode, so the selection is read from the `'<`/`'>` marks.
+---@param from_range? boolean
 ---@return string?
-local function _visual_selection()
+local function _visual_selection(from_range)
     local mode = vim.fn.mode()
-    if not mode:match("^[vV\22]") then return nil end
-    local region = vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = mode })
-    -- Drop the selection so the hover float isn't anchored to a stale region.
-    vim.api.nvim_feedkeys(
-        vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+    local p1, p2, kind
+    if mode:match("^[vV\22]") then
+        p1, p2, kind = vim.fn.getpos("v"), vim.fn.getpos("."), mode
+        vim.api.nvim_feedkeys(
+            vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+    elseif from_range then
+        p1, p2, kind = vim.fn.getpos("'<"), vim.fn.getpos("'>"), vim.fn.visualmode()
+    else
+        return nil
+    end
+    local region = vim.fn.getregion(p1, p2, { type = kind ~= "" and kind or "v" })
     if vim.tbl_isempty(region) then return nil end
     return table.concat(region, "\n")
 end
 
----@param expr? string  defaults to the visual selection, else the word under cursor
-function M.debug.inspect(expr)
-    expr = expr or _visual_selection() or vim.fn.expand("<cword>")
+---@param expr? string       defaults to the visual selection, else the word under cursor
+---@param from_range? boolean true when invoked with a command range (`:'<,'>Debug inspect`)
+function M.debug.inspect(expr, from_range)
+    expr = expr or _visual_selection(from_range) or vim.fn.expand("<cword>")
     if not expr or expr == "" then
         vim.notify("[dap] nothing to inspect", vim.log.levels.WARN)
         return

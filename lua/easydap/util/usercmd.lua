@@ -109,14 +109,17 @@ end
 
 ---@param cmd string
 ---@param run_fn easydap.usercmd.run_fn
----@param opts {desc:string?,subcommand_fn:easydap.usercmd.subcommand_fn?,count:boolean?}?
+---@param opts {desc:string?,subcommand_fn:easydap.usercmd.subcommand_fn?,count:boolean?,range:boolean?}?
 function M.register_user_cmd(cmd, run_fn, opts)
     opts = opts or {}
     vim.api.nvim_create_user_command(cmd, function(cmd_opts)
             _dispatch(cmd, run_fn, cmd_opts)
         end,
         {
-            count = opts.count or nil, -- enable ranges
+            -- `range` and `count` are mutually exclusive; `range` still exposes a
+            -- leading count via `opts.count` while also accepting a `'<,'>` range.
+            range = opts.range or nil,
+            count = (not opts.range) and opts.count or nil,
             nargs = opts.subcommand_fn ~= nil and "*" or nil,
             complete = opts.subcommand_fn ~= nil and function(arg_lead, cmd_line, _)
                 return _complete(opts.subcommand_fn, arg_lead, cmd_line)
