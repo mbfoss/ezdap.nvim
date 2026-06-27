@@ -23,6 +23,7 @@
 ---@field root_markers         string[]  filenames/dirs whose presence identifies a project root
 ---@field data_filename string
 ---@field debug_value_max_len  integer   max characters shown for variable/expression values in DebugView before truncating
+---@field stack_trace_limit    integer   max number of call-stack frames shown in DebugView; extended when the current frame is deeper so it stays visible
 ---@field antiflicker_delay    integer   milliseconds to wait before clearing stale UI (inline vars, DebugView) to avoid flicker during step-through
 ---@field inline_vars          easydap.InlineVarsMode  placement of inline variable values
 ---@field signs easydap.Signs
@@ -32,6 +33,7 @@ local M = {
 	root_markers        = { ".git" },
 	data_filename = ".easydap.json",
 	debug_value_max_len = 30,
+	stack_trace_limit   = 2,
 	antiflicker_delay   = 200,
 	inline_vars         = "eol",
 	signs = {

@@ -663,20 +663,44 @@ function DebugView:_load_stack(ctx)
         self._greyout_timer = _cancel_timer(self._greyout_timer)
         local frames = thread.stack_frames or {}
         local current_frame = sess:current_stack_frame()
-        local items = {}
+
+        -- Crop the stack to `stack_trace_limit` frames, but never hide the current
+        -- frame: if it sits deeper than the limit, extend the cutoff to include it.
+        local limit = config.stack_trace_limit
+        local cutoff = (limit and limit > 0) and limit or #frames
         for i, frame in ipairs(frames) do
-            local path = _roots.stack .. "/" .. i
-            items[#items + 1] = {
-                id         = path,
-                expandable = false,
-                expanded   = false,
-                data       = {
+            if current_frame and frame.id == current_frame.id then
+                cutoff = math.max(cutoff, i); break
+            end
+        end
+        -- A lone hidden frame would cost the same line as the "… more" marker, so
+        -- just show it instead.
+        if #frames - cutoff == 1 then cutoff = #frames end
+
+        local items = {}
+        for i = 1, math.min(cutoff, #frames) do
+            local frame, path = frames[i], _roots.stack .. "/" .. i
+            items[i] = {
+                id = path, expandable = false, expanded = false,
+                data = {
                     kind       = "stackframe",
                     path       = path,
                     name       = frame.name or "<frame>",
                     frame_id   = frame.id,
                     is_current = current_frame and frame.id == current_frame.id or false,
                     greyout    = false,
+                },
+            }
+        end
+        local hidden = #frames - cutoff
+        if hidden > 0 then
+            items[#items + 1] = {
+                id = _roots.stack .. "/__more__", expandable = false, expanded = false,
+                data = {
+                    kind    = "stackframe",
+                    path    = _roots.stack .. "/__more__",
+                    name    = ("… %d more frames"):format(hidden),
+                    greyout = true,
                 },
             }
         end
