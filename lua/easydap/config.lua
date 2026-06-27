@@ -31,7 +31,7 @@
 local M = {
 	root_markers        = { ".git" },
 	data_filename = ".easydap.json",
-	debug_value_max_len = 70,
+	debug_value_max_len = 30,
 	antiflicker_delay   = 200,
 	inline_vars         = "eol",
 	signs = {
