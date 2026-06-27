@@ -1,3 +1,5 @@
+local ui_util      = require "easydap.util.ui_util"
+local _config      = require "easydap.config"
 ---Presentation options for a buffer registered with the run host.
 ---@class easydap.AddBufOpts
 ---@field label?      string   tab label (defaults to the buffer name)
@@ -40,24 +42,24 @@ end
 ---@param task    table
 ---@param callbacks easydap.TaskCallback
 ---@return fun()
-M.start     = function(task, callbacks)
+M.start = function(task, callbacks)
     local add_bufnr = callbacks.add_bufnr or function() end
     local report    = callbacks.report or function() end
     local on_done   = callbacks.on_done or function() end
 
 
-    _run_counter    = _run_counter + 1
-    local run_key   = (task.name or "debug") .. "#" .. _run_counter
+    _run_counter   = _run_counter + 1
+    local run_key  = (task.name or "debug") .. "#" .. _run_counter
 
-    local manager   = require("easydap.manager")
-    local adapters  = require("easydap.adapters")
+    local manager  = require("easydap.manager")
+    local adapters = require("easydap.adapters")
 
     -- Resolve named adapter config and build request_args via one of two paths:
     --   1. task.request_args is set  → use verbatim as the DAP launch/attach arguments
     --   2. task.request_args absent  → call config.derive_request_args(config, task, request)
     --      to derive args from the generic task fields (command, args, cwd, env, …)
     -- Fallback when neither is available: use the adapter's base launch/attach args.
-    local base      = adapters[task.adapter]
+    local base     = adapters[task.adapter]
     if not base then
         report("unknown DAP adapter: " .. tostring(task.adapter))
         on_done(false)
@@ -186,19 +188,28 @@ M.start     = function(task, callbacks)
 
                 local unsub
                 if task.raw_messages then
-                    local buf              = vim.api.nvim_create_buf(true, true)
-                    vim.bo[buf].buftype    = "nofile"
-                    vim.bo[buf].swapfile   = false
-                    vim.bo[buf].buflisted  = true
-                    vim.bo[buf].bufhidden  = "hide"
-                    vim.bo[buf].modifiable = false
+                    local max_lines = _config.raw_messages_max_lines or 10000
+                    local buf
+                    buf = ui_util.create_scratch_buffer(true, {
+                            buftype = "nofile",
+                            swapfile = false,
+                            buflisted = true,
+                            bufhidden = "hide",
+                            modifiable = false,
+                        },
+                        function()
+                            buf = nil
+                        end)
+
                     vim.api.nvim_buf_set_name(buf,
                         _unique_buf_name("easydap://" .. run_key .. "/dap-messages"))
                     add_bufnr(buf, { label = "DAP Messages", priority = -3, autoscroll = true })
 
                     unsub = manager.on_raw_message:subscribe(function(sid, direction, msg)
-                        if sid ~= id then return end
-                        if not vim.api.nvim_buf_is_valid(buf) then return end
+                        if sid ~= id or not buf or not vim.api.nvim_buf_is_valid(buf) then
+                            unsub()
+                            return
+                        end
                         local arrow  = direction == "out" and "→" or "←"
                         local name   = msg.command or msg.event or ""
                         local header = ("%s [%s] %s"):format(arrow, msg.type or "?", name)
@@ -207,6 +218,12 @@ M.start     = function(task, callbacks)
                         vim.bo[buf].modifiable = true
                         vim.api.nvim_buf_set_lines(buf, -1, -1, false,
                             { header, ok and json or tostring(msg), "" })
+                        if max_lines > 0 then
+                            local excess = vim.api.nvim_buf_line_count(buf) - max_lines
+                            if excess > 0 then
+                                vim.api.nvim_buf_set_lines(buf, 0, excess, false, {})
+                            end
+                        end
                         vim.bo[buf].modifiable = false
                     end)
                 end
