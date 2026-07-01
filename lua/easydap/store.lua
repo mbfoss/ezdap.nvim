@@ -11,7 +11,7 @@
 
 local M = {}
 
-local fsutil               = require("easydap.util.fsutil")
+local fsutil               = require("easydap.neotoolkit.fsutil")
 local config               = require("easydap.config")
 
 local _default_filename    = ".easydap.json"

@@ -5,7 +5,7 @@ local extmarks   = require("easydap.ui.extmarks")
 local manager    = require("easydap.manager")
 local ui_util    = require("easydap.util.ui_util")
 local config     = require("easydap.config")
-local timer      = require("easydap.util.timer")
+local timer      = require("easydap.neotoolkit.timer")
 
 local M          = {}
 

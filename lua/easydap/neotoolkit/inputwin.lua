@@ -1,7 +1,7 @@
-local ui_util = require("easydap.util.ui_util")
+local ui_util = require("easydap.neotoolkit.ui")
 local M = {}
 
----@class easydap.util.inputwin.Opts
+---@class easydap.neotoolkit.inputwin.Opts
 ---@field prompt? string
 ---@field default? string
 ---@field default_width? number
@@ -9,7 +9,7 @@ local M = {}
 ---@field col_offset? number
 ---@field validate? fun(content:string):boolean,string?
 ---@
----@param opts easydap.util.inputwin.Opts
+---@param opts easydap.neotoolkit.inputwin.Opts
 ---@param on_confirm fun(value: string|nil)
 function M.open(opts, on_confirm)
     local prev_win = vim.api.nvim_get_current_win()

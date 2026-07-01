@@ -1,40 +1,38 @@
-local Tree = require("easydap.util.Tree")
-local ui_util = require("easydap.util.ui_util")
+local Tree = require("easydap.neotoolkit.Tree")
+local uiutil = require("easydap.neotoolkit.ui")
 local Signal = require("easydap.neotoolkit.Signal")
 
----@class easydap.ui.TreeBuffer.Item
+---@class easydap.neotoolkit.TreeBuffer.Item
 ---@field id any
 ---@field data any
 ---@field expandable boolean
 ---@field expanded boolean
 
----@class easydap.ui.TreeBuffer.ItemDef
+---@class easydap.neotoolkit.TreeBuffer.ItemDef
 ---@field id any
 ---@field data any
 ---@field expandable boolean?
 ---@field expanded boolean?
 
----@class easydap.ui.TreeBuffer.ItemData
+---@class easydap.neotoolkit.TreeBuffer.ItemData
 ---@field userdata any
 ---@field expandable boolean?
 ---@field expanded boolean?
 
----@alias easydap.ui.TreeBuffer.FormatterFn fun(id:any, data:any, expanded:boolean):string[][], string[][]
+---@alias easydap.neotoolkit.TreeBuffer.FormatterFn fun(id:any, data:any, expanded:boolean):string[][], string[][]
 
----@class easydap.ui.TreeBuffer.Opts
+---@class easydap.neotoolkit.TreeBuffer.Opts
 ---@field filetype string?
----@field formatter easydap.ui.TreeBuffer.FormatterFn
+---@field formatter easydap.neotoolkit.TreeBuffer.FormatterFn
 ---@field expand_char string?
 ---@field collapse_char string?
 ---@field icon_hl string?
 ---@field indent_string string?
 ---@field collapsible boolean?  -- whether nodes can be expanded/collapsed (default true)
 
-local _ns_id = vim.api.nvim_create_namespace('nvtoolkitTreeBuffer')
-
----@class easydap.ui.TreeBuffer
+---@class easydap.neotoolkit.TreeBuffer
 ---@field private _filetype string?
----@field private _formatter easydap.ui.TreeBuffer.FormatterFn
+---@field private _formatter easydap.neotoolkit.TreeBuffer.FormatterFn
 ---@field private _expand_char string
 ---@field private _collapse_char string
 ---@field private _icon_hl string
@@ -44,18 +42,19 @@ local _ns_id = vim.api.nvim_create_namespace('nvtoolkitTreeBuffer')
 ---@field private _on_selection easydap.neotoolkit.Signal<fun(id:any,data:any)>
 ---@field private _on_toggle easydap.neotoolkit.Signal<fun(id:any,data:any,expanded:boolean)>
 ---@field private _bufnr integer
----@field private _tree easydap.util.Tree
+---@field private _ns_id integer
+---@field private _tree easydap.neotoolkit.Tree
 ---@field private _flat_ids any[]
 ---@field private _id_to_idx table<any, integer>
 ---@field private _collapsible boolean
 local TreeBuffer = {}
 TreeBuffer.__index = TreeBuffer
 
----@param opts easydap.ui.TreeBuffer.Opts
----@return easydap.ui.TreeBuffer
+---@param opts easydap.neotoolkit.TreeBuffer.Opts
+---@return easydap.neotoolkit.TreeBuffer
 function TreeBuffer.new(opts)
     local indent_str = opts.indent_string or "  "
-    local expand_char = opts.expand_char or "›"
+    local expand_char = opts.expand_char or "▶"
     local indent_cache = {}
     for i = 0, 20 do
         indent_cache[i] = string.rep(indent_str, i)
@@ -64,7 +63,7 @@ function TreeBuffer.new(opts)
         _filetype       = opts.filetype,
         _formatter      = opts.formatter,
         _expand_char    = expand_char,
-        _collapse_char  = opts.collapse_char or "⌄",
+        _collapse_char  = opts.collapse_char or "▼",
         _icon_hl        = opts.icon_hl or "FoldColumn",
         _indent_string  = indent_str,
         _expand_padding = string.rep(" ", vim.fn.strdisplaywidth(expand_char)) .. " ",
@@ -72,6 +71,7 @@ function TreeBuffer.new(opts)
         _on_selection   = Signal.new(), ---@type easydap.neotoolkit.Signal<fun(id:any,data:any)>
         _on_toggle      = Signal.new(), ---@type easydap.neotoolkit.Signal<fun(id:any,data:any,expanded:boolean)>
         _bufnr          = -1,
+        _ns_id          = -1,
         _tree           = Tree.new(),
         _flat_ids       = {}, ---@type any[]
         _id_to_idx      = {}, ---@type table<any, integer>
@@ -79,22 +79,22 @@ function TreeBuffer.new(opts)
     }, TreeBuffer)
 end
 
----@param item easydap.ui.TreeBuffer.ItemDef
----@return easydap.ui.TreeBuffer.ItemData
+---@param item easydap.neotoolkit.TreeBuffer.ItemDef
+---@return easydap.neotoolkit.TreeBuffer.ItemData
 local function _to_itemdata(item)
     return { userdata = item.data, expandable = item.expandable, expanded = item.expanded }
 end
 
 ---@param id any
----@param data easydap.ui.TreeBuffer.ItemData
----@return easydap.ui.TreeBuffer.Item
+---@param data easydap.neotoolkit.TreeBuffer.ItemData
+---@return easydap.neotoolkit.TreeBuffer.Item
 local function _to_item(id, data)
     return { id = id, data = data.userdata, expandable = data.expandable, expanded = data.expanded }
 end
 
----@param tree easydap.util.Tree
+---@param tree easydap.neotoolkit.Tree
 ---@param starting_id any?  -- nil = whole tree
----@return easydap.util.Tree.FlatNode[]
+---@return easydap.neotoolkit.Tree.FlatNode[]
 local function _flatten(tree, starting_id)
     local out = {}
     local function visit(id, data, depth)
@@ -109,7 +109,7 @@ local function _flatten(tree, starting_id)
     return out
 end
 
----@param tree easydap.util.Tree
+---@param tree easydap.neotoolkit.Tree
 ---@param starting_id any?  -- nil = whole tree
 ---@return integer
 local function _tree_size(tree, starting_id)
@@ -138,20 +138,17 @@ function TreeBuffer:create_buffer(on_deleted)
         return self._bufnr, false
     end
 
-    self._bufnr = ui_util.create_scratch_buffer(false, {
+    self._bufnr = uiutil.create_scratch_buffer(false, {
         buftype      = "nofile",
-        bufhidden    = "wipe",
-        filetype     = self._filetype,
+        filetype     = self._filetype or "neotoolkit-tree",
         modifiable   = false,
         swapfile     = false,
         undolevels   = -1,
-        buflisted    = false,
-        modeline     = false,
-        spelloptions = "noplainbuffer",
     }, function()
         self._bufnr = -1
         on_deleted()
     end)
+    self._ns_id = vim.api.nvim_create_namespace("TreeBuffer_" .. self._bufnr)
 
     self:_full_render()
 
@@ -215,7 +212,7 @@ function TreeBuffer:subscribe(callbacks)
 end
 
 ---@private
----@param flatnode easydap.util.Tree.FlatNode
+---@param flatnode easydap.neotoolkit.Tree.FlatNode
 ---@param row integer
 ---@return string line, table hl_calls, table extmarks
 function TreeBuffer:_render_node(flatnode, row)
@@ -275,7 +272,7 @@ function TreeBuffer:_full_render()
         for _, e in ipairs(exts) do extmarks[#extmarks + 1] = e end
     end
 
-    vim.api.nvim_buf_clear_namespace(buf, _ns_id, 0, -1)
+    vim.api.nvim_buf_clear_namespace(buf, self._ns_id, 0, -1)
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
@@ -285,7 +282,7 @@ end
 ---@private
 ---@param start_idx integer
 ---@param old_size integer
----@param new_flat easydap.util.Tree.FlatNode[]
+---@param new_flat easydap.neotoolkit.Tree.FlatNode[]
 function TreeBuffer:_render_range(start_idx, old_size, new_flat)
     local buf = self._bufnr
     if buf <= 0 or not vim.api.nvim_buf_is_loaded(buf) then return end
@@ -302,7 +299,7 @@ function TreeBuffer:_render_range(start_idx, old_size, new_flat)
         for _, e in ipairs(exts) do extmarks[#extmarks + 1] = e end
     end
 
-    vim.api.nvim_buf_clear_namespace(buf, _ns_id, start_row, start_row + old_size)
+    vim.api.nvim_buf_clear_namespace(buf, self._ns_id, start_row, start_row + old_size)
 
     local end_row = start_row + old_size
     if old_size == 0 and #self._flat_ids == 0 then end_row = -1 end
@@ -360,7 +357,7 @@ end
 
 ---@private
 ---@param id any
----@param data easydap.ui.TreeBuffer.ItemData?
+---@param data easydap.neotoolkit.TreeBuffer.ItemData?
 function TreeBuffer:_render_line(id, data)
     data = data or self._tree:get_data(id)
     assert(data, "failed to render line, invalid data")
@@ -376,12 +373,12 @@ end
 ---@param extmarks table
 function TreeBuffer:_apply_metadata(buf, hl_calls, extmarks)
     for _, h in ipairs(hl_calls) do
-        vim.api.nvim_buf_set_extmark(buf, _ns_id, h.row, h.s_col, {
+        vim.api.nvim_buf_set_extmark(buf, self._ns_id, h.row, h.s_col, {
             end_col = h.e_col, hl_group = h.hl,
         })
     end
     for _, d in ipairs(extmarks) do
-        vim.api.nvim_buf_set_extmark(buf, _ns_id, d[1], d[2], d[3])
+        vim.api.nvim_buf_set_extmark(buf, self._ns_id, d[1], d[2], d[3])
     end
 end
 
@@ -396,7 +393,7 @@ function TreeBuffer:get_winid()
 end
 
 ---@private
----@return any?, easydap.ui.TreeBuffer.ItemData?
+---@return any?, easydap.neotoolkit.TreeBuffer.ItemData?
 function TreeBuffer:_get_cur_item()
     local winid = self:get_winid()
     if winid <= 0 then return end
@@ -406,10 +403,20 @@ function TreeBuffer:_get_cur_item()
     return id, self._tree:get_data(id)
 end
 
----@return easydap.ui.TreeBuffer.Item?
+---@return easydap.neotoolkit.TreeBuffer.Item?
 function TreeBuffer:get_cursor_item()
     local id, data = self:_get_cur_item()
     if not id or not data then return nil end
+    return _to_item(id, data)
+end
+
+---@param row integer 1-based buffer line number
+---@return easydap.neotoolkit.TreeBuffer.Item?
+function TreeBuffer:get_item_at_row(row)
+    local id = self._flat_ids[row]
+    if not id then return nil end
+    local data = self._tree:get_data(id)
+    if not data then return nil end
     return _to_item(id, data)
 end
 
@@ -423,7 +430,7 @@ function TreeBuffer:set_cursor_by_id(id)
     return ok
 end
 
----@return easydap.ui.TreeBuffer.Item?
+---@return easydap.neotoolkit.TreeBuffer.Item?
 function TreeBuffer:get_item(id)
     local data = self._tree:get_data(id)
     if not data then return nil end
@@ -435,7 +442,7 @@ function TreeBuffer:get_parent_id(id)
     return self._tree:get_parent_id(id)
 end
 
----@return easydap.ui.TreeBuffer.Item[]
+---@return easydap.neotoolkit.TreeBuffer.Item[]
 function TreeBuffer:get_children(parent_id)
     local items = {}
     for _, ti in ipairs(self._tree:get_children(parent_id)) do
@@ -469,7 +476,7 @@ function TreeBuffer:clear_items()
 end
 
 ---@param parent_id any  -- nil for root
----@param children easydap.ui.TreeBuffer.ItemDef[]
+---@param children easydap.neotoolkit.TreeBuffer.ItemDef[]
 ---@return boolean
 function TreeBuffer:set_children(parent_id, children)
     if parent_id and not self._tree:have_item(parent_id) then return false end
@@ -506,7 +513,7 @@ function TreeBuffer:remove_children(id)
 end
 
 ---@param parent_id any  -- nil for root
----@param item easydap.ui.TreeBuffer.ItemDef
+---@param item easydap.neotoolkit.TreeBuffer.ItemDef
 ---@return boolean
 function TreeBuffer:add_item(parent_id, item)
     if parent_id and not self._tree:have_item(parent_id) then return false end
@@ -534,7 +541,7 @@ function TreeBuffer:add_item(parent_id, item)
 end
 
 ---@param reference_id any
----@param item easydap.ui.TreeBuffer.ItemDef
+---@param item easydap.neotoolkit.TreeBuffer.ItemDef
 ---@param before boolean  true to insert before reference, false to insert after
 ---@return boolean
 function TreeBuffer:add_sibling(reference_id, item, before)
@@ -664,7 +671,7 @@ function TreeBuffer:get_item_data(id)
     return data and data.userdata or nil
 end
 
----@return easydap.ui.TreeBuffer.Item[]
+---@return easydap.neotoolkit.TreeBuffer.Item[]
 function TreeBuffer:get_items()
     local items = {}
     for _, ti in ipairs(self._tree:get_items()) do
@@ -673,7 +680,7 @@ function TreeBuffer:get_items()
     return items
 end
 
----@return easydap.ui.TreeBuffer.Item[]
+---@return easydap.neotoolkit.TreeBuffer.Item[]
 function TreeBuffer:get_roots()
     local items = {}
     for _, ti in ipairs(self._tree:get_roots()) do
@@ -682,7 +689,7 @@ function TreeBuffer:get_roots()
     return items
 end
 
----@return easydap.ui.TreeBuffer.Item?
+---@return easydap.neotoolkit.TreeBuffer.Item?
 function TreeBuffer:get_parent_item(id)
     local par_id = self._tree:get_parent_id(id)
     if not par_id then return nil end
@@ -692,7 +699,7 @@ function TreeBuffer:get_parent_item(id)
 end
 
 ---@param winid integer
----@return easydap.ui.TreeBuffer.Item[]
+---@return easydap.neotoolkit.TreeBuffer.Item[]
 function TreeBuffer:get_visible_items(winid)
     if not winid or not vim.api.nvim_win_is_valid(winid) then return {} end
     if vim.api.nvim_win_get_buf(winid) ~= self._bufnr then return {} end

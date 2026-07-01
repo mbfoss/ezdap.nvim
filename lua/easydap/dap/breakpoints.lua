@@ -7,7 +7,7 @@
 ---`on_change` fires whenever the desired set changes; live sessions subscribe to
 ---push the change to their adapter, and UI subscribes to repaint.
 
-local Signal = require("easydap.util.Signal")
+local Signal = require("easydap.neotoolkit.Signal")
 
 ---@class easydap.dap.SourceBreakpoint
 ---@field internal_id   integer   internal stable id (for signs)
@@ -64,7 +64,7 @@ local M = {}
 ---next tick — a batch of mutations in one cycle (clearing a file, restoring a
 ---project) notifies each subscriber once per affected file/kind, not once per
 ---breakpoint.
-M.on_change = Signal.new() ---@type easydap.util.Signal<fun(kind: easydap.dap.BreakpointChangeKind, path: string?)>
+M.on_change = Signal.new() ---@type easydap.neotoolkit.Signal<fun(kind: easydap.dap.BreakpointChangeKind, path: string?)>
 
 ---Pending coalesced changes for the next tick, or nil when none are queued.
 ---@type { sources: table<string,true>, all_sources: boolean, kinds: table<string,true> }?

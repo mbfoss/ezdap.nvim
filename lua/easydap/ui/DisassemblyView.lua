@@ -11,7 +11,7 @@
 local manager   = require("easydap.manager")
 local config    = require("easydap.config")
 local ui_util   = require("easydap.util.ui_util")
-local throttle  = require("easydap.util.throttle")
+local throttle  = require("easydap.neotoolkit.throttle")
 
 local _au_group_gen
 

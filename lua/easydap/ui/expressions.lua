@@ -1,7 +1,7 @@
 ---@brief Global watch-expression registry.
 ---Expressions are stored here independent of any session or UI.
 
-local Signal = require("easydap.util.Signal")
+local Signal = require("easydap.neotoolkit.Signal")
 
 ---@class easydap.Expression
 ---@field internal_id integer
@@ -10,7 +10,7 @@ local Signal = require("easydap.util.Signal")
 local M = {}
 
 ---Fires whenever the expression list changes.
-M.on_change = Signal.new() ---@type easydap.util.Signal<fun()>
+M.on_change = Signal.new() ---@type easydap.neotoolkit.Signal<fun()>
 
 ---@type easydap.Expression[]
 local _expressions = {}

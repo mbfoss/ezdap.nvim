@@ -5,9 +5,9 @@
 
 local M = {}
 
-local fsutil  = require("easydap.util.fsutil")
+local fsutil  = require("easydap.neotoolkit.fsutil")
 local ui_util = require("easydap.util.ui_util")
-local timer   = require("easydap.util.timer")
+local timer   = require("easydap.neotoolkit.timer")
 
 local _NS_CURSOR         = vim.api.nvim_create_namespace("easydap_select_cursor")
 local _NS_CONTENT        = vim.api.nvim_create_namespace("easydap_select_content")

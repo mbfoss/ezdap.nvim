@@ -1,10 +1,10 @@
----@class easydap.util.Signal<T>
+---@class easydap.neotoolkit.Signal<T>
 ---@field _listeners T[]
 local Signal = {}
 Signal.__index = Signal
 
 ---@generic T: fun(...)
----@return easydap.util.Signal<T>
+---@return easydap.neotoolkit.Signal<T>
 function Signal.new()
     return setmetatable({ _listeners = {} }, Signal)
 end

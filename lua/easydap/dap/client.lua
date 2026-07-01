@@ -5,7 +5,7 @@
 local connection  = require("easydap.dap.connection")
 local session_mod = require("easydap.dap.session")
 local adapters    = require("easydap.adapters")
-local Signal      = require("easydap.util.Signal")
+local Signal      = require("easydap.neotoolkit.Signal")
 local str_util    = require("easydap.util.str_util")
 
 -- ── Config evaluation ──────────────────────────────────────────────────────
@@ -55,21 +55,21 @@ local M                 = {}
 -- ── Signals ────────────────────────────────────────────────────────────────
 
 ---Fires when a session is registered: (id, sess, info)
-M.on_session_added      = Signal.new() ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session, info:easydap.client.SessionInfo)>
+M.on_session_added      = Signal.new() ---@type easydap.neotoolkit.Signal<fun(id:number, sess:easydap.dap.Session, info:easydap.client.SessionInfo)>
 ---Fires when a session terminates: (id)
-M.on_session_removed    = Signal.new() ---@type easydap.util.Signal<fun(id:number)>
+M.on_session_removed    = Signal.new() ---@type easydap.neotoolkit.Signal<fun(id:number)>
 ---Fires when a session's state changes: (id, info)
-M.on_session_updated    = Signal.new() ---@type easydap.util.Signal<fun(id:number, info:easydap.client.SessionInfo)>
+M.on_session_updated    = Signal.new() ---@type easydap.neotoolkit.Signal<fun(id:number, info:easydap.client.SessionInfo)>
 ---Fires once per stop, after threads and stack frames have been fetched: (id, info)
-M.on_session_stopped    = Signal.new() ---@type easydap.util.Signal<fun(id:number, info:easydap.client.SessionInfo)>
+M.on_session_stopped    = Signal.new() ---@type easydap.neotoolkit.Signal<fun(id:number, info:easydap.client.SessionInfo)>
 ---Fires for every raw DAP message: (id, direction, msg)
-M.on_raw_message        = Signal.new() ---@type easydap.util.Signal<fun(id:number, direction:"in"|"out", msg:table)>
+M.on_raw_message        = Signal.new() ---@type easydap.neotoolkit.Signal<fun(id:number, direction:"in"|"out", msg:table)>
 ---Fires when thread or frame selection changes in any session: (id, sess)
-M.on_selection_changed  = Signal.new() ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session)>
+M.on_selection_changed  = Signal.new() ---@type easydap.neotoolkit.Signal<fun(id:number, sess:easydap.dap.Session)>
 ---Fires after a variable value is successfully changed by the user: (id, sess)
-M.on_variable_changed   = Signal.new() ---@type easydap.util.Signal<fun(id:number, sess:easydap.dap.Session)>
+M.on_variable_changed   = Signal.new() ---@type easydap.neotoolkit.Signal<fun(id:number, sess:easydap.dap.Session)>
 ---Fires when a breakpoint's adapter-verified status changes: (id, bp, status)
-M.on_breakpoint_updated = Signal.new() ---@type easydap.util.Signal<fun(id:number, bp:table, status:easydap.dap.BpStatus)>
+M.on_breakpoint_updated = Signal.new() ---@type easydap.neotoolkit.Signal<fun(id:number, bp:table, status:easydap.dap.BpStatus)>
 
 -- ── Session registry ───────────────────────────────────────────────────────
 
