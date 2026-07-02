@@ -3,11 +3,11 @@
 ---type-to-filter fuzzy matching, an item list, and an optional file-based
 ---preview pane. No external picker dependency.
 
-local M = {}
+local M                  = {}
 
-local fsutil  = require("easydap.tk.fsutil")
-local ui_util = require("easydap.util.ui_util")
-local timer   = require("easydap.tk.timer")
+local fsutil             = require("easydap.tk.fsutil")
+local ui_util            = require("easydap.util.ui_util")
+local timer              = require("easydap.tk.timer")
 
 local _NS_CURSOR         = vim.api.nvim_create_namespace("easydap_select_cursor")
 local _NS_CONTENT        = vim.api.nvim_create_namespace("easydap_select_content")
@@ -124,9 +124,9 @@ local function _build_highlight_chunks(text, positions, hl_group)
         return { { text } }
     end
 
-    local hl             = hl_group or "Todo"
-    local chunks         = {}
-    local pos_map        = {}
+    local hl      = hl_group or "Todo"
+    local chunks  = {}
+    local pos_map = {}
     for _, p in ipairs(positions) do pos_map[p] = true end
 
     local current_chunk  = ""
@@ -252,7 +252,7 @@ local function _center_for_previewer(msg, width, height)
     local centered = string.rep(" ", pad_left) .. msg
     local pad_top  = math.max(0, math.floor((height + 1) / 2))
 
-    local lines = {}
+    local lines    = {}
     for _ = 1, pad_top do table.insert(lines, "") end
     table.insert(lines, centered)
     return lines
@@ -304,7 +304,7 @@ function Picker:init(opts, callback)
     self.async_preview_cancel  = nil
 
     ---@type easydap.select.ListItem[]
-    self._source_items = {}
+    self._source_items         = {}
     for _, it in ipairs(opts.items or {}) do
         local label, data
         if type(it) == "string" then
@@ -347,8 +347,8 @@ function Picker:relayout()
         width_ratio  = opts.width_ratio,
     }
 
-    local base_cfg = { relative = "editor", style = "minimal", border = "rounded" }
-    local winhl    = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title"
+    local base_cfg    = { relative = "editor", style = "minimal", border = "rounded" }
+    local winhl       = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title"
 
     -- Prompt window
     if not self.pwin then
@@ -628,10 +628,10 @@ function Picker:update_preview()
     local item   = cursor and self.list_items[cursor] or nil
     if not item then return end
 
-    local preview_width  = math.max(0, self.layout.preview_width - 2)  -- -2 for borders
-    local preview_height = math.max(0, self.layout.preview_height - 2) -- -2 for borders
+    local preview_width       = math.max(0, self.layout.preview_width - 2) -- -2 for borders
+    local preview_height      = math.max(0, self.layout.preview_height - 2) -- -2 for borders
 
-    local preview_fn     = self.opts.previewer or _file_preview
+    local preview_fn          = self.opts.previewer or _file_preview
 
     self.async_preview_cancel = preview_fn(
         item.data or {},
@@ -643,7 +643,7 @@ function Picker:update_preview()
             if not self.vbuf or not vim.api.nvim_buf_is_valid(self.vbuf) then return end
 
             local content = preview.content
-            local lines   ---@type string[]
+            local lines ---@type string[]
             if content then
                 lines = type(content) == "string" and vim.split(content, "\n") or content
             elseif preview.error_msg then
@@ -660,7 +660,8 @@ function Picker:update_preview()
             local filetype = content and (preview.filetype
                 or (preview.filepath and vim.filetype.match({ filename = preview.filepath }))
                 or "") or ""
-            vim.bo[self.vbuf].filetype = filetype
+            -- don't set bo[].filetype to avoid slowness and flickering triggered by treesiter/lsp etc...
+            vim.bo[self.vbuf].syntax = filetype
 
             if self.vwin and vim.api.nvim_win_is_valid(self.vwin) then
                 _apply_preview_pos(self.vwin, self.vbuf, content and preview.pos or nil)
