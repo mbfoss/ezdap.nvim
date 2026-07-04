@@ -299,7 +299,7 @@ function M.panel_jump(n)
     local p = _panel_or_warn()
     if not p then return end
     if type(n) ~= "number" then
-        _warn("panel jump: expected a tab number, e.g. :Debug panel jump 2")
+        _warn("panel jump: expected a tab number, e.g. :Debug panel jump 2 or :2Debug panel jump")
         return
     end
     p:show_index(n)
