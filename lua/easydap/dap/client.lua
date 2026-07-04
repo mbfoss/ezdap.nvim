@@ -21,12 +21,9 @@ end
 ---@param config easydap.dap.Config
 ---@return easydap.dap.Config
 local function _eval_config(config)
-    local _skip = { derive_launch_args = true, derive_attach_args = true }
     local result = {}
     for k, v in pairs(config) do
-        if _skip[k] then
-            result[k] = v
-        elseif type(v) == "table" then
+        if type(v) == "table" then
             local out = {}
             for ak, av in pairs(v) do out[ak] = _eval_val(av) end
             result[k] = out

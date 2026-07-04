@@ -1,12 +1,12 @@
 ---@brief Built-in DAP adapter definitions.
 ---
----The module is a plain table: each key is an adapter name, each value is a Config.
+---The module is a plain table: each key is an adapter name, each value is a
+---Config — pure native DAP (command, host/port, setup/teardown, request, …).
+---Translating a generic task (command/cwd/env/…) into a native launch/attach
+---body is an opt-in concern that lives in `easydap.derive`, not here.
 ---Users can add adapters or override existing ones directly:
 ---  local adapters = require("easydap.adapters")
----  adapters.myAdapter = { command = "...", derive_launch_args = function(task) … end }
----  adapters.codelldb.derive_launch_args = function(task) … end
-
-local str_util = require("easydap.util.str_util")
+---  adapters.myAdapter = { command = "...", request = "launch" }
 
 local M = {}
 
@@ -31,37 +31,8 @@ local M = {}
 ---@field prefix_local?          string
 ---@field prefix_remote?         string
 ---@field request?               string
----@field derive_launch_args?    fun(task: table): table  build launch args from generic task fields
----@field derive_attach_args?    fun(task: table): table  build attach args from generic task fields
 ---@field setup?                 fun(config: easydap.dap.Config, ctx: easydap.AdapterSetupCtx, callback: fun(err?: string, state?: any))
 ---@field teardown?              fun(config: easydap.dap.Config, ctx: any)
-
--- ── Small shared helpers ──────────────────────────────────────────────────
-
----Split task.command (string or string[]) into the program path and any extra args.
----@param task table
----@return string?  program
----@return string[]? args
-local function _split_command(task)
-    if not task.command then return end
-    local parts = type(task.command) == "table"
-        and task.command
-        or str_util.split_shell_args(task.command)
-    local args = {}
-    for i = 2, #parts do args[#args + 1] = parts[i] end
-    return parts[1], args
-end
-
----Resolve task.env, merging with the process environment unless task.clear_env is set.
----Returns nil when neither task.env nor task.clear_env was provided, so adapters
----don't stamp the full process environment into request_args unprompted.
----@param task table
----@return table<string,string>|nil
-local function _resolve_env(task)
-    if task.clear_env then return task.env end
-    if task.env == nil then return nil end
-    return vim.tbl_extend("force", vim.fn.environ(), task.env)
-end
 
 -- ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -121,32 +92,6 @@ M.debugpy = {
     command            = "python3",
     setup              = _debugpy_setup,
     teardown           = function(_, ctx) if ctx then ctx.handle.stop() end end,
-
-    derive_launch_args = function(task)
-        local program, extra_args = _split_command(task)
-        local args = {
-            type            = "python",
-            program         = program,
-            args            = extra_args,
-            justMyCode      = false,
-            console         = "integratedTerminal",
-            stopOnEntry     = false,
-            showReturnValue = true,
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { processId = task.process_id }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
 }
 
 -- task.command maps to `module` (the Python module name, not a file path)
@@ -154,31 +99,6 @@ M["debugpy-module"] = {
     command            = "python3",
     setup              = _debugpy_setup,
     teardown           = function(_, ctx) if ctx then ctx.handle.stop() end end,
-
-    derive_launch_args = function(task)
-        local module_name, extra_args = _split_command(task)
-        local args = {
-            type        = "python",
-            module      = module_name,
-            args        = extra_args,
-            justMyCode  = false,
-            console     = "integratedTerminal",
-            stopOnEntry = false,
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { processId = task.process_id }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
 }
 
 -- Attach to a remote Python process running debugpy.
@@ -189,95 +109,19 @@ M["debugpy-remote"] = {
     setup              = _debugpy_setup,
     teardown           = function(_, ctx) if ctx then ctx.handle.stop() end end,
     request            = "attach",
-
-    derive_attach_args = function(task)
-        return {
-            type       = "python",
-            connect    = {
-                host = task.host or "127.0.0.1",
-                port = task.port or 5678,
-            },
-            justMyCode = false,
-        }
-    end,
 }
 
 M.codelldb = {
-    command            = "codelldb",
-    derive_launch_args = function(task)
-        local program, extra_args = _split_command(task)
-        local args = {
-            type        = "lldb",
-            program     = program,
-            args        = extra_args,
-            stopOnEntry = false,
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { type = "lldb", pid = task.process_id }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
+    command = "codelldb",
 }
 
 M.gdb = {
-    command            = { "gdb", "--interpreter=dap" },
-    derive_launch_args = function(task)
-        local program, extra_args = _split_command(task)
-        local args = {
-            request = "launch",
-            program = program,
-            args    = extra_args,
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { pid = task.process_id }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
+    command = { "gdb", "--interpreter=dap" },
 }
 
 -- netcoredbg uses stopAtEntry instead of the standard stopOnEntry
 M.netcoredbg = {
     command = { "netcoredbg", "--interpreter=vscode" },
-
-    derive_launch_args = function(task)
-        local program, extra_args = _split_command(task)
-        local args = {
-            program     = program,
-            args        = extra_args,
-            stopAtEntry = false,
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopAtEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { processId = task.process_id }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopAtEntry = task.stop_on_entry end
-        return args
-    end,
 }
 
 -- Generic TCP attach — connect to a DAP server already listening on host:port.
@@ -292,76 +136,18 @@ M.remote = {
 -- Java — expects an external debug server (e.g. started by nvim-jdtls).
 -- Set host and port via task-level overrides or request_args.
 M["java-debug-server"] = {
-    host               = "127.0.0.1",
-    port               = 0,
-    request            = "attach",
-
-    derive_attach_args = function(task)
-        local args = {}
-        if task.host ~= nil then args.host = task.host end
-        if task.port ~= nil then args.port = task.port end
-        return args
-    end,
+    host    = "127.0.0.1",
+    port    = 0,
+    request = "attach",
 }
 
 M.lldb = {
-    command            = "lldb-dap",
-    derive_launch_args = function(task)
-        local program, extra_args = _split_command(task)
-        local args = {
-            type          = "lldb",
-            program       = program,
-            args          = extra_args,
-            stopOnEntry   = false,
-            runInTerminal = true,
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { type = "lldb", pid = task.process_id }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
+    command = "lldb-dap",
 }
 
 -- Go — dlv dap communicates over stdio; no TCP setup required.
--- program defaults to the current directory (debug the package at cwd).
 M.delve = {
-    command            = { "dlv", "dap" },
-    derive_launch_args = function(task)
-        local program, extra_args
-        if task.command ~= nil then
-            program, extra_args = _split_command(task)
-        else
-            program    = vim.fn.getcwd()
-            extra_args = {}
-        end
-        local args = {
-            mode    = "debug",
-            program = program,
-            args    = extra_args,
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { mode = "local", processId = task.process_id }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
+    command = { "dlv", "dap" },
 }
 
 -- JavaScript / TypeScript — starts js-debug's TCP server, then connects to it.
@@ -421,95 +207,29 @@ M["js-debug"] = {
     teardown = function(_, ctx)
         if ctx then ctx.handle.stop() end
     end,
-
-    derive_launch_args = function(task)
-        local program, extra_args = _split_command(task)
-        local args = {
-            type              = "pwa-node",
-            program           = program,
-            args              = extra_args,
-            runtimeExecutable = "node",
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.run_in_terminal ~= nil then args.runInTerminal = task.run_in_terminal end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
-
-    derive_attach_args = function(task)
-        local args = { type = "pwa-node", port = 9229 }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
 }
 
--- bash-debug-adapter has adapter-specific path fields; run_in_terminal is excluded
--- because the adapter manages its own terminal kind via terminalKind.
 M["bash-debug-adapter"] = {
-    command            = "bash-debug-adapter",
-    derive_launch_args = function(task)
-        local program, extra_args = _split_command(task)
-        local data_dir            = vim.fn.stdpath("data")
-        local bashdb_path         = vim.fs.joinpath(data_dir, "mason", "packages", "bash-debug-adapter", "bashdb")
-        local args                = {
-            type          = "bashdb",
-            name          = "Launch Bash Script",
-            program       = program,
-            args          = extra_args,
-            pathBash      = "bash",
-            pathBashdb    = vim.fn.filereadable(bashdb_path) == 1 and bashdb_path or "bashdb",
-            pathBashdbLib = vim.fs.joinpath(data_dir, "mason", "packages", "bash-debug-adapter"),
-            pathCat       = "cat",
-            pathMkfifo    = "mkfifo",
-            pathPkill     = "pkill",
-            terminalKind  = "integrated",
-        }
-        if task.cwd ~= nil then args.cwd = task.cwd end
-        local env = _resolve_env(task)
-        if env then args.env = env end
-        if task.stop_on_entry ~= nil then args.stopOnEntry = task.stop_on_entry end
-        return args
-    end,
+    command = "bash-debug-adapter",
 }
 
--- PHP — listens for an Xdebug connection; task fields do not apply.
 M["php-debug-adapter"] = {
-    command            = "php-debug-adapter",
-    derive_launch_args = function(_)
-        return { type = "php", name = "Listen for Xdebug", cwd = vim.fn.getcwd(), port = 9003 }
-    end,
+    command = "php-debug-adapter",
 }
 
--- Lua — task.command maps to program.file (first token); remaining args are not forwarded
--- because the js-based adapter embeds them inside the program table, not at the top level.
+-- Lua
 local _lua_debugger_adapter_js = vim.fs.joinpath(
     vim.fn.stdpath("data"), "mason", "packages",
     "local-lua-debugger-vscode", "extension", "extension", "debugAdapter.js"
 )
 M["local-lua-debugger"] = {
-    command            = { "node", _lua_debugger_adapter_js },
-    command_env        = {
+    command     = { "node", _lua_debugger_adapter_js },
+    command_env = {
         LUA_PATH = vim.fs.joinpath(
             vim.fn.stdpath("data"), "mason", "packages",
             "local-lua-debugger-vscode", "debugger", "?.lua"
         ) .. ";;",
     },
-
-    derive_launch_args = function(task)
-        local file = _split_command(task)
-        return {
-            type    = "lua-local",
-            name    = "Debug",
-            program = {
-                lua           = vim.fn.exepath("lua"),
-                file          = file,
-                communication = "stdio",
-            },
-        }
-    end,
 }
 
 return M

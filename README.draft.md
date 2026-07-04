@@ -123,9 +123,11 @@ generic fields into a DAP `launch`/`attach` request.
 | `request_args`    | `table`                  | Sent verbatim in the launch/attach body; overrides the generic fields. |
 | `raw_messages`    | `boolean`                | Capture raw DAP protocol traffic in a dedicated buffer. |
 
-When `request_args` is omitted, the adapter's `derive_launch_args` /
-`derive_attach_args` builds the request from the generic fields above. When you
-need full control, set `request_args` and it is forwarded unchanged.
+The generic fields above are a convenience: `require("easydap.derive")`
+translates them into the adapter's native launch/attach body before the task
+runs (the DAP core itself only ever sees native `request_args`). When you need
+full control, set `request_args` directly — it is forwarded unchanged, and it is
+deep-merged over the derived body (native keys win) when both are present.
 
 ## Adapters
 
@@ -153,7 +155,8 @@ system `PATH`.
 
 ### Adding or overriding adapters
 
-The adapters table is mutable — add your own or tweak a built-in directly:
+The adapters table is mutable — add your own or tweak a built-in directly. An
+adapter config is **pure native DAP** (no generic-task knowledge):
 
 ```lua
 local adapters = require("easydap.adapters")
@@ -161,9 +164,7 @@ local adapters = require("easydap.adapters")
 -- New adapter
 adapters.myadapter = {
   command = { "my-dap-server", "--stdio" },
-  derive_launch_args = function(task)
-    return { program = task.command, args = {} }
-  end,
+  request = "launch",
 }
 
 -- Override a built-in field
@@ -171,9 +172,25 @@ adapters.codelldb.command = "/opt/codelldb/codelldb"
 ```
 
 Key adapter-config fields: `command` (string or argv), `host`/`port` (for TCP
-adapters), `request`, `derive_launch_args` / `derive_attach_args`, and a
-`setup`/`teardown` pair for adapters that must spawn a server first. See the
-`easydap.dap.Config` annotation in [`adapters.lua`](lua/easydap/adapters.lua).
+adapters), `request`, and a `setup`/`teardown` pair for adapters that must spawn
+a server first. See the `easydap.dap.Config` annotation in
+[`adapters.lua`](lua/easydap/adapters.lua).
+
+Translating the generic task fields into a native launch/attach body is a
+separate, opt-in concern in [`derive.lua`](lua/easydap/derive.lua) — a registry
+keyed by adapter name, parallel to `adapters`. Add or override a translation
+there:
+
+```lua
+local derive = require("easydap.derive")
+
+derive.adapters.myadapter = {
+  launch = function(task) return { program = task.command, args = {} } end,
+}
+
+-- Override just one built-in translation
+derive.adapters.codelldb.launch = function(task) … end
+```
 
 ## Commands
 

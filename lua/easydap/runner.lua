@@ -12,22 +12,12 @@
 
 local M = {}
 
----A debug task: the generic fields consumed by `easydap.task` and the adapters.
----Mirrors what easytasks sends as `debug.Params`; `name` defaults to "debug".
----@class easydap.Task
+---A debug task: the portable `easydap.derive.Task` fields plus run-presentation
+---flags. Generic fields (command/cwd/env/…) are translated into native DAP
+---`request_args` by `easydap.derive` before reaching the native `easydap.task`
+---core. Mirrors what easytasks sends as `debug.Params`; `name` defaults to "debug".
+---@class easydap.Task : easydap.derive.Task
 ---@field name?            string
----@field adapter          string                  name of an entry in `easydap.adapters`
----@field request?         "launch"|"attach"
----@field host?            string                  attach only
----@field port?            integer                 attach only (required for the `remote` adapter)
----@field process_id?      integer                 attach only — target process id (PID) to attach to
----@field command?         string|string[]         program to debug ([program, arg1, …] shorthand allowed)
----@field cwd?             string
----@field env?             table<string,string>
----@field clear_env?       boolean                 pass `env` verbatim without merging the process environment
----@field run_in_terminal? boolean
----@field stop_on_entry?   boolean
----@field request_args?    table                   raw DAP launch/attach body; deep-merged over the derived args and wins on conflicts. Uses the adapter's NATIVE DAP keys (e.g. `stopAtEntry` for netcoredbg, `pid` vs `processId`), which may not line up with the generic fields above — a mismatched key is added, not a substitute for the generic one.
 ---@field raw_messages?    boolean                 capture raw DAP protocol messages in a dedicated buffer
 
 ---A run: a unique id (used as its panel group), the task name, a cancel
@@ -150,6 +140,14 @@ function M.run(task)
     task      = vim.deepcopy(task)
     task.name = task.name or "debug"
     _last_task = task
+
+    -- Turn the generic task into a native one (request_args populated) via the
+    -- opt-in derive utility; `easydap.task` itself consumes native DAP only.
+    local native, derive_err = require("easydap.derive").resolve(task)
+    if not native then
+        _err("run: " .. tostring(derive_err))
+        return
+    end
 
     _clear_finished(task.name)
 
