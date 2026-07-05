@@ -33,8 +33,8 @@ local M = {}
 ---— which produces a nested body table (e.g. a `connect` group → body.connect).
 ---Group children are addressed by their dotted path (`connect.host`).
 ---@class easydap.ParamSpec
----@field type?     "string"|"boolean"|"integer"|"number"|"table"|"schema"
----@field kind?     "env"|"enum"|"host"|"port"|"list"|"file"|"dir"   data refinement
+---@field type?     "string"|"boolean"|"integer"|"number"|"table"|"list"|"schema"
+---@field kind?     "env"|"enum"|"host"|"port"|"file"|"dir"   data refinement
 ---@field role?     "target"|"args"    value meaning; maps program/args for run_target
 ---@field fields?   table<string, easydap.ParamSpec>  child specs when `type == "schema"`
 ---@field enum?     any[]              allowed values when `kind == "enum"`
@@ -90,7 +90,7 @@ end
 ---@type easydap.ParamSpec
 local _program = { type = "string", role = "target", desc = "program to debug" }
 ---@type easydap.ParamSpec
-local _args = { type = "table", role = "args", desc = "program arguments" }
+local _args = { type = "list", role = "args", desc = "program arguments" }
 ---@type easydap.ParamSpec
 local _cwd = { type = "string", kind = "dir", desc = "working directory" }
 ---@type easydap.ParamSpec
@@ -102,7 +102,7 @@ local _run_in_terminal = { type = "boolean", desc = "run in the integrated termi
 ---@param desc string
 ---@return easydap.ParamSpec
 local function _lldb_cmds(desc)
-    return { type = "table", kind = "list", desc = desc }
+    return { type = "list", desc = desc }
 end
 
 -- ParamSpecs common to lldb-dap's launch and attach requests (see
@@ -334,7 +334,7 @@ M.lldb = {
         args           = _args,
         cwd            = _cwd,
         env            = _env,
-        stdio          = { type = "table", kind = "list", desc = "redirection targets for the program's stdio streams" },
+        stdio          = { type = "list", desc = "redirection targets for the program's stdio streams" },
         stopOnEntry    = { type = "boolean", desc = "stop at entry", default = false },
         console        = { type = "string", kind = "enum", default = "integratedTerminal",
             enum = { "internalConsole", "integratedTerminal", "externalTerminal" },
@@ -464,10 +464,7 @@ M["bash-debug-adapter"] = {
         cwd           = _cwd,
         env           = _env,
         pathBash      = { default = "bash" },
-        pathBashdb    = { default = function()
-            local p = vim.fs.joinpath(vim.fn.stdpath("data"), "mason", "packages", "bash-debug-adapter", "bashdb")
-            return vim.fn.filereadable(p) == 1 and p or "bashdb"
-        end },
+        pathBashdb    = { default = "bash-debug-adapter" },
         pathBashdbLib = { default = function()
             return vim.fs.joinpath(vim.fn.stdpath("data"), "mason", "packages", "bash-debug-adapter")
         end },
