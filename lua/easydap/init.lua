@@ -78,6 +78,79 @@ local function _warn_if_unpersisted()
         vim.log.levels.WARN)
 end
 
+---Completion for `:Debug quick_run …`. `committed` is the already-typed
+---`key=value` tokens; `arg_lead` is the partial token under the cursor. Returns
+---full `key=value` candidates — the usercmd layer prefix-filters them by arg_lead.
+---@param committed string[]
+---@param arg_lead string
+---@return string[]
+local function _quick_run_complete(committed, arg_lead)
+    local derive = require("easydap.derive")
+
+    -- Scan committed tokens for the chosen adapter/request and the used keys.
+    local adapter, request
+    local used = {}
+    for _, tok in ipairs(committed) do
+        local key, val = tok:match("^([%w_]+)=(.*)$")
+        if key then
+            used[key] = true
+            if key == "adapter" then adapter = val end
+            if key == "request" then request = val end
+        end
+    end
+
+    ---The request used for field lookup: explicit request=, else the adapter's
+    ---default, else whichever it maps.
+    local function eff_request()
+        if request and request ~= "" then return request end
+        if not adapter then return "launch" end
+        local supported = derive.requests(adapter)
+        local base      = require("easydap.adapters")[adapter]
+        local r         = (base and base.request) or "launch"
+        if vim.tbl_contains(supported, r) then return r end
+        return supported[1] or "launch"
+    end
+
+    ---@param prefix string
+    ---@param values string[]
+    local function tag(prefix, values)
+        return vim.tbl_map(function(v) return prefix .. v end, values)
+    end
+
+    -- Completing a value: arg_lead is `key=partial`.
+    local vkey, vpartial = arg_lead:match("^([%w_]+)=(.*)$")
+    if vkey then
+        if vkey == "adapter" then
+            return tag("adapter=", derive.adapter_names())
+        elseif vkey == "request" then
+            return tag("request=", adapter and derive.requests(adapter) or { "launch", "attach" })
+        elseif vkey == "raw_messages" then
+            return tag("raw_messages=", { "true", "false" })
+        end
+        local spec = derive.field_specs[vkey]
+        if spec and spec.type == "boolean" then
+            return tag(vkey .. "=", { "true", "false" })
+        elseif spec and spec.type == "path" then
+            return tag(vkey .. "=", vim.fn.getcompletion(vpartial, "file"))
+        end
+        return {}
+    end
+
+    -- Completing a key: offer `key=` candidates, minus already-used keys.
+    local out = {}
+    local function offer(key)
+        if not used[key] then out[#out + 1] = key .. "=" end
+    end
+    offer("adapter")
+    if adapter and derive.adapters[adapter] then
+        offer("request")
+        offer("name")
+        offer("raw_messages")
+        for _, f in ipairs(derive.fields(adapter, eff_request())) do offer(f) end
+    end
+    return out
+end
+
 local function _register_user_commands()
     local cmd      = require("easydap.manager")
     local usercmd  = require("easydap.util.usercmd")
@@ -160,7 +233,7 @@ local function _register_user_commands()
     })
 
     local _debug_subs = {
-        "run_file", "rerun",
+        "run_file", "quick_run", "rerun",
         "breakpoint",
         "view", "continue", "continue_all",
         "step_over", "next", "step_in", "step_out", "step_back",
@@ -177,6 +250,8 @@ local function _register_user_commands()
         local sub = args[1]
         if sub == "run_file" then
             M.run_file(args[2])
+        elseif sub == "quick_run" then
+            M.quick_run({ unpack(args, 2) })
         elseif sub == "rerun" then
             M.rerun()
         elseif sub == "view" then
@@ -265,6 +340,9 @@ local function _register_user_commands()
             if rest[1] == "run_file" and #rest == 1 then
                 return vim.fn.getcompletion(arg_lead, "file")
             end
+            if rest[1] == "quick_run" then
+                return _quick_run_complete({ unpack(rest, 2) }, arg_lead)
+            end
             if rest[1] == "panel" and #rest == 1 then
                 return { "toggle", "jump", "next", "previous" }
             end
@@ -348,6 +426,14 @@ end
 function M.run_file(path)
     local runner = require("easydap.runner")
     return runner.run_file(path)
+end
+
+---Assemble and run a debug task from `key=value` tokens (adapter-agnostic).
+---E.g. `quick_run adapter=gdb command=./a.out stop_on_entry=true`.
+---@param tokens string[] raw key=value tokens
+function M.quick_run(tokens)
+    local runner = require("easydap.runner")
+    return runner.quick_run(tokens)
 end
 
 ---@param task easydap.Task

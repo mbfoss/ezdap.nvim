@@ -46,7 +46,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   `raw_messages`) and sends `parameters` as the DAP request body verbatim.
 - [derive.lua](lua/easydap/derive.lua) — optional, **standalone** utility (nothing
   in easydap requires it): builds a task's native `parameters` from a portable
-  description (command/cwd/env/…) via `derive.args(adapter, request, generic)`,
+  description (target/cwd/env/…) via `derive.args(adapter, request, generic)`,
   keyed by a per-adapter registry parallel to `adapters`.
 - [templates.lua](lua/easydap/templates.lua) — starter task templates (LLDB, CodeLLDB, …).
 
