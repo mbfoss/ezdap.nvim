@@ -310,7 +310,7 @@ local function _register_user_commands()
     end, {
         desc  = "easydap commands",
         range = true,
-        nargs = "*",
+        count = true,
         complete = function(arg_lead, cmd_line, _)
             local parts = usercmd.split_args(cmd_line)
             if cmd_line:match("%s+$") then table.insert(parts, ' ') end
