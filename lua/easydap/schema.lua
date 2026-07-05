@@ -113,24 +113,50 @@ local function _resolve_default(spec)
     return spec.default
 end
 
----Assign `value` into `tbl` at a possibly-dotted `path` (e.g. "connect.host"),
----creating intermediate tables as needed.
----@param tbl table
----@param path string
----@param value any
-local function _set_path(tbl, path, value)
-    if not path:find(".", 1, true) then
-        tbl[path] = value
-        return
+---A schema node is either a leaf ParamSpec or a nested group of further nodes.
+---A leaf is recognised by its scalar descriptor fields (`type`/`kind`/`fixed`);
+---a group is just a map of names to nodes and has none of them at its own level.
+---@param node table
+---@return boolean
+local function _is_leaf(node)
+    return type(node.type) == "string"
+        or type(node.kind) == "string"
+        or type(node.fixed) == "boolean"
+end
+
+---Walk a (possibly nested) schema, calling `fn(dotted_key, spec)` for every leaf.
+---Keys are visited in sorted order at each level, so the traversal is stable and
+---`key_of_kind`'s "first match" is deterministic. Nested groups contribute a
+---dotted path prefix (e.g. `connect.host`).
+---@param schema table
+---@param fn fun(key: string, spec: easydap.ParamSpec)
+local function _walk_leaves(schema, fn)
+    local function rec(group, prefix)
+        local keys = {}
+        for k in pairs(group) do keys[#keys + 1] = k end
+        table.sort(keys)
+        for _, k in ipairs(keys) do
+            local node = group[k]
+            local path = prefix == "" and k or (prefix .. "." .. k)
+            if _is_leaf(node) then fn(path, node) else rec(node, path) end
+        end
     end
-    local parts = vim.split(path, ".", { plain = true })
-    local node  = tbl
-    for i = 1, #parts - 1 do
-        local p = parts[i]
-        if type(node[p]) ~= "table" then node[p] = {} end
-        node = node[p]
+    rec(schema, "")
+end
+
+---Resolve a dotted `key` (e.g. "connect.host") to its leaf spec in a nested
+---schema, or nil when the path is unknown or lands on a group rather than a leaf.
+---@param schema table
+---@param key string
+---@return easydap.ParamSpec?
+local function _find_leaf(schema, key)
+    local node = schema
+    for part in vim.gsplit(key, ".", { plain = true }) do
+        if type(node) ~= "table" then return nil end
+        node = node[part]
     end
-    node[parts[#parts]] = value
+    if type(node) == "table" and _is_leaf(node) then return node end
+    return nil
 end
 
 -- ── Introspection ──────────────────────────────────────────────────────────
@@ -170,14 +196,11 @@ end
 function M.key_of_kind(adapter, request, kind)
     local schema = M.schema(adapter, request)
     if not schema then return nil end
-    local keys = {}
-    for key in pairs(schema) do keys[#keys + 1] = key end
-    table.sort(keys)
-    for _, key in ipairs(keys) do
-        local spec = schema[key]
-        if not spec.fixed and spec.kind == kind then return key end
-    end
-    return nil
+    local found
+    _walk_leaves(schema, function(key, spec)
+        if not found and not spec.fixed and spec.kind == kind then found = key end
+    end)
+    return found
 end
 
 ---Adapter names that can launch a program target via run_target — those whose
@@ -204,20 +227,21 @@ function M.requests(adapter)
 end
 
 ---The ParamSpec for a user-settable param, or nil when the key is unknown or
----`fixed` (fixed params are not settable from the command line).
+---`fixed` (fixed params are not settable from the command line). `key` is a dotted
+---path into nested groups (e.g. "connect.host").
 ---@param adapter string
 ---@param request string
 ---@param key string
 ---@return easydap.ParamSpec?
 function M.spec(adapter, request, key)
     local schema = M.schema(adapter, request)
-    local spec   = schema and schema[key]
+    local spec   = schema and _find_leaf(schema, key)
     if not spec or spec.fixed then return nil end
     return spec
 end
 
 ---User-settable param names (excludes `fixed` entries) for an adapter's request,
----sorted. For completion.
+---sorted. Nested groups yield dotted names. For completion.
 ---@param adapter string
 ---@param request string
 ---@return string[]
@@ -225,17 +249,18 @@ function M.param_names(adapter, request)
     local schema = M.schema(adapter, request)
     if not schema then return {} end
     local out = {}
-    for key, spec in pairs(schema) do
+    _walk_leaves(schema, function(key, spec)
         if not spec.fixed then out[#out + 1] = key end
-    end
+    end)
     table.sort(out)
     return out
 end
 
 ---Assemble an adapter-native launch/attach body from already-coerced `values`
----(keyed by param name). Applies `fixed` values and `default`s for keys the
----caller did not supply, nests via each spec's `into` path, and enforces
----`required`. Unknown keys in `values` are ignored (the caller validates those).
+---(keyed by dotted param path). Mirrors the schema's shape: nested groups produce
+---nested body tables. Applies `fixed` values and `default`s for keys the caller
+---did not supply, enforces `required`, and omits groups that end up empty. Unknown
+---keys in `values` are ignored (the caller validates those).
 ---@param adapter string
 ---@param request string  "launch"|"attach"
 ---@param values table<string, any>
@@ -245,22 +270,35 @@ function M.build(adapter, request, values)
     if not schema then
         return nil, ("adapter %s has no %s schema"):format(tostring(adapter), tostring(request))
     end
-    local body = {}
-    for key, spec in pairs(schema) do
-        local val
-        if spec.fixed then
-            val = _resolve_default(spec)
-        elseif values[key] ~= nil then
-            val = values[key]
-        elseif spec.default ~= nil then
-            val = _resolve_default(spec)
+    ---@param group table
+    ---@param prefix string
+    ---@return table? node, string? err
+    local function assemble(group, prefix)
+        local out = {}
+        for key, node in pairs(group) do
+            local path = prefix == "" and key or (prefix .. "." .. key)
+            if _is_leaf(node) then
+                local val
+                if node.fixed then
+                    val = _resolve_default(node)
+                elseif values[path] ~= nil then
+                    val = values[path]
+                elseif node.default ~= nil then
+                    val = _resolve_default(node)
+                end
+                if val == nil and node.required then
+                    return nil, ("%s is required"):format(path)
+                end
+                if val ~= nil then out[key] = val end
+            else
+                local sub, err = assemble(node, path)
+                if not sub then return nil, err end
+                if next(sub) ~= nil then out[key] = sub end
+            end
         end
-        if val == nil and spec.required then
-            return nil, ("%s is required"):format(key)
-        end
-        if val ~= nil then _set_path(body, spec.into or key, val) end
+        return out
     end
-    return body
+    return assemble(schema, "")
 end
 
 return M

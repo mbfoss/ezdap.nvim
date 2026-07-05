@@ -91,7 +91,7 @@ local function _quick_run_complete(committed, arg_lead)
     local adapter, request
     local used = {}
     for _, tok in ipairs(committed) do
-        local key, val = tok:match("^([%w_]+)=(.*)$")
+        local key, val = tok:match("^([%w_.]+)=(.*)$")
         if key then
             used[key] = true
             if key == "adapter" then adapter = val end
@@ -118,7 +118,7 @@ local function _quick_run_complete(committed, arg_lead)
     end
 
     -- Completing a value: arg_lead is `key=partial`.
-    local vkey, vpartial = arg_lead:match("^([%w_]+)=(.*)$")
+    local vkey, vpartial = arg_lead:match("^([%w_.]+)=(.*)$")
     if vkey then
         if vkey == "adapter" then
             return tag("adapter=", schema.adapter_names())

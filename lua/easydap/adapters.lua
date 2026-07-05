@@ -26,12 +26,16 @@ local M = {}
 ---coercion, completion and validation (a `kind` implies its `type`). A `fixed`
 ---entry is not user-settable — it always emits its `default` (which may be a
 ---function for computed values) — and needs no `type`.
+---
+---A schema is a `table<string, easydap.ParamSpec>`, but any value may itself be a
+---nested `table<string, easydap.ParamSpec>` group instead of a leaf ParamSpec —
+---that produces a nested body table (e.g. a `connect` group → body.connect). Such
+---params are addressed by their dotted path (`connect.host`).
 ---@class easydap.ParamSpec
 ---@field type?     "string"|"boolean"|"integer"|"number"|"table"
 ---@field kind?     "target"|"args"|"env"|"enum"|"host"|"port"|"list"|"file"|"dir"
 ---@field enum?     any[]              allowed values when `kind == "enum"`
 ---@field desc?     string
----@field into?     string             dotted body path to assign to (defaults to the key)
 ---@field default?  any|fun():any      value used when the caller omits the key
 ---@field fixed?    boolean            not user-settable; always emits `default`
 ---@field required? boolean
@@ -222,12 +226,15 @@ M["debugpy-remote"] = {
     setup              = _debugpy_setup,
     teardown           = function(_, ctx) if ctx then ctx.handle.stop() end end,
     request            = "attach",
-    -- host/port target the REMOTE process and go in the body's `connect`, not the
-    -- task-level connection (the local adapter port is chosen by _debugpy_setup).
+    -- The `connect` group targets the REMOTE process and goes in the body's
+    -- `connect`, not the task-level connection (the local adapter port is chosen
+    -- by _debugpy_setup). Set them as `connect.host` / `connect.port`.
     attach_schema      = {
         type       = { fixed = true, default = "python" },
-        host       = { type = "string", kind = "host", into = "connect.host", desc = "remote host", default = "127.0.0.1" },
-        port       = { type = "integer", kind = "port", into = "connect.port", desc = "remote port", default = 5678 },
+        connect    = {
+            host = { type = "string", kind = "host", desc = "remote host", default = "127.0.0.1" },
+            port = { type = "integer", kind = "port", desc = "remote port", default = 5678 },
+        },
         justMyCode = { type = "boolean", desc = "debug only user code", default = false },
     },
 }
@@ -491,14 +498,16 @@ M["local-lua-debugger"] = {
             "local-lua-debugger-vscode", "debugger", "?.lua"
         ) .. ";;",
     },
-    -- `program` is a nested table the js-based adapter consumes; `file` lands
-    -- inside it via dotted `into` paths.
+    -- `program` is a nested table the js-based adapter consumes; the target file
+    -- is set as `program.file`.
     launch_schema = {
-        type                      = { fixed = true, default = "lua-local" },
-        name                      = { fixed = true, default = "Debug" },
-        ["program.lua"]           = { fixed = true, default = function() return vim.fn.exepath("lua") end },
-        ["program.communication"] = { fixed = true, default = "stdio" },
-        file                      = { type = "string", kind = "target", into = "program.file", desc = "lua file to debug" },
+        type    = { fixed = true, default = "lua-local" },
+        name    = { fixed = true, default = "Debug" },
+        program = {
+            lua           = { fixed = true, default = function() return vim.fn.exepath("lua") end },
+            communication = { fixed = true, default = "stdio" },
+            file          = { type = "string", kind = "target", desc = "lua file to debug" },
+        },
     },
 }
 
