@@ -7,28 +7,41 @@ local function _split_args(str)
     local i = 1
     local len = #str
     local part = {}
+    local has_part = false
+    local quote = nil
 
     while i <= len do
         local c = str:sub(i, i)
-        if c == '\\' and i < len then
-            table.insert(part, str:sub(i + 1, i + 1))
-            i = i + 2
+        if quote then
+            if c == quote then
+                quote = nil
+            else
+                table.insert(part, c)
+            end
+            i = i + 1
+        elseif c == '"' or c == "'" then
+            quote = c
+            has_part = true
+            i = i + 1
         elseif c:match('%s') then
-            if #part > 0 then
+            if has_part then
                 table.insert(args, table.concat(part))
                 part = {}
+                has_part = false
             end
             i = i + 1
         else
             table.insert(part, c)
+            has_part = true
             i = i + 1
         end
     end
-    if #part > 0 then
+    if has_part then
         table.insert(args, table.concat(part))
     end
     return args
 end
+M._split_args = _split_args
 
 ---@alias easydap.tk.usercmd.subcommand_fn fun(cmd:string,rest:string[],arg_lead:string):string[]
 
@@ -87,10 +100,10 @@ function M.register_user_cmd(cmd, run_fn, opts)
             _dispatch(cmd, run_fn, cmd_opts)
         end,
         {
-            nargs = opts.subcommand_fn ~= nil and "*" or nil,
+            nargs = "*",
             complete = opts.subcommand_fn ~= nil and function(arg_lead, cmd_line, _)
                 return _complete(opts.subcommand_fn, arg_lead, cmd_line)
-            end or nil,
+            end or function() return {} end,
             desc = opts.desc,
         })
 end
