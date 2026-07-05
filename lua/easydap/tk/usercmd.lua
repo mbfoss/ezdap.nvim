@@ -69,7 +69,7 @@ local function _complete(subcommand_fn, arg_lead, cmd_line)
     if #args == 1 then
         return filter(subcommand_fn(cmd, {}, arg_lead))
     elseif #args >= 2 then
-        local rest = { table.unpack(args, 2) }
+        local rest = { unpack(args, 2) }
         rest[#rest] = nil
         return filter(subcommand_fn(cmd, rest, arg_lead))
     end
