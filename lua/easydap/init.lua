@@ -375,7 +375,7 @@ local function _register_user_commands()
     -- panel`) still arrives via `opts.count`. Arg splitting/quote handling is
     -- reused from `tk.usercmd`.
     vim.api.nvim_create_user_command("Debug", function(cmd_opts)
-        local args = usercmd._split_args(cmd_opts.args)
+        local args = usercmd.split_args(cmd_opts.args)
         local ok, err = pcall(_debug_run, args, cmd_opts)
         if not ok then
             vim.notify("[easydap] Debug command error\n" .. tostring(err), vim.log.levels.ERROR)
@@ -385,7 +385,7 @@ local function _register_user_commands()
         range = true,
         nargs = "*",
         complete = function(arg_lead, cmd_line, _)
-            local parts = usercmd._split_args(cmd_line)
+            local parts = usercmd.split_args(cmd_line)
             if cmd_line:match("%s+$") then table.insert(parts, ' ') end
             -- Drop the command name and the token currently being typed.
             local rest = { unpack(parts, 2) }
