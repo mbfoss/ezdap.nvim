@@ -177,7 +177,9 @@ local function _register_user_commands()
         "list",
     }
 
-    usercmd.register_subcommand("breakpoint", function(_, args, _)
+    ---Run the `breakpoint` subcommand. Also reachable via `:Debug breakpoint …`.
+    ---@param args string[]
+    local function _bp_run(args)
         local sub = args[1]
         if sub == nil or sub == "" or sub == "toggle" then
             if vim.b.easydap_disasm and _disassembly_view then
@@ -226,23 +228,26 @@ local function _register_user_commands()
         else
             vim.notify("[dap] unknown subcommand: " .. tostring(sub), vim.log.levels.WARN)
         end
-    end, {
-        complete_fn = function(rest, _)
-            if #rest == 0 then return _bp_subs end
-            if rest[1] == "fn" and #rest == 1 then
-                return vim.tbl_map(function(bp) return bp.name end,
-                    require("easydap.dap.breakpoints").function_breakpoints())
-            end
-            if rest[1] == "exception_type" and #rest == 1 then
-                return vim.tbl_map(function(bp) return bp.name end,
-                    require("easydap.dap.breakpoints").exception_name_breakpoints())
-            end
-            if rest[1] == "exception_type" and #rest == 2 then
-                return { "always", "unhandled", "userUnhandled", "never" }
-            end
-            return {}
-        end,
-    })
+    end
+
+    ---Completion for the `breakpoint` subcommand.
+    ---@param rest string[]
+    ---@return string[]
+    local function _bp_complete(rest)
+        if #rest == 0 then return _bp_subs end
+        if rest[1] == "fn" and #rest == 1 then
+            return vim.tbl_map(function(bp) return bp.name end,
+                require("easydap.dap.breakpoints").function_breakpoints())
+        end
+        if rest[1] == "exception_type" and #rest == 1 then
+            return vim.tbl_map(function(bp) return bp.name end,
+                require("easydap.dap.breakpoints").exception_name_breakpoints())
+        end
+        if rest[1] == "exception_type" and #rest == 2 then
+            return { "always", "unhandled", "userUnhandled", "never" }
+        end
+        return {}
+    end
 
     local _debug_subs = {
         "run_file", "quick_run", "rerun",
@@ -258,7 +263,9 @@ local function _register_user_commands()
         "project", "panel",
     }
 
-    usercmd.register_user_cmd("Debug", function(_, args, opts)
+    ---@param args string[]
+    ---@param opts vim.api.keyset.create_user_command.command_args
+    local function _debug_run(args, opts)
         local sub = args[1]
         if sub == "run_file" then
             M.run_file(args[2])
@@ -332,36 +339,64 @@ local function _register_user_commands()
                 vim.notify("[easydap] unknown panel command: " .. tostring(action), vim.log.levels.WARN)
             end
         elseif sub == "breakpoint" then
-            local def = usercmd.get_subcommand("breakpoint")
-            if def then def.run("breakpoint", { unpack(args, 2) }, {}) end
+            _bp_run({ unpack(args, 2) })
         else
             vim.notify("[easydap] unknown command: " .. tostring(sub), vim.log.levels.WARN)
         end
+    end
+
+    ---Completion for `:Debug …`.
+    ---@param rest string[] completed args preceding the token being typed
+    ---@param arg_lead string
+    ---@return string[]
+    local function _debug_complete_subs(rest, arg_lead)
+        if #rest == 0 then return _debug_subs end
+        if rest[1] == "breakpoint" then
+            return _bp_complete({ unpack(rest, 2) })
+        end
+        if rest[1] == "run_file" and #rest == 1 then
+            return vim.fn.getcompletion(arg_lead, "file")
+        end
+        if rest[1] == "quick_run" then
+            return _quick_run_complete({ unpack(rest, 2) }, arg_lead)
+        end
+        if rest[1] == "panel" and #rest == 1 then
+            return { "toggle", "jump", "next", "previous" }
+        end
+        if rest[1] == "panel" and rest[2] == "jump" and #rest == 2 then
+            return require("easydap.runner").panel_tab_numbers()
+        end
+        return {}
+    end
+
+    -- Registered directly (rather than via `usercmd.register_user_cmd`) so the
+    -- command carries `range = true`: `:'<,'>Debug inspect` from visual mode is
+    -- accepted instead of erroring with E16, while a leading count (`:2Debug
+    -- panel`) still arrives via `opts.count`. Arg splitting/quote handling is
+    -- reused from `tk.usercmd`.
+    vim.api.nvim_create_user_command("Debug", function(cmd_opts)
+        local args = usercmd._split_args(cmd_opts.args)
+        local ok, err = pcall(_debug_run, args, cmd_opts)
+        if not ok then
+            vim.notify("[easydap] Debug command error\n" .. tostring(err), vim.log.levels.ERROR)
+        end
     end, {
-        desc = "easydap commands",
-        -- `range` (not `count`) so `:'<,'>Debug inspect` from visual mode is
-        -- accepted instead of erroring with E16; a leading count (`:2Debug
-        -- panel`) still arrives via opts.count.
+        desc  = "easydap commands",
         range = true,
-        subcommand_fn = function(_, rest, arg_lead)
-            if #rest == 0 then return _debug_subs end
-            if rest[1] == "breakpoint" then
-                local def = usercmd.get_subcommand("breakpoint")
-                return def and def.complete({ unpack(rest, 2) }, arg_lead) or {}
+        nargs = "*",
+        complete = function(arg_lead, cmd_line, _)
+            local parts = usercmd._split_args(cmd_line)
+            if cmd_line:match("%s+$") then table.insert(parts, ' ') end
+            -- Drop the command name and the token currently being typed.
+            local rest = { unpack(parts, 2) }
+            if #rest > 0 then rest[#rest] = nil end
+            local out = {}
+            for _, s in ipairs(_debug_complete_subs(rest, arg_lead) or {}) do
+                if not vim.startswith(s, '_') and vim.startswith(s, arg_lead) then
+                    table.insert(out, s)
+                end
             end
-            if rest[1] == "run_file" and #rest == 1 then
-                return vim.fn.getcompletion(arg_lead, "file")
-            end
-            if rest[1] == "quick_run" then
-                return _quick_run_complete({ unpack(rest, 2) }, arg_lead)
-            end
-            if rest[1] == "panel" and #rest == 1 then
-                return { "toggle", "jump", "next", "previous" }
-            end
-            if rest[1] == "panel" and rest[2] == "jump" and #rest == 2 then
-                return require("easydap.runner").panel_tab_numbers()
-            end
-            return {}
+            return out
         end,
     })
 end
