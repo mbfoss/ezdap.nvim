@@ -178,9 +178,8 @@ local function _register_user_commands()
         "project", "panel",
     }
 
-    ---@param args string[]
-    ---@param opts vim.api.keyset.create_user_command.command_args
-    local function _debug_run(args, opts)
+    ---@type easydap.tk.usercmd.run_fn
+    local function _debug_run(_, args, opts)
         local sub = args[1]
         if sub == "run_file" then
             M.run_file(args[2])
@@ -263,10 +262,8 @@ local function _register_user_commands()
     end
 
     ---Completion for `:Debug …`.
-    ---@param rest string[] completed args preceding the token being typed
-    ---@param arg_lead string
-    ---@return string[]
-    local function _debug_complete_subs(rest, arg_lead)
+    ---@type easydap.tk.usercmd.subcommand_fn
+    local function _debug_complete_subs(_, rest, arg_lead)
         if #rest == 0 then return _debug_subs end
         if rest[1] == "breakpoint" then
             return _bp_complete({ unpack(rest, 2) })
@@ -296,35 +293,13 @@ local function _register_user_commands()
         return {}
     end
 
-    -- Registered directly (rather than via `usercmd.register_user_cmd`) so the
-    -- command carries `range = true`: `:'<,'>Debug inspect` from visual mode is
-    -- accepted instead of erroring with E16, while a leading count (`:2Debug
-    -- panel`) still arrives via `opts.count`. Arg splitting/quote handling is
-    -- reused from `tk.usercmd`.
-    vim.api.nvim_create_user_command("Debug", function(cmd_opts)
-        local args = usercmd.split_args(cmd_opts.args)
-        local ok, err = pcall(_debug_run, args, cmd_opts)
-        if not ok then
-            vim.notify("[easydap] Debug command error\n" .. tostring(err), vim.log.levels.ERROR)
-        end
-    end, {
-        desc  = "easydap commands",
+    -- `range = true` lets `:'<,'>Debug inspect` from visual mode be accepted
+    -- instead of erroring with E16; a leading count (`:2Debug panel`) still
+    -- arrives via `opts.count`.
+    usercmd.register_user_cmd("Debug", _debug_run, {
+        desc = "easydap commands",
         range = true,
-        count = true,
-        complete = function(arg_lead, cmd_line, _)
-            local parts = usercmd.split_args(cmd_line)
-            if cmd_line:match("%s+$") then table.insert(parts, ' ') end
-            -- Drop the command name and the token currently being typed.
-            local rest = { unpack(parts, 2) }
-            if #rest > 0 then rest[#rest] = nil end
-            local out = {}
-            for _, s in ipairs(_debug_complete_subs(rest, arg_lead) or {}) do
-                if not vim.startswith(s, '_') and vim.startswith(s, arg_lead) then
-                    table.insert(out, s)
-                end
-            end
-            return out
-        end,
+        subcommand_fn = _debug_complete_subs,
     })
 end
 
