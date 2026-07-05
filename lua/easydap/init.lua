@@ -165,7 +165,7 @@ end
 
 local function _register_user_commands()
     local cmd      = require("easydap.manager")
-    local usercmd  = require("easydap.util.usercmd")
+    local usercmd  = require("easydap.tk.usercmd")
 
     local _bp_subs = {
         "toggle", "add", "remove", "column",

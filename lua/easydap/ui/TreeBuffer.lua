@@ -1,4 +1,4 @@
-local Tree = require("easydap.util.Tree")
+local Tree = require("easydap.tk.Tree")
 local ui_util = require("easydap.util.ui_util")
 local Signal = require("easydap.tk.Signal")
 
@@ -44,7 +44,7 @@ local _ns_id = vim.api.nvim_create_namespace('nvtoolkitTreeBuffer')
 ---@field private _on_selection easydap.tk.Signal<fun(id:any,data:any)>
 ---@field private _on_toggle easydap.tk.Signal<fun(id:any,data:any,expanded:boolean)>
 ---@field private _bufnr integer
----@field private _tree easydap.util.Tree
+---@field private _tree easydap.tk.Tree
 ---@field private _flat_ids any[]
 ---@field private _id_to_idx table<any, integer>
 ---@field private _collapsible boolean
@@ -92,9 +92,9 @@ local function _to_item(id, data)
     return { id = id, data = data.userdata, expandable = data.expandable, expanded = data.expanded }
 end
 
----@param tree easydap.util.Tree
+---@param tree easydap.tk.Tree
 ---@param starting_id any?  -- nil = whole tree
----@return easydap.util.Tree.FlatNode[]
+---@return easydap.tk.Tree.FlatNode[]
 local function _flatten(tree, starting_id)
     local out = {}
     local function visit(id, data, depth)
@@ -109,7 +109,7 @@ local function _flatten(tree, starting_id)
     return out
 end
 
----@param tree easydap.util.Tree
+---@param tree easydap.tk.Tree
 ---@param starting_id any?  -- nil = whole tree
 ---@return integer
 local function _tree_size(tree, starting_id)
@@ -215,7 +215,7 @@ function TreeBuffer:subscribe(callbacks)
 end
 
 ---@private
----@param flatnode easydap.util.Tree.FlatNode
+---@param flatnode easydap.tk.Tree.FlatNode
 ---@param row integer
 ---@return string line, table hl_calls, table extmarks
 function TreeBuffer:_render_node(flatnode, row)
@@ -285,7 +285,7 @@ end
 ---@private
 ---@param start_idx integer
 ---@param old_size integer
----@param new_flat easydap.util.Tree.FlatNode[]
+---@param new_flat easydap.tk.Tree.FlatNode[]
 function TreeBuffer:_render_range(start_idx, old_size, new_flat)
     local buf = self._bufnr
     if buf <= 0 or not vim.api.nvim_buf_is_loaded(buf) then return end

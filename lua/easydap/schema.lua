@@ -15,7 +15,7 @@
 ---`table`); coercing a CLI string prefers the `kind` parser and falls back to a
 ---plain `type` coercion when no `kind` is set.
 
-local str_util = require("easydap.util.str_util")
+local str_util = require("easydap.tk.strutil")
 
 local M = {}
 

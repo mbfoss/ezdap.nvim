@@ -5,7 +5,7 @@
 local connection  = require("easydap.dap.connection")
 local session_mod = require("easydap.dap.session")
 local Signal      = require("easydap.tk.Signal")
-local str_util    = require("easydap.util.str_util")
+local str_util    = require("easydap.tk.strutil")
 
 -- ── Config type ─────────────────────────────────────────────────────────────
 

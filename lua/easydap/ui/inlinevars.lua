@@ -1,6 +1,6 @@
 local M              = {}
 
-local str_util       = require("easydap.util.str_util")
+local str_util       = require("easydap.tk.strutil")
 local manager        = require("easydap.manager")
 local config         = require("easydap.config")
 local extmarks       = require("easydap.ui.extmarks")
