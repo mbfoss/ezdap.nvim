@@ -48,6 +48,7 @@ local _GLOBAL = "\0global"
 ---@field private _height   integer
 ---@field private _seq      integer
 ---@field private _attached table<integer, boolean>   buffers with an autoscroll listener
+---@field private _au_group integer?                  WinNew-detection augroup, live only while open
 local Panel = {}
 Panel.__index = Panel
 
@@ -94,25 +95,6 @@ function M.new(opts)
 end
 
 function Panel:init()
-    -- Splitting the panel window copies its winbar (and other window-local
-    -- options) onto the new sibling verbatim — click regions included — but the
-    -- sibling is never re-rendered (_render_winbar only targets self._win), so
-    -- its numbering goes stale as soon as the panel state changes and clicking
-    -- it jumps to the wrong tab. Detect the inherited winbar text (the sibling
-    -- lacks our marker, since window-local variables are not copied on split)
-    -- and strip every panel-special option back off so it reverts to a plain
-    -- window. Registered once per instance (not per open()) so it doesn't pile
-    -- up across open/close cycles.
-    vim.api.nvim_create_autocmd("WinNew", {
-        callback = function()
-            local new_win = vim.api.nvim_get_current_win()
-            if not self:is_open() or new_win == self._win then return end
-            if vim.wo[new_win].winbar ~= "" and vim.wo[new_win].winbar == vim.wo[self._win].winbar then
-                vim.cmd("setlocal winbar< winfixheight< winfixbuf< number< relativenumber< wrap<")
-            end
-        end,
-    })
-
     return self
 end
 
@@ -140,6 +122,29 @@ function Panel:open()
     local first   = self._active or (display[1] and display[1].bufnr)
     self:_set_buf(first or vim.api.nvim_create_buf(false, true))
     _click_target = self
+
+    -- Splitting the panel window copies its winbar (and other window-local
+    -- options) onto the new sibling verbatim — click regions included — but the
+    -- sibling is never re-rendered (_render_winbar only targets self._win), so
+    -- its numbering goes stale as soon as the panel state changes and clicking
+    -- it jumps to the wrong tab. Detect the inherited winbar text (the sibling
+    -- lacks our marker, since window-local variables are not copied on split)
+    -- and strip every panel-special option back off so it reverts to a plain
+    -- window. Only relevant while the panel is open, so it's (re)registered
+    -- here and torn down in close() rather than living for the instance's
+    -- whole lifetime.
+    self._au_group = vim.api.nvim_create_augroup("EasydapPanel" .. tostring(self):gsub("^table: ", ""), { clear = true })
+    vim.api.nvim_create_autocmd("WinNew", {
+        group = self._au_group,
+        callback = function()
+            local new_win = vim.api.nvim_get_current_win()
+            if not self:is_open() or new_win == self._win then return end
+            if vim.wo[new_win].winbar ~= "" and vim.wo[new_win].winbar == vim.wo[self._win].winbar then
+                vim.cmd("setlocal winbar< winfixheight< winfixbuf< number< relativenumber< wrap<")
+            end
+        end,
+    })
+
     if vim.api.nvim_win_is_valid(cur) then vim.api.nvim_set_current_win(cur) end
 end
 
@@ -148,6 +153,10 @@ function Panel:close()
     if self:is_open() then vim.api.nvim_win_close(self._win, false) end
     self._win = nil
     if _click_target == self then _click_target = nil end
+    if self._au_group then
+        vim.api.nvim_del_augroup_by_id(self._au_group)
+        self._au_group = nil
+    end
 end
 
 ---Toggle the panel window. Hosted buffers persist across hide/show.
