@@ -366,41 +366,40 @@ end
 
 ---Launch or attach under an adapter by filling role-tagged native fields from
 ---`role=value` assignments — the request-agnostic generalisation of `run_target`.
----`assignments` also takes `adapter` and `request` as `key=value` tokens (any
----order, alongside the role assignments); everything else names a `role` the
+---`assignments` leads with the adapter and request as bare positional tokens
+---(`{ "codelldb", "launch", … }`); everything else names a `role` the
 ---adapter's `request` schema declares (see `schema.quick_roles`), whose value is
 ---coerced by that field's spec and placed in the request body, with the rest of
 ---the body coming from the schema's defaults. The `host`/`port` roles
 ---additionally set the task's connection endpoint for adapters that connect over
 ---a task-level TCP endpoint (a def `host`/`port`, e.g. `remote`/
 ---`java-debug-server`), so those attach too. Unknown roles are rejected.
----@param assignments string[]  raw "key=value" tokens, e.g. { "adapter=codelldb", "request=launch", "target=./a.out" }
+---@param assignments string[]  adapter, request, then "role=value" tokens, e.g. { "codelldb", "launch", "target=./a.out" }
 ---@return easydap.runner.Run?
 function M.quick_run(assignments)
     local schema = require("easydap.schema")
 
+    -- The adapter and request come first as bare positional arguments
+    -- (`quick_run codelldb launch …`); every remaining token is a `role=value`
+    -- assignment.
     local adapter, request
     local role_tokens = {}
     for _, tok in ipairs(assignments) do
-        local eq = tok:find("=", 1, true)
-        if not eq then
-            _warn("quick_run: expected key=value, got " .. tok)
-            return
-        end
-        local key = tok:sub(1, eq - 1)
-        local val = tok:sub(eq + 1)
-        if key == "adapter" then
-            adapter = val
-        elseif key == "request" then
-            request = val
-        else
+        if tok:find("=", 1, true) then
             role_tokens[#role_tokens + 1] = tok
+        elseif not adapter then
+            adapter = tok
+        elseif not request then
+            request = tok
+        else
+            _warn("quick_run: unexpected argument '" .. tok .. "' (expected role=value)")
+            return
         end
     end
     assignments = role_tokens
 
     if not adapter or adapter == "" then
-        _warn("quick_run: usage: quick_run adapter=<name> request=<launch|attach> <role>=<value>…")
+        _warn("quick_run: usage: quick_run <adapter> <launch|attach> <role>=<value>…")
         return
     end
     local def = require("easydap.adapters")[adapter]
