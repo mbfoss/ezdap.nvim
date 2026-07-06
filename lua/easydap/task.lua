@@ -2,7 +2,7 @@ local OutputBuffer = require "easydap.ui.OutputBuffer"
 local _config      = require "easydap.config"
 
 ---A debug task — native DAP, sent as-is. `parameters` is the adapter's raw
----launch/attach body, sent verbatim. `:Debug new_task` scaffolds a task file
+---launch/attach body, sent verbatim. `:Debug new_run_file` scaffolds a run file
 ---pre-filled from the adapter's schema (see `easydap.schema`); tasks from a file
 ---supply `parameters` directly. Mirrors what easytasks sends as `debug.Params`;
 ---`name` defaults to "debug".
@@ -66,7 +66,7 @@ M.start = function(task, callbacks)
 
     -- The task is native DAP: `parameters` is the adapter's raw launch/attach
     -- body, sent verbatim. The task layer never inspects or translates it —
-    -- scaffolding `parameters` from an adapter schema is new_task's job, via
+    -- scaffolding `parameters` from an adapter schema is new_run_file's job, via
     -- `easydap.schema`. A task with no `parameters` sends an empty body.
     local base     = adapters[task.adapter]
     if not base then

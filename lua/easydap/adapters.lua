@@ -4,7 +4,7 @@
 ---AdapterDef — native DAP process/connection config (command, host/port,
 ---setup/teardown, request, …) plus optional `launch_schema`/`attach_schema`
 ---describing that adapter's own launch/attach parameters. The schemas are what
----`:Debug new_task`/`run_target` read (via `easydap.schema`) to scaffold a task
+---`:Debug new_run_file`/`run_target` read (via `easydap.schema`) to scaffold a run
 ---file / assemble a native request body; the DAP core never touches them.
 ---Users can add adapters or override existing ones directly:
 ---  local adapters = require("easydap.adapters")
@@ -50,7 +50,7 @@ local M = {}
 ---`request_args` here — that is a per-run value carried by the resolved config.
 ---`setup`/`teardown` receive that resolved config (setup may mutate host/port).
 ---`launch_schema`/`attach_schema` describe the adapter's own DAP parameters and
----are consumed only by `easydap.schema` (for new_task/run_target), never by the DAP core.
+---are consumed only by `easydap.schema` (for new_run_file/run_target), never by the DAP core.
 ---@class easydap.AdapterDef
 ---@field command?               string|string[]
 ---@field cwd?                   string

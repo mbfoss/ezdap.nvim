@@ -52,6 +52,9 @@ end
 local _report_buf ---@type integer?
 local _panel ---@type easydap.ui.Panel?
 
+---Cap on the report buffer's line count; `_report` trims oldest lines past this.
+local _MAX_REPORT_LINES = 10000
+
 ---@return easydap.ui.Panel
 local function _get_panel()
     if not _panel then _panel = require("easydap.ui.Panel").new() end
@@ -79,7 +82,8 @@ local function _report_open()
 end
 
 ---Append timestamped lines to the report buffer. The panel autoscrolls the page
----while it is the active one.
+---while it is the active one. Oldest lines are trimmed past `_MAX_REPORT_LINES`
+---so the buffer never grows unbounded across a long session.
 ---@param msg string
 local function _report(msg)
     local stamp = os.date("%H:%M:%S")
@@ -93,6 +97,10 @@ local function _report(msg)
         and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, empty and 0 or -1, -1, false, lines)
+    local overflow = vim.api.nvim_buf_line_count(buf) - _MAX_REPORT_LINES
+    if overflow > 0 then
+        vim.api.nvim_buf_set_lines(buf, 0, overflow, false, {})
+    end
     vim.bo[buf].modifiable = false
 end
 
@@ -304,7 +312,7 @@ function M.run_target(adapter, program, program_args)
     end
     local target_key = schema.key_of_role(adapter, "launch", "target")
     if not target_key then
-        _err("run_target: adapter " .. adapter .. " has no launch target (try new_task)")
+        _err("run_target: adapter " .. adapter .. " has no launch target (try new_run_file)")
         return
     end
     if not program or program == "" then
@@ -355,21 +363,41 @@ end
 
 ---Launch or attach under an adapter by filling role-tagged native fields from
 ---`role=value` assignments — the request-agnostic generalisation of `run_target`.
----Each assignment names a `role` the adapter's `request` schema declares (see
----`schema.quick_roles`); its value is coerced by that field's spec and placed in
----the request body, with the rest of the body coming from the schema's defaults.
----The `host`/`port` roles additionally set the task's connection endpoint for
----adapters that connect over a task-level TCP endpoint (a def `host`/`port`, e.g.
----`remote`/`java-debug-server`), so those attach too. Unknown roles are rejected.
----@param adapter string
----@param request string  "launch"|"attach"
----@param assignments string[]  raw "role=value" tokens
+---`assignments` also takes `adapter` and `request` as `key=value` tokens (any
+---order, alongside the role assignments); everything else names a `role` the
+---adapter's `request` schema declares (see `schema.quick_roles`), whose value is
+---coerced by that field's spec and placed in the request body, with the rest of
+---the body coming from the schema's defaults. The `host`/`port` roles
+---additionally set the task's connection endpoint for adapters that connect over
+---a task-level TCP endpoint (a def `host`/`port`, e.g. `remote`/
+---`java-debug-server`), so those attach too. Unknown roles are rejected.
+---@param assignments string[]  raw "key=value" tokens, e.g. { "adapter=codelldb", "request=launch", "target=./a.out" }
 ---@return easydap.runner.Run?
-function M.quick_run(adapter, request, assignments)
+function M.quick_run(assignments)
     local schema = require("easydap.schema")
 
+    local adapter, request
+    local role_tokens = {}
+    for _, tok in ipairs(assignments) do
+        local eq = tok:find("=", 1, true)
+        if not eq then
+            _warn("quick_run: expected key=value, got " .. tok)
+            return
+        end
+        local key = tok:sub(1, eq - 1)
+        local val = tok:sub(eq + 1)
+        if key == "adapter" then
+            adapter = val
+        elseif key == "request" then
+            request = val
+        else
+            role_tokens[#role_tokens + 1] = tok
+        end
+    end
+    assignments = role_tokens
+
     if not adapter or adapter == "" then
-        _warn("quick_run: usage: quick_run <adapter> <launch|attach> <role>=<value>…")
+        _warn("quick_run: usage: quick_run adapter=<name> request=<launch|attach> <role>=<value>…")
         return
     end
     local def = require("easydap.adapters")[adapter]
@@ -379,7 +407,7 @@ function M.quick_run(adapter, request, assignments)
         return
     end
     if request ~= "launch" and request ~= "attach" then
-        _warn("quick_run: expected 'launch' or 'attach', got " .. tostring(request))
+        _warn("quick_run: expected request=launch or request=attach, got " .. tostring(request))
         return
     end
 

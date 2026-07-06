@@ -165,7 +165,7 @@ local function _register_user_commands()
     end
 
     local _debug_subs = {
-        "run_file", "quick_run", "new_task", "rerun",
+        "run_file", "quick_run", "new_run_file", "rerun",
         "breakpoint",
         "view", "continue", "continue_all",
         "step_over", "next", "step_in", "step_out", "step_back",
@@ -184,9 +184,9 @@ local function _register_user_commands()
         if sub == "run_file" then
             M.run_file(args[2])
         elseif sub == "quick_run" then
-            M.quick_run(args[2], args[3], { unpack(args, 4) })
-        elseif sub == "new_task" then
-            M.new_task(args[2], args[3], args[4])
+            M.quick_run({ unpack(args, 2) })
+        elseif sub == "new_run_file" then
+            M.new_run_file({ unpack(args, 2) })
         elseif sub == "rerun" then
             M.rerun()
         elseif sub == "view" then
@@ -263,40 +263,60 @@ local function _register_user_commands()
         end
     end
 
-    ---Completion for `:Debug quick_run <adapter> <request> …` role tokens: role
-    ---names (as `role=`) not yet supplied, or file paths for a path-like role's
-    ---value once `=` has been typed.
+    ---Completion for `:Debug quick_run …` tokens: `adapter=`/`request=`/role
+    ---names (as `key=`) not yet supplied, or a value once `=` has been typed
+    ---(adapter/adapter names, request's own requests, file paths for a path-like
+    ---role). `adapter`/`request` may appear anywhere among `used`.
     ---@param schema table
-    ---@param adapter string
-    ---@param request string
-    ---@param used string[]     already-typed role=value tokens
+    ---@param used string[]     already-typed key=value tokens
     ---@param arg_lead string   the token being completed
     ---@return string[]
-    local function _quick_run_role_complete(schema, adapter, request, used, arg_lead)
+    local function _quick_run_complete(schema, used, arg_lead)
+        local function find(key)
+            for _, tok in ipairs(used) do
+                local e = tok:find("=", 1, true)
+                if e and tok:sub(1, e - 1) == key then return tok:sub(e + 1) end
+            end
+        end
+        local adapter = find("adapter")
+        local request = find("request")
+
         local eq = arg_lead:find("=", 1, true)
         if eq then
-            -- Completing a value (`role=<partial>`): offer file paths for path-like
-            -- roles (target/cwd, or a file/dir field); nothing for the rest.
-            local role = arg_lead:sub(1, eq - 1)
-            local pfx  = arg_lead:sub(1, eq)
-            local val  = arg_lead:sub(eq + 1)
-            local key  = schema.key_of_role(adapter, request, role)
-            local spec = key and schema.spec(adapter, request, key)
-            local pathish = role == "target" or role == "cwd"
+            local key = arg_lead:sub(1, eq - 1)
+            local pfx = arg_lead:sub(1, eq)
+            local val = arg_lead:sub(eq + 1)
+            if key == "adapter" then
+                return vim.tbl_map(function(a) return pfx .. a end, schema.quick_run_adapters())
+            elseif key == "request" then
+                if not adapter then return {} end
+                return vim.tbl_map(function(r) return pfx .. r end, schema.requests(adapter))
+            end
+            if not adapter or not request then return {} end
+            -- Completing a role's value: offer file paths for path-like roles
+            -- (target/cwd, or a file/dir field); nothing for the rest.
+            local role_key = schema.key_of_role(adapter, request, key)
+            local spec     = role_key and schema.spec(adapter, request, role_key)
+            local pathish  = key == "target" or key == "cwd"
                 or (spec and (spec.kind == "file" or spec.kind == "dir")) or false
             if not pathish then return {} end
             local comp_type = spec.kind == "dir" and "dir" or "file"
             return vim.tbl_map(function(f) return pfx .. f end, vim.fn.getcompletion(val, comp_type))
         end
-        -- Completing a role name: offer `role=` for roles not yet supplied.
+
+        -- Completing a key name: offer `key=` for keys not yet supplied.
         local supplied = {}
         for _, tok in ipairs(used) do
             local e = tok:find("=", 1, true)
             if e then supplied[tok:sub(1, e - 1)] = true end
         end
         local out = {}
-        for _, role in ipairs(schema.quick_roles(adapter, request)) do
-            if not supplied[role] then out[#out + 1] = role .. "=" end
+        if not supplied.adapter then out[#out + 1] = "adapter=" end
+        if not supplied.request then out[#out + 1] = "request=" end
+        if adapter and request then
+            for _, role in ipairs(schema.quick_roles(adapter, request)) do
+                if not supplied[role] then out[#out + 1] = role .. "=" end
+            end
         end
         return out
     end
@@ -312,20 +332,47 @@ local function _register_user_commands()
             return vim.fn.getcompletion(arg_lead, "file")
         end
         if rest[1] == "quick_run" then
+            -- adapter=<name> request=<launch|attach> <role>=<value>…, any order.
             local schema = require("easydap.schema")
-            -- <adapter> <launch|attach> <role>=<value>…
-            if #rest == 1 then return schema.quick_run_adapters() end
-            if #rest == 2 then return schema.requests(rest[2]) end
-            return _quick_run_role_complete(schema, rest[2], rest[3],
-                { unpack(rest, 4) }, arg_lead)
+            return _quick_run_complete(schema, { unpack(rest, 2) }, arg_lead)
         end
-        if rest[1] == "new_task" then
-            local schema = require("easydap.schema")
-            -- <adapter> <request> [path]
-            if #rest == 1 then return schema.adapter_names() end
-            if #rest == 2 then return schema.requests(rest[2]) end
-            if #rest == 3 then return vim.fn.getcompletion(arg_lead, "file") end
-            return {}
+        if rest[1] == "new_run_file" then
+            -- adapter=<name> [request=launch|attach] [path=value], any order.
+            local schema   = require("easydap.schema")
+            local supplied = { unpack(rest, 2) }
+            local function find(key)
+                for _, tok in ipairs(supplied) do
+                    local e = tok:find("=", 1, true)
+                    if e and tok:sub(1, e - 1) == key then return tok:sub(e + 1) end
+                end
+            end
+            local eq = arg_lead:find("=", 1, true)
+            if eq then
+                local key = arg_lead:sub(1, eq - 1)
+                local pfx = arg_lead:sub(1, eq)
+                local val = arg_lead:sub(eq + 1)
+                if key == "adapter" then
+                    return vim.tbl_map(function(a) return pfx .. a end, schema.adapter_names())
+                elseif key == "request" then
+                    local adapter = find("adapter")
+                    if not adapter then return {} end
+                    return vim.tbl_map(function(r) return pfx .. r end, schema.requests(adapter))
+                elseif key == "path" then
+                    return vim.tbl_map(function(f) return pfx .. f end, vim.fn.getcompletion(val, "file"))
+                end
+                return {}
+            end
+            -- Completing a key name: offer keys not yet supplied.
+            local have = {}
+            for _, tok in ipairs(supplied) do
+                local e = tok:find("=", 1, true)
+                if e then have[tok:sub(1, e - 1)] = true end
+            end
+            local out = {}
+            for _, k in ipairs({ "adapter", "request", "path" }) do
+                if not have[k] then out[#out + 1] = k .. "=" end
+            end
+            return out
         end
         if rest[1] == "panel" and #rest == 1 then
             return { "toggle", "jump", "next", "previous", "clean" }
@@ -420,14 +467,14 @@ function M.run_file(path)
     return runner.run_file(path)
 end
 
----Scaffold a run_file for `adapter` + `request` from its schema (defaults +
----placeholders + descriptions) and open it for editing. E.g.
----`new_task("codelldb", "launch")` writes `<root>/codelldb_launch.lua`.
----@param adapter string
----@param request string?
----@param path string?
-function M.new_task(adapter, request, path)
-    return require("easydap.scaffold").new_task(adapter, request, path)
+---Scaffold a run_file from an adapter's schema (defaults + placeholders +
+---descriptions) and open it for editing. `assignments` takes `key=value` tokens:
+---`adapter` (required), `request` (defaults to the adapter's own default), and
+---`path` (destination file). E.g. `new_run_file({ "adapter=codelldb",
+---"request=launch" })` writes `<root>/codelldb_launch.lua`.
+---@param assignments string[]  raw "key=value" tokens, e.g. { "adapter=codelldb", "path=./foo.lua" }
+function M.new_run_file(assignments)
+    return require("easydap.scaffold").new_run_file(assignments)
 end
 
 ---Launch `program` (with optional `args`) under the named debugger — a convenience
@@ -441,16 +488,15 @@ function M.run_target(adapter, program, program_args)
     return runner.run_target(adapter, program, program_args)
 end
 
----Launch or attach under `adapter` for `request`, filling role-tagged native
----fields from `role=value` assignments — the command-surface entry point behind
----`:Debug quick_run`. E.g.
----`quick_run("codelldb", "launch", { "target=./a.out", "args=--verbose" })` or
----`quick_run("debugpy", "attach", { "pid=41234" })`.
----@param adapter string
----@param request string  "launch"|"attach"
----@param assignments string[]  raw "role=value" tokens
-function M.quick_run(adapter, request, assignments)
-    return require("easydap.runner").quick_run(adapter, request, assignments)
+---Launch or attach under an adapter, filling role-tagged native fields from
+---`role=value` assignments — the command-surface entry point behind `:Debug
+---quick_run`. `assignments` also takes `adapter` and `request` as `key=value`
+---tokens (any order). E.g. `quick_run({ "adapter=codelldb", "request=launch",
+---"target=./a.out", "args=--verbose" })` or `quick_run({ "adapter=debugpy",
+---"request=attach", "pid=41234" })`.
+---@param assignments string[]  raw "key=value" tokens
+function M.quick_run(assignments)
+    return require("easydap.runner").quick_run(assignments)
 end
 
 ---@param task easydap.Task

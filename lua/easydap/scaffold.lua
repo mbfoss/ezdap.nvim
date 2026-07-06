@@ -1,4 +1,4 @@
----@brief Task-file scaffolding for `:Debug new_task`.
+---@brief run_file scaffolding for `:Debug new_run_file`.
 ---
 ---Writes a runnable Lua run_file for an `adapter` + `request`, pre-populating its
 ---`parameters` from the adapter's launch/attach schema (defaults and
@@ -34,7 +34,7 @@ local function _placeholder(spec)
 end
 
 ---Render an adapter's request schema as the body of a Lua `parameters` table — a
----multi-line source string for a run_file template (see `new_task`). Each leaf
+---multi-line source string for a run_file template (see `new_run_file`). Each leaf
 ---param is emitted on its own line, seeded with its resolved default or a
 ---type-appropriate placeholder, with a trailing `-- desc` comment; nested groups
 ---are rendered inline. `indent` is the column (in spaces) the outermost params sit
@@ -75,25 +75,47 @@ local function _render_params(adapter, request, indent)
     return table.concat(lines, "\n")
 end
 
----Scaffold a run_file for `adapter` + `request`: write a Lua file that returns a
----task table whose `parameters` are pre-populated from the adapter's schema (defaults, 
+---Scaffold a run_file for an `adapter` + `request`: write a Lua file that returns a
+---task table whose `parameters` are pre-populated from the adapter's schema (defaults,
 ---and type-appropriate placeholders for the rest, each annotated
 ---with its description), then open it for editing. Run it afterwards with `:Debug
----run_file`. `path` defaults to `<project root or cwd>/<adapter>_<request>.lua`,
----uniquified so an existing file is never clobbered. Reports a clear error for
----every failure mode instead of throwing.
----@param adapter string
----@param request string?
----@param path string?
+---run_file`. `assignments` takes `key=value` tokens: `adapter` (required),
+---`request` (defaults to the adapter's own default request, or its sole schema),
+---and `path` (destination file, defaulting to
+---`<project root or cwd>/<adapter>_<request>.lua`). Fails if the destination
+---already exists, rather than overwriting or picking a different name. Reports a
+---clear error for every failure mode instead of throwing.
+---@param assignments string[]  raw "key=value" tokens, e.g. { "adapter=codelldb", "path=./foo.lua" }
 ---@return string? path  the file that was created
-function M.new_task(adapter, request, path)
+function M.new_run_file(assignments)
+    local adapter, request, path
+    for _, tok in ipairs(assignments or {}) do
+        local eq = tok:find("=", 1, true)
+        if not eq then
+            _warn("new_run_file: expected key=value, got " .. tok)
+            return
+        end
+        local key = tok:sub(1, eq - 1)
+        local val = tok:sub(eq + 1)
+        if key == "adapter" then
+            adapter = val
+        elseif key == "request" then
+            request = val
+        elseif key == "path" then
+            path = val
+        else
+            _warn("new_run_file: unknown key '" .. key .. "' (supported: adapter, request, path)")
+            return
+        end
+    end
+
     if not adapter or adapter == "" then
-        _warn("new_task: usage: new_task <adapter> [request] [path]")
+        _warn("new_run_file: usage: new_run_file adapter=<name> [request=launch|attach] [path=value]")
         return
     end
     local base = require("easydap.adapters")[adapter]
     if not base then
-        _err("new_task: unknown adapter: " .. adapter ..
+        _err("new_run_file: unknown adapter: " .. adapter ..
             " (available: " .. table.concat(schema.adapter_names(), ", ") .. ")")
         return
     end
@@ -102,7 +124,7 @@ function M.new_task(adapter, request, path)
     -- schema — then reject anything the adapter has no schema for.
     local supported = schema.requests(adapter)
     if #supported == 0 then
-        _err("new_task: adapter " .. adapter .. " declares no launch/attach schema")
+        _err("new_run_file: adapter " .. adapter .. " declares no launch/attach schema")
         return
     end
     request = (request and request ~= "") and request or (base.request or "launch")
@@ -110,33 +132,30 @@ function M.new_task(adapter, request, path)
         if #supported == 1 then
             request = supported[1]
         else
-            _err(("new_task: adapter %s has no %s schema (supports: %s)")
+            _err(("new_run_file: adapter %s has no %s schema (supports: %s)")
                 :format(adapter, request, table.concat(supported, ", ")))
             return
         end
     end
 
-    -- Resolve the destination and uniquify so we never overwrite an existing file.
+    -- Resolve the destination; fail rather than clobber or rename an existing file.
     local root = require("easydap.store").root() or vim.fn.getcwd()
     local dest = (path and path ~= "") and vim.fn.fnamemodify(vim.fn.expand(path), ":p")
         or vim.fs.joinpath(root, adapter .. "_" .. request .. ".lua")
     if not dest:match("%.lua$") then dest = dest .. ".lua" end
-    do
-        local stem, n = (dest:gsub("%.lua$", "")), 1
-        while vim.uv.fs_stat(dest) do
-            dest = ("%s_%d.lua"):format(stem, n)
-            n = n + 1
-        end
+    if vim.uv.fs_stat(dest) then
+        _err("new_run_file: file already exists: " .. dest)
+        return
     end
 
     local params_src, perr = _render_params(adapter, request, 8)
     if not params_src then
-        _err("new_task: " .. tostring(perr))
+        _err("new_run_file: " .. tostring(perr))
         return
     end
 
     local lines = {
-        ("-- easydap task — %s (%s)"):format(adapter, request),
+        ("-- easydap run — %s (%s)"):format(adapter, request),
         "-- Edit the parameters, then run with:  :Debug run_file " .. vim.fn.fnamemodify(dest, ":~:."),
         "return {",
         ("    name       = %q,"):format(adapter),
@@ -152,11 +171,11 @@ function M.new_task(adapter, request, path)
 
     local ok, werr = require("easydap.tk.fsutil").write_content(dest, table.concat(lines, "\n"))
     if not ok then
-        _err("new_task: failed to write " .. dest .. ": " .. tostring(werr))
+        _err("new_run_file: failed to write " .. dest .. ": " .. tostring(werr))
         return
     end
     vim.cmd.edit(vim.fn.fnameescape(dest))
-    vim.notify("[easydap] created task file: " .. dest, vim.log.levels.INFO)
+    vim.notify("[easydap] created run file: " .. dest, vim.log.levels.INFO)
     return dest
 end
 

@@ -47,15 +47,15 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`/
   `raw_messages`) and sends `parameters` as the DAP request body verbatim.
 - [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run` and
-  the schema reader for `new_task`. Reads the adapters' `launch_schema`/
+  the schema reader for `new_run_file`. Reads the adapters' `launch_schema`/
   `attach_schema` (each `ParamSpec` has a Lua `type`, an optional data `kind` and
   value-meaning `role`; a schema entry may be a nested group — a `type = "schema"`
   spec holding children under `fields`) to assemble a native request body (`build`)
   and locate role-tagged fields by `role` (`key_of_role`/`quick_roles`, for
   `quick_run`). Exposes `is_group`/`group_fields`/`resolve_default` for schema
   traversal. Native keys throughout — no portable/generic field vocabulary.
-- [scaffold.lua](lua/easydap/scaffold.lua) — task-file creation behind `:Debug
-  new_task`: renders an adapter's schema (via `easydap.schema`) into a runnable Lua
+- [scaffold.lua](lua/easydap/scaffold.lua) — run-file creation behind `:Debug
+  new_run_file`: renders an adapter's schema (via `easydap.schema`) into a runnable Lua
   run_file, seeded with defaults/placeholders, then opens it.
 
 **Persistence** — [store.lua](lua/easydap/store.lua)

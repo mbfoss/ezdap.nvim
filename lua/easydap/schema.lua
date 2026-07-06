@@ -1,11 +1,11 @@
----@brief Schema engine behind `:Debug new_task` and `:Debug quick_run`.
+---@brief Schema engine behind `:Debug new_run_file` and `:Debug quick_run`.
 ---
 ---Each adapter in `easydap.adapters` may declare a `launch_schema` and/or
 ---`attach_schema`: a `native_key -> easydap.ParamSpec` table describing that
 ---adapter's own DAP launch/attach parameters. This module reads those schemas to
 ---coerce raw strings into a native request body (`build`) and to locate
 ---role-tagged fields (`key_of_role`, for `quick_run`). Rendering a schema as a
----run_file template (for `new_task`) lives in `easydap.scaffold`, which builds on
+---run_file template (for `new_run_file`) lives in `easydap.scaffold`, which builds on
 ---the `group_fields`/`is_group`/`resolve_default` helpers exposed here. This module
 ---speaks each adapter's native keys directly — no portable field vocabulary between.
 ---
@@ -189,7 +189,7 @@ function M.schema(adapter, request)
     return nil
 end
 
----Adapter names that declare at least one schema (i.e. `new_task` can scaffold a
+---Adapter names that declare at least one schema (i.e. `new_run_file` can scaffold a
 ---body for them), sorted.
 ---@return string[]
 function M.adapter_names()
