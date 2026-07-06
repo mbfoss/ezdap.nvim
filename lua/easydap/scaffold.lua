@@ -163,8 +163,7 @@ function M.new_run_file(assignments)
     end
 
     local lines = {
-        ("-- easydap run — %s (%s)"):format(adapter, request),
-        "-- Edit the parameters, then run with:  :Debug run_file " .. vim.fn.fnamemodify(dest, ":~:."),
+        "-- easydap run file",
         "return {",
         ("    name       = %q,"):format(adapter),
         ("    adapter    = %q,"):format(adapter),

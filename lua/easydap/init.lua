@@ -331,7 +331,8 @@ local function _register_user_commands()
             return _quick_run_complete(schema, { unpack(rest, 2) }, arg_lead)
         end
         if rest[1] == "new_run_file" then
-            -- Positional: <adapter> [request] [path].
+            -- Positional: <adapter> [request] [path]. The path names a new file to
+            -- create, so it has no completion.
             local schema = require("easydap.schema")
             local used   = { unpack(rest, 2) }
             local pos    = #used + 1 -- 1-based position of the token being completed
@@ -339,8 +340,6 @@ local function _register_user_commands()
                 return schema.adapter_names()
             elseif pos == 2 then
                 return schema.requests(used[1])
-            elseif pos == 3 then
-                return vim.fn.getcompletion(arg_lead, "file")
             end
             return {}
         end
