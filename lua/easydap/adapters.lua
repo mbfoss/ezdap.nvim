@@ -24,9 +24,10 @@ local M = {}
 ---One parameter of an adapter's launch/attach schema. `type` is the value's pure
 ---Lua/JSON type. `kind` is an optional *data* refinement (file/dir/env/enum/host/
 ---port/list) driving CLI-string coercion, completion and validation (a `kind`
----implies its `type`). `role` is an optional *value-meaning* marker (target/args)
----tagging the program/arguments fields so `run_target` can find them across
----adapters.
+---implies its `type`). `role` is an optional *value-meaning* marker
+---(target/args/cwd/env for launch, pid/host/port for attach) tagging a field so
+---`quick_run` can map its `role=value` inputs onto the adapter's native keys
+---across adapters.
 ---
 ---A schema is a `table<string, easydap.ParamSpec>`. A value may instead be a nested
 ---group — a ParamSpec with `type = "schema"` holding its children under `fields`
@@ -35,7 +36,7 @@ local M = {}
 ---@class easydap.ParamSpec
 ---@field type?     "string"|"boolean"|"integer"|"number"|"table"|"list"|"schema"
 ---@field kind?     "env"|"enum"|"host"|"port"|"file"|"dir"   data refinement
----@field role?     "target"|"args"|"cwd"|"env"    value meaning; maps program/args/cwd/env for run_target
+---@field role?     "target"|"args"|"cwd"|"env"|"pid"|"host"|"port"  value meaning; maps a field to a quick_run role
 ---@field fields?   table<string, easydap.ParamSpec>  child specs when `type == "schema"`
 ---@field enum?     any[]              allowed values when `kind == "enum"`
 ---@field desc?     string
@@ -81,12 +82,13 @@ end
 -- Adapters whose defaults differ (e.g. lldb's runInTerminal, delve's program)
 -- spell those entries out inline instead of sharing these.
 
--- `role = "target"` marks the launch program — the thing `run_target` fills from
--- its `<program>` argument. It coerces like a file path; the role is what lets
--- run_target locate this field generically across adapters (which name it
--- `program`/`module`/`file`). `role = "args"` similarly marks the arguments field.
--- (`kind = "file"`/`"dir"` are plain path params, split only so completion knows
--- which to offer.)
+-- These `role` tags let `quick_run` map its `role=value` inputs onto whatever
+-- native keys an adapter uses. `role = "target"` marks the launch program (named
+-- `program`/`module`/`file` across adapters), `args` the argument vector, `cwd`
+-- the working directory, `env` the environment; the attach schemas below add
+-- `pid` and the `host`/`port` endpoint. The role only *locates* the field —
+-- coercion still follows its `kind`/`type`. (`kind = "file"`/`"dir"` are plain
+-- path params, split only so completion knows which to offer.)
 ---@type easydap.ParamSpec
 local _program = { type = "string", role = "target", desc = "program to debug" }
 ---@type easydap.ParamSpec
@@ -132,7 +134,7 @@ local _lldb_common = {
 -- Shared by debugpy and debugpy-module (both attach the same way).
 ---@type table<string, easydap.ParamSpec>
 local _debugpy_attach_schema = {
-    processId   = { type = "integer", desc = "PID to attach to" },
+    processId   = { type = "integer", role = "pid", desc = "PID to attach to" },
     cwd         = _cwd,
     stopOnEntry = { type = "boolean", desc = "stop at entry" },
 }
@@ -236,8 +238,8 @@ M["debugpy-remote"] = {
         connect    = {
             type   = "schema",
             fields = {
-                host = { type = "string", kind = "host", desc = "remote host", default = "127.0.0.1" },
-                port = { type = "integer", kind = "port", desc = "remote port", default = 5678 },
+                host = { type = "string", kind = "host", role = "host", desc = "remote host", default = "127.0.0.1" },
+                port = { type = "integer", kind = "port", role = "port", desc = "remote port", default = 5678 },
             },
         },
         justMyCode = { type = "boolean", desc = "debug only user code", default = false },
@@ -257,7 +259,7 @@ M.codelldb = {
     },
     attach_schema = {
         type        = { default = "lldb" },
-        pid         = { type = "integer", desc = "PID to attach to" },
+        pid         = { type = "integer", role = "pid", desc = "PID to attach to" },
         cwd         = _cwd,
         stopOnEntry = { type = "boolean", desc = "stop at entry" },
     },
@@ -275,7 +277,7 @@ M.gdb = {
         runInTerminal = _run_in_terminal,
     },
     attach_schema = {
-        pid         = { type = "integer", desc = "PID to attach to" },
+        pid         = { type = "integer", role = "pid", desc = "PID to attach to" },
         cwd         = _cwd,
         stopOnEntry = { type = "boolean", desc = "stop at entry" },
     },
@@ -293,7 +295,7 @@ M.netcoredbg = {
         runInTerminal = _run_in_terminal,
     },
     attach_schema = {
-        processId   = { type = "integer", desc = "PID to attach to" },
+        processId   = { type = "integer", role = "pid", desc = "PID to attach to" },
         cwd         = _cwd,
         stopAtEntry = { type = "boolean", desc = "stop at entry" },
     },
@@ -318,8 +320,8 @@ M["java-debug-server"] = {
     port          = 0,
     request       = "attach",
     attach_schema = {
-        host = { type = "string", kind = "host", desc = "debug server host" },
-        port = { type = "integer", kind = "port", desc = "debug server port" },
+        host = { type = "string", kind = "host", role = "host", desc = "debug server host" },
+        port = { type = "integer", kind = "port", role = "port", desc = "debug server port" },
     },
 }
 
@@ -344,12 +346,12 @@ M.lldb = {
     attach_schema = vim.tbl_extend("error", {
         type             = { default = "lldb" },
         program          = { type = "string", kind = "file", desc = "path to the executable (helps locate the binary)" },
-        pid              = { type = "integer", desc = "PID to attach to" },
+        pid              = { type = "integer", role = "pid", desc = "PID to attach to" },
         waitFor          = { type = "boolean", desc = "wait for the next process matching `program` to launch" },
         attachCommands   = _lldb_cmds("LLDB commands run to perform the attach (replaces the default attach)"),
         coreFile         = { type = "string", kind = "file", desc = "core file to debug" },
-        ["gdb-remote-port"] = { type = "integer", kind = "port", desc = "TCP port to attach to on a remote system" },
-        ["gdb-remote-host"] = { type = "string", kind = "host", desc = "hostname of the remote system (default localhost)" },
+        ["gdb-remote-port"] = { type = "integer", kind = "port", role = "port", desc = "TCP port to attach to on a remote system" },
+        ["gdb-remote-host"] = { type = "string", kind = "host", role = "host", desc = "hostname of the remote system (default localhost)" },
     }, _lldb_common),
 }
 
@@ -370,7 +372,7 @@ M.delve = {
     },
     attach_schema = {
         mode        = { type = "string", kind = "enum", enum = { "local", "remote" }, default = "local", desc = "dlv attach mode" },
-        processId   = { type = "integer", desc = "PID to attach to" },
+        processId   = { type = "integer", role = "pid", desc = "PID to attach to" },
         cwd         = _cwd,
         stopOnEntry = { type = "boolean", desc = "stop at entry" },
     },
@@ -446,7 +448,7 @@ M["js-debug"] = {
     },
     attach_schema = {
         type        = { default = "pwa-node" },
-        port        = { type = "integer", kind = "port", desc = "inspector port", default = 9229 },
+        port        = { type = "integer", kind = "port", role = "port", desc = "inspector port", default = 9229 },
         cwd         = _cwd,
         stopOnEntry = { type = "boolean", desc = "stop at entry" },
     },

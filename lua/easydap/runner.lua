@@ -333,6 +333,116 @@ function M.run_target(adapter, program, program_args)
     return M.run(task)
 end
 
+---Launch or attach under an adapter by filling role-tagged native fields from
+---`role=value` assignments — the request-agnostic generalisation of `run_target`.
+---Each assignment names a `role` the adapter's `request` schema declares (see
+---`schema.quick_roles`); its value is coerced by that field's spec and placed in
+---the request body, with the rest of the body coming from the schema's defaults.
+---The `host`/`port` roles additionally set the task's connection endpoint for
+---adapters that connect over a task-level TCP endpoint (a def `host`/`port`, e.g.
+---`remote`/`java-debug-server`), so those attach too. Unknown roles are rejected.
+---@param adapter string
+---@param request string  "launch"|"attach"
+---@param assignments string[]  raw "role=value" tokens
+---@return easydap.runner.Run?
+function M.quick_run(adapter, request, assignments)
+    local schema = require("easydap.schema")
+
+    if not adapter or adapter == "" then
+        _warn("quick_run: usage: quick_run <adapter> <launch|attach> <role>=<value>…")
+        return
+    end
+    local def = require("easydap.adapters")[adapter]
+    if not def then
+        _err("quick_run: unknown adapter: " .. adapter ..
+            " (available: " .. table.concat(schema.quick_run_adapters(), ", ") .. ")")
+        return
+    end
+    if request ~= "launch" and request ~= "attach" then
+        _warn("quick_run: expected 'launch' or 'attach', got " .. tostring(request))
+        return
+    end
+
+    -- Adapters that connect over a task-level TCP endpoint carry a def host/port;
+    -- for those, host/port roles set the connection, not (only) the body. A stdio
+    -- adapter that happens to have host/port body fields (e.g. lldb's
+    -- `gdb-remote-*`) is NOT task-level, so those stay in the body — setting
+    -- task.port would wrongly flip it to a TCP connection.
+    local is_tcp   = def.host ~= nil or def.port ~= nil
+    local has_body = schema.schema(adapter, request) ~= nil
+    if not has_body and not (request == "attach" and is_tcp) then
+        _err("quick_run: adapter " .. adapter .. " has no " .. request .. " schema")
+        return
+    end
+
+    local values    = {}
+    local task_host = nil ---@type string?
+    local task_port = nil ---@type integer?
+
+    for _, tok in ipairs(assignments) do
+        local eq = tok:find("=", 1, true)
+        if not eq then
+            _warn("quick_run: expected role=value, got " .. tok)
+            return
+        end
+        local role = tok:sub(1, eq - 1)
+        local raw  = tok:sub(eq + 1)
+        local key  = schema.key_of_role(adapter, request, role)
+
+        local value
+        if key then
+            local spec = schema.spec(adapter, request, key)
+            if spec then
+                local cerr
+                value, cerr = schema.coerce(spec, raw)
+                if cerr then
+                    _warn("quick_run: " .. role .. ": " .. cerr)
+                    return
+                end
+                values[key] = value
+            end
+        end
+
+        if is_tcp and role == "host" then
+            task_host = key and value or raw
+        elseif is_tcp and role == "port" then
+            local n = key and value or tonumber(raw)
+            if type(n) ~= "number" or n ~= math.floor(n) then
+                _warn("quick_run: port: expected an integer, got " .. raw)
+                return
+            end
+            task_port = math.floor(n)
+        elseif not key then
+            local roles = schema.quick_roles(adapter, request)
+            _warn("quick_run: adapter " .. adapter .. " " .. request ..
+                " has no role '" .. role .. "'" ..
+                (#roles > 0 and " (roles: " .. table.concat(roles, ", ") .. ")" or ""))
+            return
+        end
+    end
+
+    local params
+    if has_body then
+        local perr
+        params, perr = schema.build(adapter, request, values)
+        if not params then
+            _err("quick_run: " .. tostring(perr))
+            return
+        end
+    end
+
+    ---@type easydap.Task
+    local task = {
+        name       = adapter,
+        adapter    = adapter,
+        request    = request,
+        parameters = params,
+        host       = task_host,
+        port       = task_port,
+    }
+    return M.run(task)
+end
+
 ---Cancel every live run. Stops their sessions, or aborts a run still in adapter
 ---setup (before any session exists, where `:Debug stop` has nothing to act on yet).
 function M.cancel()

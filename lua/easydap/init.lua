@@ -165,7 +165,7 @@ local function _register_user_commands()
     end
 
     local _debug_subs = {
-        "run_file", "quick_launch", "new_task", "rerun",
+        "run_file", "quick_run", "new_task", "rerun",
         "breakpoint",
         "view", "continue", "continue_all",
         "step_over", "next", "step_in", "step_out", "step_back",
@@ -183,8 +183,8 @@ local function _register_user_commands()
         local sub = args[1]
         if sub == "run_file" then
             M.run_file(args[2])
-        elseif sub == "quick_launch" then
-            M.run_target(args[2], args[3], { unpack(args, 4) })
+        elseif sub == "quick_run" then
+            M.quick_run(args[2], args[3], { unpack(args, 4) })
         elseif sub == "new_task" then
             M.new_task(args[2], args[3], args[4])
         elseif sub == "rerun" then
@@ -261,6 +261,44 @@ local function _register_user_commands()
         end
     end
 
+    ---Completion for `:Debug quick_run <adapter> <request> …` role tokens: role
+    ---names (as `role=`) not yet supplied, or file paths for a path-like role's
+    ---value once `=` has been typed.
+    ---@param schema table
+    ---@param adapter string
+    ---@param request string
+    ---@param used string[]     already-typed role=value tokens
+    ---@param arg_lead string   the token being completed
+    ---@return string[]
+    local function _quick_run_role_complete(schema, adapter, request, used, arg_lead)
+        local eq = arg_lead:find("=", 1, true)
+        if eq then
+            -- Completing a value (`role=<partial>`): offer file paths for path-like
+            -- roles (target/cwd, or a file/dir field); nothing for the rest.
+            local role = arg_lead:sub(1, eq - 1)
+            local pfx  = arg_lead:sub(1, eq)
+            local val  = arg_lead:sub(eq + 1)
+            local key  = schema.key_of_role(adapter, request, role)
+            local spec = key and schema.spec(adapter, request, key)
+            local pathish = role == "target" or role == "cwd"
+                or (spec and (spec.kind == "file" or spec.kind == "dir")) or false
+            if not pathish then return {} end
+            local comp_type = spec.kind == "dir" and "dir" or "file"
+            return vim.tbl_map(function(f) return pfx .. f end, vim.fn.getcompletion(val, comp_type))
+        end
+        -- Completing a role name: offer `role=` for roles not yet supplied.
+        local supplied = {}
+        for _, tok in ipairs(used) do
+            local e = tok:find("=", 1, true)
+            if e then supplied[tok:sub(1, e - 1)] = true end
+        end
+        local out = {}
+        for _, role in ipairs(schema.quick_roles(adapter, request)) do
+            if not supplied[role] then out[#out + 1] = role .. "=" end
+        end
+        return out
+    end
+
     ---Completion for `:Debug …`.
     ---@type easydap.tk.usercmd.subcommand_fn
     local function _debug_complete_subs(_, rest, arg_lead)
@@ -271,10 +309,13 @@ local function _register_user_commands()
         if rest[1] == "run_file" and #rest == 1 then
             return vim.fn.getcompletion(arg_lead, "file")
         end
-        if rest[1] == "quick_launch" then
-            -- First arg: adapter name; program and its args complete as files.
-            if #rest == 1 then return require("easydap.schema").target_adapters() end
-            return vim.fn.getcompletion(arg_lead, "file")
+        if rest[1] == "quick_run" then
+            local schema = require("easydap.schema")
+            -- <adapter> <launch|attach> <role>=<value>…
+            if #rest == 1 then return schema.quick_run_adapters() end
+            if #rest == 2 then return schema.requests(rest[2]) end
+            return _quick_run_role_complete(schema, rest[2], rest[3],
+                { unpack(rest, 4) }, arg_lead)
         end
         if rest[1] == "new_task" then
             local schema = require("easydap.schema")
@@ -396,6 +437,18 @@ end
 function M.run_target(adapter, program, program_args)
     local runner = require("easydap.runner")
     return runner.run_target(adapter, program, program_args)
+end
+
+---Launch or attach under `adapter` for `request`, filling role-tagged native
+---fields from `role=value` assignments — the command-surface entry point behind
+---`:Debug quick_run`. E.g.
+---`quick_run("codelldb", "launch", { "target=./a.out", "args=--verbose" })` or
+---`quick_run("debugpy", "attach", { "pid=41234" })`.
+---@param adapter string
+---@param request string  "launch"|"attach"
+---@param assignments string[]  raw "role=value" tokens
+function M.quick_run(adapter, request, assignments)
+    return require("easydap.runner").quick_run(adapter, request, assignments)
 end
 
 ---@param task easydap.Task

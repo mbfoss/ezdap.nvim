@@ -1,10 +1,10 @@
----@brief Schema engine behind `:Debug new_task` and `:Debug run_target`.
+---@brief Schema engine behind `:Debug new_task` and `:Debug quick_run`.
 ---
 ---Each adapter in `easydap.adapters` may declare a `launch_schema` and/or
 ---`attach_schema`: a `native_key -> easydap.ParamSpec` table describing that
 ---adapter's own DAP launch/attach parameters. This module reads those schemas to
----coerce raw strings into a native request body (`build`) and to locate the
----program/args fields (`key_of_role`, for `run_target`). Rendering a schema as a
+---coerce raw strings into a native request body (`build`) and to locate
+---role-tagged fields (`key_of_role`, for `quick_run`). Rendering a schema as a
 ---run_file template (for `new_task`) lives in `easydap.scaffold`, which builds on
 ---the `group_fields`/`is_group`/`resolve_default` helpers exposed here. This module
 ---speaks each adapter's native keys directly — no portable field vocabulary between.
@@ -16,9 +16,9 @@
 ---    that drives string coercion, completion and validation. A `kind` implies its
 ---    `type` (e.g. `kind="list"` yields a `table`); coercing a CLI string prefers
 ---    the `kind` parser and falls back to a plain `type` coercion when unset.
----  * `role` — an optional *value-meaning* marker (target/args) tagging an
----    adapter's program field and arguments field so `run_target` can map its
----    `<program>`/`<args>` inputs onto whatever native keys the adapter uses (see
+---  * `role` — an optional *value-meaning* marker (target/args/cwd/env for launch,
+---    pid/host/port for attach) tagging a field so `quick_run` can map its
+---    `role=value` inputs onto whatever native keys the adapter uses (see
 ---    `key_of_role`). A `role` is independent of `kind`/`type` coercion.
 ---
 
@@ -63,8 +63,8 @@ function M.coerce(spec, raw)
     if spec.role == "args" then
         return str_util.split_shell_args(raw)
     elseif spec.role == "target" then
-        -- The run_target program: a single expanded path (module names pass
-        -- through `expand` unchanged, having nothing to expand).
+        -- The launch program: a single expanded path (module names pass through
+        -- `expand` unchanged, having nothing to expand).
         return vim.fn.expand(raw)
     end
     local kind = spec.kind
@@ -202,9 +202,9 @@ function M.adapter_names()
 end
 
 ---The first user-settable param key in an adapter's request schema whose spec has
----the given `role` (e.g. `"target"` for the program field, `"args"` for the
----arguments field), or nil. Lets run_target map program/args onto an adapter's
----native keys without hard-coding their names. Keys are scanned in sorted order so
+---the given `role` (e.g. `"target"` for the program field, `"pid"` for the attach
+---PID field), or nil. Lets `quick_run` map a `role=value` input onto an adapter's
+---native key without hard-coding its name. Keys are scanned in sorted order so
 ---the pick is stable if a schema ever declares two of the same role.
 ---@param adapter string
 ---@param request string  "launch"|"attach"
@@ -228,6 +228,62 @@ function M.target_adapters()
     for _, name in ipairs(M.adapter_names()) do
         if M.key_of_role(name, "launch", "target") then out[#out + 1] = name end
     end
+    return out
+end
+
+---The distinct `role`s an adapter's request schema declares, sorted. These are
+---the body fields `quick_run` can fill; see `quick_roles` for the completion set
+---(which also surfaces a task-level TCP endpoint).
+---@param adapter string
+---@param request string  "launch"|"attach"
+---@return string[]
+function M.roles(adapter, request)
+    local schema = M.schema(adapter, request)
+    if not schema then return {} end
+    local seen, out = {}, {}
+    _walk_leaves(schema, function(_, spec)
+        if spec.role and not seen[spec.role] then
+            seen[spec.role] = true
+            out[#out + 1] = spec.role
+        end
+    end)
+    table.sort(out)
+    return out
+end
+
+---The roles `quick_run` accepts for an adapter+request: the schema's declared
+---roles (`roles`), plus `host`/`port` when the adapter connects over a task-level
+---TCP endpoint (its def carries a `host`/`port`) so `remote`-style attach can set
+---them even though they are not body fields. Sorted, de-duplicated.
+---@param adapter string
+---@param request string  "launch"|"attach"
+---@return string[]
+function M.quick_roles(adapter, request)
+    local roles = M.roles(adapter, request)
+    local def = require("easydap.adapters")[adapter]
+    if request == "attach" and def and (def.host ~= nil or def.port ~= nil) then
+        local seen = {}
+        for _, r in ipairs(roles) do seen[r] = true end
+        for _, r in ipairs({ "host", "port" }) do
+            if not seen[r] then roles[#roles + 1] = r end
+        end
+        table.sort(roles)
+    end
+    return roles
+end
+
+---Adapter names `quick_run` can drive — those declaring at least one role in
+---either schema, or a task-level TCP endpoint (def `host`/`port`) — sorted.
+---@return string[]
+function M.quick_run_adapters()
+    local out = {}
+    for name, def in pairs(require("easydap.adapters")) do
+        if #M.roles(name, "launch") > 0 or #M.roles(name, "attach") > 0
+            or def.host ~= nil or def.port ~= nil then
+            out[#out + 1] = name
+        end
+    end
+    table.sort(out)
     return out
 end
 
