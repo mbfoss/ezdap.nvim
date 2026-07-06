@@ -187,14 +187,17 @@ local function _register_session(sess, callbacks, progress)
 
     sess:on("start_debugging", function(child_config)
         local child_opts = { on_event = on_event, on_fail = callbacks.on_fail }
+        local child_name = child_config.name or sess.config.name or sess.config.adapter or "debug"
         if sess.config.port then
             M.start({
+                name         = child_name,
                 host         = sess.config.host,
                 port         = sess.config.port,
                 request      = child_config.request or "attach",
                 request_args = child_config,
             }, child_opts)
         else
+            child_config.name = child_name
             M.start(child_config, child_opts)
         end
     end)
