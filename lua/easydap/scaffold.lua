@@ -10,6 +10,13 @@ local schema = require("easydap.schema")
 
 local M = {}
 
+---Preferred position of well-known keys in a rendered `parameters` block: the
+---identity/target/args/cwd/env fields adapters consistently declare first
+---(mirroring their declaration order in `easydap.adapters`). Keys absent here sort
+---alphabetically after all of these.
+---@type table<string, integer>
+local _key_priority = { type = 1, name = 2, program = 3, module = 3, args = 4, cwd = 5, env = 6 }
+
 ---@param msg string
 local function _warn(msg) vim.notify("[easydap] " .. msg, vim.log.levels.WARN) end
 
@@ -37,8 +44,11 @@ end
 ---multi-line source string for a run_file template (see `new_run_file`). Each leaf
 ---param is emitted on its own line, seeded with its resolved default or a
 ---type-appropriate placeholder, with a trailing `-- desc` comment; nested groups
----are rendered inline. `indent` is the column (in spaces) the outermost params sit
----at. Keys are sorted for stable output.
+---are rendered inline. Fields marked `fixed` (e.g. `type`/`name` identity fields
+---the adapter pins itself) are omitted entirely — they are not meant to be
+---user-edited. `indent` is the column (in spaces) the outermost params sit
+---at. Keys are sorted by `_key_priority` (identity/target/args/cwd/env first), then
+---alphabetically, for stable, readable output.
 ---@param adapter string
 ---@param request string
 ---@param indent integer
@@ -53,16 +63,20 @@ local function _render_params(adapter, request, indent)
         local fields = schema.group_fields(group)
         local keys = {}
         for k in pairs(fields) do keys[#keys + 1] = k end
-        table.sort(keys)
+        table.sort(keys, function(a, b)
+            local pa, pb = _key_priority[a] or math.huge, _key_priority[b] or math.huge
+            if pa ~= pb then return pa < pb end
+            return a < b
+        end)
         for _, k in ipairs(keys) do
             local node = fields[k]
-            -- Bare identifier keys stay unquoted; anything else needs ["..."].
-            local lhs = k:match("^[%a_][%w_]*$") and k or ("[%q]"):format(k)
             if schema.is_group(node) then
-                lines[#lines + 1] = ("%s%s = {"):format(pad, lhs)
+                lines[#lines + 1] = ("%s%s = {"):format(pad, k:match("^[%a_][%w_]*$") and k or ("[%q]"):format(k))
                 emit(node, pad .. "    ")
                 lines[#lines + 1] = ("%s},"):format(pad)
-            else
+            elseif not node.fixed then
+                -- Bare identifier keys stay unquoted; anything else needs ["..."].
+                local lhs     = k:match("^[%a_][%w_]*$") and k or ("[%q]"):format(k)
                 local val     = (node.default ~= nil) and schema.resolve_default(node) or _placeholder(node)
                 local line    = ("%s%s = %s,"):format(pad, lhs, vim.inspect(val))
                 local comment = node.desc
@@ -174,8 +188,7 @@ function M.new_run_file(assignments)
         _err("new_run_file: failed to write " .. dest .. ": " .. tostring(werr))
         return
     end
-    vim.cmd.edit(vim.fn.fnameescape(dest))
-    vim.notify("[easydap] created run file: " .. dest, vim.log.levels.INFO)
+    require("easydap.util.ui_util").smart_open_file(vim.fn.fnameescape(dest))
     return dest
 end
 
