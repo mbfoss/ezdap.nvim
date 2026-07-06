@@ -107,10 +107,9 @@ function Panel:init()
         callback = function()
             local new_win = vim.api.nvim_get_current_win()
             if not self:is_open() or new_win == self._win then return end
-            if vim.wo[new_win].winbar == "" or vim.wo[new_win].winbar ~= vim.wo[self._win].winbar then return end
-            vim.api.nvim_win_call(new_win, function()
+            if vim.wo[new_win].winbar ~= "" and vim.wo[new_win].winbar == vim.wo[self._win].winbar then
                 vim.cmd("setlocal winbar< winfixheight< winfixbuf< number< relativenumber< wrap<")
-            end)
+            end
         end,
     })
 
@@ -130,15 +129,15 @@ function Panel:open()
     if self:is_open() then return end
     local cur = vim.api.nvim_get_current_win()
     vim.cmd("botright " .. self._height .. "split")
-    self._win                        = vim.api.nvim_get_current_win()
+    self._win = vim.api.nvim_get_current_win()
 
     _setlocal(self._win, "number", false)
     _setlocal(self._win, "relativenumber", false)
     _setlocal(self._win, "winfixheight", true)
     _setlocal(self._win, "wrap", false)
 
-    local display                    = self:_display()
-    local first                      = self._active or (display[1] and display[1].bufnr)
+    local display = self:_display()
+    local first   = self._active or (display[1] and display[1].bufnr)
     self:_set_buf(first or vim.api.nvim_create_buf(false, true))
     _click_target = self
     if vim.api.nvim_win_is_valid(cur) then vim.api.nvim_set_current_win(cur) end

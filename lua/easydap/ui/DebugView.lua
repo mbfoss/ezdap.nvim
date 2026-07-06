@@ -248,24 +248,6 @@ function DebugView:init()
     self:_init_tree()
     self:_setup_subs()
     self:_load_breakpoints()
-
-    -- Splitting the view window copies most window-local options onto the new
-    -- sibling (which starts out showing the same buffer, since a plain split
-    -- keeps the current buffer) — but not 'winfixwidth'/'winfixbuf', and never
-    -- window-local variables. Detect a same-buffer sibling missing our marker
-    -- and strip its inherited options back to plain-window defaults.
-    -- Registered once per instance so it doesn't pile up across open/close.
-    vim.api.nvim_create_autocmd("WinNew", {
-        callback = function()
-            local new_win = vim.api.nvim_get_current_win()
-            if not self._win or not vim.api.nvim_win_is_valid(self._win) then return end
-            if vim.api.nvim_win_get_buf(new_win) ~= vim.api.nvim_win_get_buf(self._win) then return end
-            vim.api.nvim_win_call(new_win, function()
-                vim.cmd("setlocal signcolumn< number< relativenumber<")
-            end)
-        end,
-    })
-
     return self
 end
 
