@@ -93,40 +93,32 @@ end
 ---task table whose `parameters` are pre-populated from the adapter's schema (defaults,
 ---and type-appropriate placeholders for the rest, each annotated
 ---with its description), then open it for editing. Run it afterwards with `:Debug
----run_file`. `assignments` leads with the adapter (required) and request
----(positional; defaults to the adapter's own default request, or its sole schema)
----as bare tokens, then an optional `path=` token (destination file, defaulting to
----`<project root or cwd>/<adapter>_<request>.lua`). Fails if the destination
----already exists, rather than overwriting or picking a different name. Reports a
----clear error for every failure mode instead of throwing.
----@param assignments string[]  adapter, request, then optional "path=value", e.g. { "codelldb", "launch", "path=./foo.lua" }
+---run_file`. `assignments` is positional: the adapter (required), the request
+---(defaults to the adapter's own default request, or its sole schema), then the
+---destination path (defaulting to `<project root or cwd>/<adapter>_<request>.lua`).
+---Fails if the destination already exists, rather than overwriting or picking a
+---different name. Reports a clear error for every failure mode instead of throwing.
+---@param assignments string[]  positional adapter, request, path, e.g. { "codelldb", "launch", "./foo.lua" }
 ---@return string? path  the file that was created
 function M.new_run_file(assignments)
-    -- The adapter and request come first as bare positional arguments
-    -- (`new_run_file codelldb launch`); `path=` is the only keyed token.
+    -- Every argument is positional: `new_run_file <adapter> [request] [path]`.
     local adapter, request, path
     for _, tok in ipairs(assignments or {}) do
-        local eq = tok:find("=", 1, true)
-        if eq then
-            local key = tok:sub(1, eq - 1)
-            if key == "path" then
-                path = tok:sub(eq + 1)
-            else
-                _warn("new_run_file: unknown key '" .. key .. "' (supported: path; adapter/request are positional)")
-                return
-            end
-        elseif not adapter then
+        if not adapter then
             adapter = tok
         elseif not request then
             request = tok
+        elseif not path then
+            path = tok
         else
-            _warn("new_run_file: unexpected argument '" .. tok .. "' (expected path=value)")
+            _warn("new_run_file: unexpected argument '" .. tok ..
+                "' (usage: new_run_file <adapter> [request] [path])")
             return
         end
     end
 
     if not adapter or adapter == "" then
-        _warn("new_run_file: usage: new_run_file <adapter> [request] [path=value]")
+        _warn("new_run_file: usage: new_run_file <adapter> [request] [path]")
         return
     end
     local base = require("easydap.adapters")[adapter]

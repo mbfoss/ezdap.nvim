@@ -331,36 +331,17 @@ local function _register_user_commands()
             return _quick_run_complete(schema, { unpack(rest, 2) }, arg_lead)
         end
         if rest[1] == "new_run_file" then
-            -- <adapter> [request] [path=value]
+            -- Positional: <adapter> [request] [path].
             local schema = require("easydap.schema")
-            local adapter, request, have_path
-            for _, tok in ipairs({ unpack(rest, 2) }) do
-                local e = tok:find("=", 1, true)
-                if e then
-                    if tok:sub(1, e - 1) == "path" then have_path = true end
-                elseif not adapter then
-                    adapter = tok
-                elseif not request then
-                    request = tok
-                end
-            end
-            local eq = arg_lead:find("=", 1, true)
-            if eq then
-                local key = arg_lead:sub(1, eq - 1)
-                local pfx = arg_lead:sub(1, eq)
-                local val = arg_lead:sub(eq + 1)
-                if key == "path" then
-                    return vim.tbl_map(function(f) return pfx .. f end, vim.fn.getcompletion(val, "file"))
-                end
-                return {}
-            end
-            -- No `=` yet: complete the adapter, then the request, then `path=`.
-            if not adapter then
+            local used   = { unpack(rest, 2) }
+            local pos    = #used + 1 -- 1-based position of the token being completed
+            if pos == 1 then
                 return schema.adapter_names()
-            elseif not request then
-                return schema.requests(adapter)
+            elseif pos == 2 then
+                return schema.requests(used[1])
+            elseif pos == 3 then
+                return vim.fn.getcompletion(arg_lead, "file")
             end
-            if not have_path then return { "path=" } end
             return {}
         end
         if rest[1] == "panel" and #rest == 1 then
@@ -457,11 +438,10 @@ function M.run_file(path)
 end
 
 ---Scaffold a run_file from an adapter's schema (defaults + placeholders +
----descriptions) and open it for editing. `assignments` leads with the adapter and
----(optional) request as bare positional tokens, then an optional `path=` token
----(destination file). E.g. `new_run_file({ "codelldb", "launch" })` writes
----`<root>/codelldb_launch.lua`.
----@param assignments string[]  adapter, request, then optional "path=value", e.g. { "codelldb", "launch", "path=./foo.lua" }
+---descriptions) and open it for editing. `assignments` is positional: the adapter,
+---an optional request, and an optional destination path. E.g. `new_run_file({
+---"codelldb", "launch" })` writes `<root>/codelldb_launch.lua`.
+---@param assignments string[]  positional adapter, request, path, e.g. { "codelldb", "launch", "./foo.lua" }
 function M.new_run_file(assignments)
     return require("easydap.scaffold").new_run_file(assignments)
 end
