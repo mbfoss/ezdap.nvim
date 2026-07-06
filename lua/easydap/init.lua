@@ -165,7 +165,7 @@ local function _register_user_commands()
     end
 
     local _debug_subs = {
-        "run_file", "run_target", "new_task", "rerun",
+        "run_file", "quick_launch", "new_task", "rerun",
         "breakpoint",
         "view", "continue", "continue_all",
         "step_over", "next", "step_in", "step_out", "step_back",
@@ -183,7 +183,7 @@ local function _register_user_commands()
         local sub = args[1]
         if sub == "run_file" then
             M.run_file(args[2])
-        elseif sub == "run_target" then
+        elseif sub == "quick_launch" then
             M.run_target(args[2], args[3], { unpack(args, 4) })
         elseif sub == "new_task" then
             M.new_task(args[2], args[3], args[4])
@@ -271,7 +271,7 @@ local function _register_user_commands()
         if rest[1] == "run_file" and #rest == 1 then
             return vim.fn.getcompletion(arg_lead, "file")
         end
-        if rest[1] == "run_target" then
+        if rest[1] == "quick_launch" then
             -- First arg: adapter name; program and its args complete as files.
             if #rest == 1 then return require("easydap.schema").target_adapters() end
             return vim.fn.getcompletion(arg_lead, "file")
