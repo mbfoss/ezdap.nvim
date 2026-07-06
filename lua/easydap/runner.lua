@@ -134,15 +134,18 @@ end
 ---Drop every finished run from the panel and wipe their buffers, leaving live
 ---runs untouched. Bound to `:Debug panel clean`.
 function M.panel_clean()
-    local kept = {}
+    local kept, finished = {}, {}
     for _, r in ipairs(_runs) do
         if r.done then
-            _remove_run(r)
+            finished[#finished + 1] = r
         else
             kept[#kept + 1] = r
         end
     end
     _runs = kept
+    for _, r in ipairs(finished) do
+        _remove_run(r)
+    end
 end
 
 ---Run a debug task. Tasks may run in parallel: each run gets its own panel group
