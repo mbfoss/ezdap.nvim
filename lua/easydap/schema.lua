@@ -63,8 +63,8 @@ function M.coerce(spec, raw)
     if spec.role == "args" then
         return str_util.split_shell_args(raw)
     elseif spec.role == "target" then
-        -- The launch program: a single expanded path (module names pass through
-        -- `expand` unchanged, having nothing to expand).
+        -- The run_target program: a single expanded path (module names pass
+        -- through `expand` unchanged, having nothing to expand).
         return vim.fn.expand(raw)
     end
     local kind = spec.kind
@@ -202,9 +202,9 @@ function M.adapter_names()
 end
 
 ---The first user-settable param key in an adapter's request schema whose spec has
----the given `role` (e.g. `"target"` for the program field, `"pid"` for the attach
----PID field), or nil. Lets `quick_run` map a `role=value` input onto an adapter's
----native key without hard-coding its name. Keys are scanned in sorted order so
+---the given `role` (e.g. `"target"` for the program field, `"args"` for the
+---arguments field), or nil. Lets run_target map program/args onto an adapter's
+---native keys without hard-coding their names. Keys are scanned in sorted order so
 ---the pick is stable if a schema ever declares two of the same role.
 ---@param adapter string
 ---@param request string  "launch"|"attach"

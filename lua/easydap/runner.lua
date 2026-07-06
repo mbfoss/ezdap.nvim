@@ -96,6 +96,17 @@ local function _report(msg)
     vim.bo[buf].modifiable = false
 end
 
+---Remove a run's group from the panel and wipe the buffers it spawned.
+---@param run easydap.runner.Run
+local function _remove_run(run)
+    _get_panel():remove_group(run.id)
+    for _, b in ipairs(run.bufnrs) do
+        if vim.api.nvim_buf_is_valid(b) then
+            pcall(vim.api.nvim_buf_delete, b, { force = true })
+        end
+    end
+end
+
 ---Drop any finished run of the same name from the panel and wipe its buffers, so
 ---re-running a task replaces its own previous run. Live runs and finished runs of
 ---other tasks are left untouched, so parallel runs accumulate as separate groups.
@@ -104,12 +115,21 @@ local function _clear_finished(name)
     local kept = {}
     for _, r in ipairs(_runs) do
         if r.done and r.name == name then
-            _get_panel():remove_group(r.id)
-            for _, b in ipairs(r.bufnrs) do
-                if vim.api.nvim_buf_is_valid(b) then
-                    pcall(vim.api.nvim_buf_delete, b, { force = true })
-                end
-            end
+            _remove_run(r)
+        else
+            kept[#kept + 1] = r
+        end
+    end
+    _runs = kept
+end
+
+---Drop every finished run from the panel and wipe their buffers, leaving live
+---runs untouched. Bound to `:Debug panel clean`.
+function M.panel_clean()
+    local kept = {}
+    for _, r in ipairs(_runs) do
+        if r.done then
+            _remove_run(r)
         else
             kept[#kept + 1] = r
         end

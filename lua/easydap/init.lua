@@ -249,6 +249,8 @@ local function _register_user_commands()
                 runner.panel_next()
             elseif action == "previous" or action == "prev" then
                 runner.panel_prev()
+            elseif action == "clean" then
+                runner.panel_clean()
             elseif action == nil or action == "" or action == "toggle" then
                 if count then runner.panel_jump(count) else runner.panel_toggle() end
             else
@@ -326,7 +328,7 @@ local function _register_user_commands()
             return {}
         end
         if rest[1] == "panel" and #rest == 1 then
-            return { "toggle", "jump", "next", "previous" }
+            return { "toggle", "jump", "next", "previous", "clean" }
         end
         if rest[1] == "panel" and rest[2] == "jump" and #rest == 2 then
             return require("easydap.runner").panel_tab_numbers()
