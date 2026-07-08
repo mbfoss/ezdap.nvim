@@ -16,6 +16,8 @@
 ---yanked away — including by a parallel run starting in the background. Per-buffer
 ---autoscroll keeps append-only logs pinned to the bottom while they are active.
 
+local fixedwin = require("easydap.tk.fixedwin")
+
 local M = {}
 
 -- Sentinel group id for group-less (shared) entries such as the report page.
@@ -109,13 +111,18 @@ end
 ---open. The first display entry (or an empty scratch) is shown.
 function Panel:open()
     if self:is_open() then return end
-    local cur = vim.api.nvim_get_current_win()
-    vim.cmd("botright " .. self._height .. "split")
-    self._win = vim.api.nvim_get_current_win()
+    -- fixedwin owns the split's creation, height pinning, resize/ratio tracking
+    -- and re-pinning across layout changes, and returns focus to the current
+    -- window (enter defaults to false). Its on_delete records the final height
+    -- so a manual resize survives a hide/show, and tears the panel down whether
+    -- it was closed via close() or directly by the user (:q).
+    local ratio = self._height / math.max(1, vim.o.lines)
+    self._win = fixedwin.create_fixed_win("height", ratio, function(r)
+        self:_on_win_closed(r)
+    end)
 
     _setlocal(self._win, "number", false)
     _setlocal(self._win, "relativenumber", false)
-    _setlocal(self._win, "winfixheight", true)
     _setlocal(self._win, "wrap", false)
 
     local display = self:_display()
@@ -144,19 +151,29 @@ function Panel:open()
             end
         end,
     })
-
-    if vim.api.nvim_win_is_valid(cur) then vim.api.nvim_set_current_win(cur) end
 end
 
----Close the panel window. Hosted buffers persist; reopening restores them.
-function Panel:close()
-    if self:is_open() then vim.api.nvim_win_close(self._win, false) end
+---Reset window-scoped state. Invoked by fixedwin's on_delete on every WinClosed
+---(so a direct `:q` cleans up too); `ratio`, when present, records the final
+---height for the next open. Idempotent, so close() may also call it directly.
+---@param ratio? number
+function Panel:_on_win_closed(ratio)
+    if ratio then self._height = math.max(1, math.floor(vim.o.lines * ratio)) end
     self._win = nil
     if _click_target == self then _click_target = nil end
     if self._au_group then
         vim.api.nvim_del_augroup_by_id(self._au_group)
         self._au_group = nil
     end
+end
+
+---Close the panel window. Hosted buffers persist; reopening restores them.
+function Panel:close()
+    if self:is_open() then
+        -- WinClosed → fixedwin on_delete → _on_win_closed does the teardown.
+        vim.api.nvim_win_close(self._win, false)
+    end
+    self:_on_win_closed()
 end
 
 ---Toggle the panel window. Hosted buffers persist across hide/show.

@@ -8,8 +8,11 @@ local inputwin    = require("easydap.tk.inputwin")
 local select      = require("easydap.util.select")
 local timer       = require("easydap.tk.timer")
 local floatwin    = require("easydap.tk.floatwin")
+local fixedwin    = require("easydap.tk.fixedwin")
 
-local _au_group_gen
+-- Fraction of the editor width the view occupies on first open; thereafter the
+-- last-used ratio (tracked by fixedwin across resizes) is reused.
+local _DEFAULT_WIDTH_RATIO = 0.2
 
 ---@alias easydap.DebugView.ItemKind
 ---| "root"
@@ -220,9 +223,7 @@ end
 
 ---@class easydap.DebugView
 ---@field private _tree             easydap.ui.TreeBuffer
----@field private _win              integer?  the view window, when open
----@field private _win_width        integer?  cached width of _win, invalidated on resize/close
----@field private _aug              integer?  augroup for window-scoped autocmds (WinResized/WinClosed), live only while _win is open
+---@field private _width_ratio      number?   last-known width ratio, reused on the next open
 ---@field private _active_id        number?
 ---@field private _active_sess      easydap.dap.Session?
 ---@field private _query_ctx        number
@@ -238,8 +239,6 @@ DebugView.__index = DebugView
 ---@return easydap.DebugView
 function DebugView.new()
     local self = setmetatable({
-        _win            = nil,
-        _win_width      = nil,
         _active_id      = nil,
         _active_sess    = nil,
         _query_ctx      = 0,
@@ -339,10 +338,8 @@ end
 ---@private
 ---@return integer
 function DebugView:_get_win_width()
-    if self._win_width then return self._win_width end
     local winid = self._tree:get_winid()
-    self._win_width = winid > 0 and vim.api.nvim_win_get_width(winid) or config.debug_value_max_len
-    return self._win_width
+    return winid > 0 and vim.api.nvim_win_get_width(winid) or config.debug_value_max_len
 end
 
 -- ── Signal subscriptions ──────────────────────────────────────────────────
@@ -1092,24 +1089,13 @@ function DebugView:get_bufnr(on_deleted)
     return bufnr
 end
 
----Reset window-scoped state; called on programmatic close and on WinClosed.
----@private
-function DebugView:_cleanup_win()
-    self._win = nil
-    self._win_width = nil
-    if self._aug then
-        vim.api.nvim_del_augroup_by_id(self._aug)
-        self._aug = nil
-    end
-end
-
----Close the DebugView window if it is currently visible.
+---Close the DebugView window if it is currently visible. The fixedwin on_delete
+---(fired on WinClosed) records the final width ratio for the next open.
 function DebugView:close()
     local winid = self._tree:get_winid()
     if winid > 0 then
         vim.api.nvim_win_close(winid, true)
     end
-    self:_cleanup_win()
 end
 
 ---@param focus boolean
@@ -1119,37 +1105,18 @@ function DebugView:_open(focus)
         if focus then vim.api.nvim_set_current_win(winid) end
         return
     end
-    local prev_win = vim.api.nvim_get_current_win()
     local bufnr = self:get_bufnr(function() end)
-    vim.cmd("botright vsplit")
-    local win = vim.api.nvim_get_current_win()
-    self._win = win
-    _au_group_gen = _au_group_gen and (_au_group_gen + 1) or 1
-    self._aug = vim.api.nvim_create_augroup(("easydap_debugview_%d"):format(_au_group_gen), { clear = true })
-    vim.api.nvim_create_autocmd("WinResized", {
-        group    = self._aug,
-        callback = function()
-            if vim.tbl_contains(vim.v.event.windows, self._win) then
-                self._win_width = nil
-            end
-        end,
-    })
-    -- the window may also be closed directly by the user (e.g. `:q`/`<C-w>c`)
-    -- rather than via DebugView:close(), so tear down on WinClosed too.
-    vim.api.nvim_create_autocmd("WinClosed", {
-        group    = self._aug,
-        pattern  = tostring(win),
-        once     = true,
-        callback = function() self:_cleanup_win() end,
-    })
+    -- fixedwin owns the split's creation, width pinning, resize/ratio tracking
+    -- and re-pinning across layout changes; we only layer on the view-specific
+    -- window options and swap in the tree buffer.
+    local win = fixedwin.create_fixed_win("width", self._width_ratio or _DEFAULT_WIDTH_RATIO,
+        function(ratio) self._width_ratio = ratio end,
+        { enter = focus })
     vim.api.nvim_win_set_buf(win, bufnr)
-    vim.api.nvim_win_set_width(win, math.ceil(vim.o.columns * 0.2))
-    _setlocal(win, "winfixwidth", true)
     _setlocal(win, "winfixbuf", true)
     _setlocal(win, "signcolumn", "no")
     _setlocal(win, "number", false)
     _setlocal(win, "relativenumber", false)
-    if not focus then vim.api.nvim_set_current_win(prev_win) end
 end
 
 ---Open the DebugView in a vertical split (or focus if already visible).
