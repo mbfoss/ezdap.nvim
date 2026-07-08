@@ -891,27 +891,7 @@ function M.debug.inspect(expr, from_range)
         vim.notify("[dap] nothing to inspect", vim.log.levels.WARN)
         return
     end
-    M.evaluate(expr, "hover", function(body, err)
-        if err or not body then
-            vim.notify("[dap] " .. expr .. ": " .. (err or "not available"), vim.log.levels.WARN)
-            return
-        end
-        local lines = {}
-        if body.type and body.type ~= "" then
-            lines[#lines + 1] = body.type
-            lines[#lines + 1] = ""
-        end
-        for _, line in ipairs(vim.split(body.result or "", "\n", { plain = true })) do
-            lines[#lines + 1] = line
-        end
-        if #lines > 0 then
-            vim.lsp.util.open_floating_preview(lines, "plaintext", {
-                border   = "rounded",
-                title    = expr,
-                focus_id = "easydap_inspect",
-            })
-        end
-    end)
+    require("easydap.ui.InspectView").open(expr)
 end
 
 ---Open the disassembly pane for the active session's current frame.
