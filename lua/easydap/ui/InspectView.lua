@@ -45,6 +45,14 @@ function M.open(expr)
         return
     end
 
+    -- Capture the inspected symbol's screen position *now*, before the async
+    -- evaluate; the cursor (and even the current window/mode) may have moved by
+    -- the time the response arrives. `screenpos` (no nvim_ equivalent) is 1-based
+    -- and returns {row=0} when the cell is off-screen. `nvim_win_get_cursor`
+    -- gives a 1-based line and 0-based column, so shift the column to 1-based.
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local anchor = vim.fn.screenpos(0, cursor[1], cursor[2] + 1)
+
     manager.evaluate(expr, "hover", function(body, err)
         if err or not body then
             vim.notify("[dap] " .. expr .. ": " .. (err or "not available"), vim.log.levels.WARN)
@@ -130,18 +138,27 @@ function M.open(expr)
         })
 
         local ui_w, ui_h = vim.o.columns, vim.o.lines
+        local width = math.floor(ui_w * 0.4)
         ---@type vim.api.keyset.win_config
         local win_opts = {
             relative  = "editor",
-            width     = math.floor(ui_w * 0.4),
+            width     = width,
             height    = 1,
             style     = "minimal",
             border    = "rounded",
             title     = " " .. expr .. " ",
             title_pos = "center",
         }
-        win_opts.row = math.floor((ui_h - win_opts.height) / 2)
-        win_opts.col = math.floor((ui_w - win_opts.width) / 2)
+        if anchor.row > 0 then
+            -- Anchor just below/at the symbol (screenpos is 1-based; editor rows
+            -- are 0-based), clamped so the float stays fully on screen. A 2-row
+            -- border/height allowance keeps the initial 1-line float visible.
+            win_opts.row = math.min(anchor.row, math.max(0, ui_h - 4))
+            win_opts.col = math.min(math.max(0, anchor.col - 1), math.max(0, ui_w - width - 2))
+        else
+            win_opts.row = math.floor((ui_h - win_opts.height) / 2)
+            win_opts.col = math.floor((ui_w - width) / 2)
+        end
 
         local close
         win = ui_util.create_window(buf, true, win_opts, function() win = nil end)
