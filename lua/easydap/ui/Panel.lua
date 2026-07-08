@@ -50,7 +50,6 @@ local _GLOBAL = "\0global"
 ---@field private _height   integer
 ---@field private _seq      integer
 ---@field private _attached table<integer, boolean>   buffers with an autoscroll listener
----@field private _au_group integer?                  WinNew-detection augroup, live only while open
 local Panel = {}
 Panel.__index = Panel
 
@@ -117,7 +116,8 @@ function Panel:open()
     -- so a manual resize survives a hide/show, and tears the panel down whether
     -- it was closed via close() or directly by the user (:q).
     local ratio = self._height / math.max(1, vim.o.lines)
-    self._win = fixedwin.create_fixed_win("height", ratio, function(r)
+    local augroup
+    self._win, augroup = fixedwin.create_fixed_win("height", ratio, function(r)
         self:_on_win_closed(r)
     end)
 
@@ -140,9 +140,9 @@ function Panel:open()
     -- window. Only relevant while the panel is open, so it's (re)registered
     -- here and torn down in close() rather than living for the instance's
     -- whole lifetime.
-    self._au_group = vim.api.nvim_create_augroup("EasydapPanel" .. tostring(self):gsub("^table: ", ""), { clear = true })
+    assert(augroup)
     vim.api.nvim_create_autocmd("WinNew", {
-        group = self._au_group,
+        group = augroup,
         callback = function()
             local new_win = vim.api.nvim_get_current_win()
             if not self:is_open() or new_win == self._win then return end
@@ -161,10 +161,6 @@ function Panel:_on_win_closed(ratio)
     if ratio then self._height = math.max(1, math.floor(vim.o.lines * ratio)) end
     self._win = nil
     if _click_target == self then _click_target = nil end
-    if self._au_group then
-        vim.api.nvim_del_augroup_by_id(self._au_group)
-        self._au_group = nil
-    end
 end
 
 ---Close the panel window. Hosted buffers persist; reopening restores them.
