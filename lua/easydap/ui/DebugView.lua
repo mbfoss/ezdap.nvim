@@ -9,6 +9,7 @@ local select      = require("easydap.util.select")
 local timer       = require("easydap.tk.timer")
 local floatwin    = require("easydap.tk.floatwin")
 local fixedwin    = require("easydap.tk.fixedwin")
+local ui          = require("easydap.tk.ui")
 
 -- Fraction of the editor width the view occupies on first open; thereafter the
 -- last-used ratio (tracked by fixedwin across resizes) is reused.
@@ -315,21 +316,8 @@ function DebugView:_init_tree()
                 manager.select_session(data.session_id)
             elseif data.kind == "stackframe" and data.frame_id then
                 manager.select_frame(data.frame_id)
-            elseif data.kind == "breakpoint" and data.bp_kind == "source"
-                and data.bp_source and data.bp_line then
-                local view_win = self._tree:get_winid()
-                local target = -1
-                for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-                    if win ~= view_win then
-                        target = win; break
-                    end
-                end
-                if target == -1 then
-                    vim.cmd("vsplit"); target = vim.api.nvim_get_current_win()
-                end
-                vim.api.nvim_set_current_win(target)
-                local ok = pcall(vim.cmd.edit, data.bp_source)
-                if ok then pcall(vim.api.nvim_win_set_cursor, target, { data.bp_line, 0 }) end
+            elseif data.kind == "breakpoint" and data.bp_kind == "source" and data.bp_source and data.bp_line then
+                ui.smart_open_file( data.bp_source, data.bp_line, nil, false)
             end
         end,
     })
@@ -758,7 +746,7 @@ function DebugView:_merge_children(parent_id, new_children)
         new_ids[item.id] = true
         if existing_map[item.id] then
             self._tree:set_item_data(item.id, item.data)
-            self._tree:set_item_expandable(item.id, item.expandable or false)
+            self._tree:set_item_expafndable(item.id, item.expandable or false)
         else
             self._tree:add_item(parent_id, item)
         end
