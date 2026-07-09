@@ -85,7 +85,7 @@ local function _register_user_commands()
     local _bp_subs = {
         "toggle", "add", "remove", "column",
         "clear_file", "clear_all", "clear_fn",
-        "enable", "disable", "enable_all", "disable_all",
+        "enable", "disable", "toggle_enabled", "enable_all", "disable_all",
         "condition", "logpoint",
         "fn", "exception_filter", "exception_type",
         "data", "data_clear", "data_list",
@@ -118,6 +118,8 @@ local function _register_user_commands()
             cmd.breakpoint.enable()
         elseif sub == "disable" then
             cmd.breakpoint.disable()
+        elseif sub == "toggle_enabled" then
+            cmd.breakpoint.toggle_enabled()
         elseif sub == "enable_all" then
             cmd.breakpoint.enable_all()
         elseif sub == "disable_all" then

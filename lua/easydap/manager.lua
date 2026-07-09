@@ -462,6 +462,23 @@ function M.breakpoint.disable()
     bps.patch(file, row, { disabled = true })
 end
 
+---Toggle the enabled/disabled state of the breakpoint at the current line.
+function M.breakpoint.toggle_enabled()
+    local file, row = _cursor_location()
+    if not file then return end
+    local bps = require("easydap.dap.breakpoints")
+    local bp
+    for _, b in ipairs(bps.for_source(file)) do
+        if b.line == row then
+            bp = b; break
+        end
+    end
+    if not bp then
+        vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return
+    end
+    bps.patch(file, row, { disabled = not bp.disabled })
+end
+
 function M.breakpoint.enable_all()
     require("easydap.dap.breakpoints").enable_all()
 end
