@@ -1306,6 +1306,15 @@ function DebugView:_setup_keymaps(bufnr)
             -- set_variable picks setExpression/setVariable per adapter capability.
             local parent = self._tree:get_parent_item(cur.id)
             local parent_ref = parent and parent.data and parent.data.variablesReference
+            -- A top-level watch has no parent variablesReference, so setVariable
+            -- can't reach it; without setExpression (e.g. codelldb) there is no
+            -- way to assign it. Bail out now rather than prompting for a value we
+            -- can't apply.
+            if type(parent_ref) ~= "number" and not self._active_sess:capable("supportsSetExpression") then
+                vim.notify("[dap] adapter can't set a watch expression's value (no setExpression support)",
+                    vim.log.levels.WARN)
+                return
+            end
             inputwin.open({ prompt = "New value: ", default = d.value or "" }, function(input)
                 if input == nil then return end
                 self._active_sess:set_variable(parent_ref,
