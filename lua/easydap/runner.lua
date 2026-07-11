@@ -397,7 +397,7 @@ function M.quick_run(assignments)
         elseif not request then
             request = tok
         else
-            _warn("quick_run: unexpected argument '" .. tok .. "' (expected role=value)")
+            _warn("quick_run: unexpected argument '" .. tok .. "' (expected key=value)")
             return
         end
     end
@@ -437,7 +437,7 @@ function M.quick_run(assignments)
     for _, tok in ipairs(assignments) do
         local eq = tok:find("=", 1, true)
         if not eq then
-            _warn("quick_run: expected role=value, got " .. tok)
+            _warn("quick_run: expected key=value, got " .. tok)
             return
         end
         local role = tok:sub(1, eq - 1)

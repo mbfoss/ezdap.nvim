@@ -522,6 +522,12 @@ map("n", "<leader>du", "<Cmd>Debug view<CR>",                 { desc = "Debug: f
 map("n", "<leader>dp", "<Cmd>Debug panel<CR>",                { desc = "Debug: toggle run panel" })
 map("n", "<leader>dq", "<Cmd>Debug stop<CR>",                 { desc = "Debug: stop" })
 
+-- Count-prefixed panel jump: `2<leader>dj` jumps to run panel tab 2.
+-- With no count, `count1` defaults to 1, so a bare `<leader>dj` jumps to tab 1.
+map("n", "<leader>dj", function()
+  vim.cmd("Debug panel jump " .. vim.v.count1)
+end, { desc = "Debug: jump to run panel tab [count]" })
+
 map("n", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: inspect" })
 map("x", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: inspect selection" })
 ```
