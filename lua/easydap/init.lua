@@ -242,11 +242,8 @@ local function _register_user_commands()
         elseif sub == "panel" then
             local runner = require("easydap.runner")
             local action = args[2]
-            -- A count prefix selects a tab: `:2Debug panel` / `:2Debug panel jump`
-            -- both jump to tab 2 (count is 0 when none is given).
-            local count  = opts.count > 0 and opts.count or nil
             if action == "jump" then
-                runner.panel_jump(count or tonumber(args[3]) or nil)
+                runner.panel_jump(tonumber(args[3]))
             elseif action == "next" then
                 runner.panel_next()
             elseif action == "previous" or action == "prev" then
@@ -290,9 +287,9 @@ local function _register_user_commands()
         local eq = arg_lead:find("=", 1, true)
         if eq then
             if not adapter or not request then return {} end
-            local key = arg_lead:sub(1, eq - 1)
-            local pfx = arg_lead:sub(1, eq)
-            local val = arg_lead:sub(eq + 1)
+            local key      = arg_lead:sub(1, eq - 1)
+            local pfx      = arg_lead:sub(1, eq)
+            local val      = arg_lead:sub(eq + 1)
             -- Completing a role's value: offer file paths for path-like roles
             -- (target/cwd, or a file/dir field); nothing for the rest.
             local role_key = schema.key_of_role(adapter, request, key)
@@ -354,9 +351,6 @@ local function _register_user_commands()
         return {}
     end
 
-    -- `range = true` lets `:'<,'>Debug inspect` from visual mode be accepted
-    -- instead of erroring with E16; a leading count (`:2Debug panel`) still
-    -- arrives via `opts.count`.
     usercmd.register_user_cmd("Debug", _debug_run, {
         desc = "easydap commands",
         range = true,

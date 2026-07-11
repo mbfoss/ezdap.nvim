@@ -331,7 +331,6 @@ Each run gets a bottom split hosting its buffers, paged via a winbar:
 ```vim
 :Debug panel            " toggle the run panel
 :Debug panel next       " next tab (also: previous, jump)
-:2Debug panel           " jump straight to tab 2
 :Debug panel clean      " drop finished runs
 ```
 
