@@ -238,7 +238,7 @@ function ReplBuffer:_handle_tab()
             if #items == 1 then
                 self:_cycle_next()
             else
-                self:_print(_DIM .. _format_grid(items, self:_width()) .. _RESET)
+                self:_print(_RESET .. _format_grid(items, self:_width()) .. _RESET)
                 c.grid = true
                 self:_cycle_next()
             end
