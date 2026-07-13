@@ -1,7 +1,0 @@
-[[tasks]]
-name = "debug-remote"
-type = "debug"
-adapter = "remote"
-request = "attach"
-host = "127.0.0.1"
-port = 8086
