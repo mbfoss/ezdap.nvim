@@ -44,10 +44,11 @@ Re-exports client signals so consumers depend only on `manager`.
 - `proto.lua` — a `---@meta` file of DAP spec types; never `require()` it.
 
 **Adapters & tasks**
-- [adapters.lua](lua/easydap/adapters.lua) — built-in adapter definitions as a
+- [adapters/](lua/easydap/adapters/) — built-in adapter definitions, one file per
+  adapter, assembled by [adapters/init.lua](lua/easydap/adapters/init.lua) into a
   plain `name → easydap.AdapterDef` table: native DAP process/connection config
-  plus optional `launch_schema`/`attach_schema`. Users add/override keys directly.
-  The DAP core never reads the schemas — only `easydap.schema` does.
+  plus optional named `configurations`. Users add/override keys directly. The DAP
+  core never reads `configurations` — only `easydap.schema` does.
 - [task.lua](lua/easydap/task.lua) — the task runner backend. Consumes a native
   task (`name`/`adapter`/`request`/`parameters` + optional
   `host`/`port`/`raw_messages`) and sends `parameters` as the DAP request body
@@ -55,10 +56,11 @@ Re-exports client signals so consumers depend only on `manager`.
 - [runner.lua](lua/easydap/runner.lua) — the standalone run frontend: run files,
   `quick_run`, `run_target`, `rerun`, and the run panel.
 - [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run` and
-  the reader for `new_run_file`. Reads adapters' `launch_schema`/`attach_schema`
-  to assemble a native request body (`build`) and locate role-tagged fields.
-- [scaffold.lua](lua/easydap/scaffold.lua) — `:Debug new_run_file`: renders an
-  adapter's schema into a runnable Lua run file and opens it.
+  the reader for `new_run_file`. Reads adapters' `configurations` to fill a
+  configuration's `{placeholder}` tokens (`fill_configuration`) and assemble the
+  resulting native request body / task-level connection.
+- [scaffold.lua](lua/easydap/scaffold.lua) — `:Debug new_run_file`: renders one of
+  an adapter's configurations into a runnable Lua run file and opens it.
 
 **Persistence** — [store.lua](lua/easydap/store.lua)
 A thin path + read/write helper. The project root is the nearest ancestor of the
@@ -88,33 +90,46 @@ LOCAL=../neotoolkit.nvim scripts/vendor-neotoolkit.sh   # sync from a local chec
 easydap's own utilities live in [lua/easydap/util/](lua/easydap/util/) and are
 untouched by the vendor script.
 
-## The adapter schema format
+## The adapter configuration format
 
 An `AdapterDef` describes how to launch a DAP adapter (`command`/`host`/`port`,
-optional `setup`/`teardown`, default `request`). Its optional `launch_schema` /
-`attach_schema` is a `table<string, ParamSpec>` describing the adapter's own
-native launch/attach parameters, consumed only by `easydap.schema`.
+optional `setup`/`teardown`, default `request`). Its optional `configurations` is
+a `table<string, easydap.Configuration>` — named launch/attach templates
+(`launch`, `attach`, `remote`, …) consumed only by `easydap.schema`. Adapters carry
+no separate schema of their own: each configuration is wholly self-describing.
 
-Each `ParamSpec`:
+Each `easydap.Configuration`:
 
-| Field      | Meaning                                                                         |
-| ---------- | ------------------------------------------------------------------------------- |
-| `type`     | the value's Lua/JSON type (`string`, `boolean`, `integer`, `number`, `table`, `list`, `schema`) |
-| `kind`     | optional data refinement (`file`, `dir`, `env`, `enum`, `host`, `port`) driving CLI coercion, completion and validation |
-| `role`     | optional value-meaning tag (`target`, `args`, `cwd`, `env`, `pid`, `host`, `port`) mapping the field to a `quick_run` role |
-| `enum`     | allowed values when `kind == "enum"`                                            |
-| `default`  | value (or `fun():any`) used when the caller omits the key                       |
-| `desc`     | human description, surfaced in scaffolded run files                             |
-| `required` | whether the field must be present                                               |
-| `fixed`    | identity field the adapter pins (e.g. `type`/`name`); omitted from scaffolds    |
-| `fields`   | child specs when `type == "schema"` (a nested group → nested body table)        |
+| Field        | Meaning                                                                         |
+| ------------ | ------------------------------------------------------------------------------- |
+| `request`    | `"launch"` or `"attach"`                                                       |
+| `parameters` | the native request body, sent (mostly) verbatim; see leaf shapes below          |
+| `required`   | placeholder names that must be supplied — a missing one is a `quick_run` error; anything else left unset is simply omitted from the body |
+| `connect`    | placeholder mechanism for adapters that connect over a task-level TCP endpoint (an `AdapterDef` `host`/`port`, e.g. `remote`/`java-debug-server`) — its `host`/`port` placeholders set the task's connection, not a body field |
 
-The `role` only *locates* a field across adapters (e.g. `target` is `program` for
-codelldb, `file` for `local-lua-debugger`);
-coercion still follows the field's `kind`/`type`. See
-[adapters.lua](lua/easydap/adapters.lua) for worked examples of every shape,
-including nested `schema` groups (`debugpy`'s `connect`,
-`local-lua-debugger`'s `program`).
+A `parameters` (or `connect`) leaf value is one of:
+
+- a **literal** (string/boolean/number/table) — an identity field the
+  configuration pins itself (e.g. `type`/`name`) or a fixed default it always
+  sends;
+- a **zero-arg function** — a computed default resolved at fill time (e.g.
+  `function() return vim.fn.getcwd() end`);
+- a **placeholder string** `"{name}"` (kept as a raw string) or `"{name:kind}"`
+  (coerced from a CLI/`quick_run` string by `kind` — one of `boolean`/
+  `integer`/`number`/`file`/`dir`/`cwd`/`env`/`host`/`port`/`list`/
+  `shell_args`/`shell_program`/`shell_rest_args`; `easydap.schema.coerce` does
+  the coercion).
+
+Placeholder *names* are native to each adapter/configuration — there is no
+portable role vocabulary across adapters (e.g. codelldb's `launch`
+configuration takes `command`, a full shell command line, while debugpy's
+`launch` configuration takes `target`/`args` separately). `run_target` finds
+an adapter's launch configuration to drive via `schema.target_configuration`
+(the first `launch` configuration declaring a `target` placeholder) rather than
+assuming one exists. See each file under
+[adapters/](lua/easydap/adapters/) for worked examples of every shape,
+including nested `connect` groups (`debugpy`'s `remote` configuration) and
+computed defaults.
 
 ## Conventions
 

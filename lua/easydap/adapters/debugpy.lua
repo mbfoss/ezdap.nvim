@@ -41,7 +41,7 @@ local function _debugpy_setup(config, ctx, callback)
     local handle = term.spawn(
         { python, "-m", "debugpy.adapter", "--host", "127.0.0.1", "--port", tostring(port) },
         {
-            bufname = S.unique_buf_name("easydap://" .. (config.name or config.adapter or "debug") .. "/debugpy-adapter"),
+            bufname = ui.unique_buf_name("easydap://" .. (config.name or config.adapter or "debug") .. "/debugpy-adapter"),
             cwd     = config.cwd or vim.fn.getcwd(),
             on_exit = function() done("debugpy adapter exited unexpectedly") end,
         }
@@ -67,7 +67,7 @@ return {
     setup    = _debugpy_setup,
     teardown = function(_, ctx) if ctx then ctx.handle.stop() end end,
     configurations = {
-        program = {
+        launch = {
             request = "launch",
             parameters = {
                 type            = "python",
@@ -79,7 +79,7 @@ return {
                 showReturnValue = true,
             },
         },
-        pid = {
+        attach = {
             request = "attach",
             parameters = {
                 type            = "python",

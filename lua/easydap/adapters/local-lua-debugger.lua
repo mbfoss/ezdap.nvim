@@ -17,7 +17,7 @@ return {
     -- is set as `program.file`. Field set follows tomblind/local-lua-debugger-vscode's
     -- launch configuration.
     configurations = {
-        program = {
+        launch = {
             request = "launch",
             parameters = {
                 type = "lua-local",

@@ -68,7 +68,7 @@ return {
         -- Launch mode defaults to "debug" (LaunchConfig, service/dap/config.go);
         -- `dlvCwd`/per-mode fields (buildFlags, corefilePath, …) aren't set by
         -- this configuration — add them to the run file directly if needed.
-        program = {
+        launch = {
             request = "launch",
             parameters = {
                 mode    = "debug",
@@ -81,7 +81,7 @@ return {
         -- Only `dlv dap`-served attach mode is "local" (attach to a process the
         -- server can see); "remote" attach is served by `dlv --headless` and
         -- configured at the connection level, not through this launched-server body.
-        pid = {
+        attach = {
             request = "attach",
             parameters = {
                 mode      = "local",

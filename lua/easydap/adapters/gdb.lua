@@ -7,7 +7,7 @@
 return {
     command = { "gdb", "--interpreter=dap" },
     configurations = {
-        program = {
+        launch = {
             request = "launch",
             parameters = {
                 program = "{target:file}",
@@ -18,7 +18,7 @@ return {
         },
         -- One of pid / target / coreFile identifies what to attach to; GDB
         -- checks them in that order and uses the first present.
-        pid = {
+        attach = {
             request    = "attach",
             parameters = { pid = "{pid:integer}" },
         },

@@ -355,7 +355,7 @@ end
 
 ---Launch or attach under an adapter using one of its declared `configurations` — the
 ---request-agnostic generalisation of `run_target`. `assignments[1]`/`[2]` are
----strictly the adapter and configuration name (`{ "codelldb", "program", … }`);
+---strictly the adapter and configuration name (`{ "codelldb", "launch", … }`);
 ---every argument from `[3]` on is a `placeholder=value` assignment filled into
 ---the configuration via `schema.fill_configuration` (see `schema.configuration_placeholders`
 ---for the set a configuration accepts). A placeholder left unset is simply omitted
@@ -364,13 +364,13 @@ end
 ---the task's connection endpoint for
 ---adapters that connect over a task-level TCP endpoint (e.g. `remote`/
 ---`java-debug-server`).
----@param assignments string[]  adapter, configuration name, then "placeholder=value" tokens, e.g. { "codelldb", "program", "target=./a.out" }
+---@param assignments string[]  adapter, configuration name, then "placeholder=value" tokens, e.g. { "codelldb", "launch", "command=./a.out" }
 ---@return easydap.runner.Run?
 function M.quick_run(assignments)
     local schema = require("easydap.schema")
 
     -- The adapter and configuration name are strictly the first two positional
-    -- arguments (`quick_run codelldb program …`); every argument from the
+    -- arguments (`quick_run codelldb launch …`); every argument from the
     -- third on is a `placeholder=value` assignment.
     local adapter, configuration_name = assignments[1], assignments[2]
     if not adapter or adapter == "" or adapter:find("=", 1, true) then

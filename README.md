@@ -119,11 +119,12 @@ require("easydap").setup()
 ```
 
 Then start debugging. The fastest path is `:Debug quick_run`, which launches
-(or attaches to) an adapter with a few `role=value` arguments:
+(or attaches to) an adapter using one of its named configurations, filled in
+with a few `placeholder=value` arguments:
 
 ```vim
 " Launch a native binary under codelldb
-:Debug quick_run codelldb launch target=./a.out args=--verbose
+:Debug quick_run codelldb launch command="./a.out --verbose"
 
 " Debug a Python file
 :Debug quick_run debugpy launch target=./main.py
@@ -175,26 +176,26 @@ version-controlled run files.
 
 ### `:Debug quick_run` — one-shot launch/attach
 
-Fill an adapter's native fields with portable `role=value` tokens. The adapter
-and request come first as bare words, then any roles:
+Each adapter declares one or more named **configurations** (`launch`, `attach`,
+`remote`, …), each with its own `{placeholder}` fields. Fill them in with
+`placeholder=value` tokens; the adapter and configuration name come first as
+bare words:
 
 ```vim
-:Debug quick_run <adapter> <launch|attach> [role=value ...]
+:Debug quick_run <adapter> <configuration> [placeholder=value ...]
 ```
 
-Roles map onto whatever native keys the adapter uses:
+Placeholders are native to each adapter/configuration — e.g. codelldb's
+`launch` configuration takes `command` (a full shell command line) and `cwd`,
+while debugpy's `launch` configuration takes `target`, `args`, `cwd` and
+`env`; debugpy's `attach` configuration takes `pid`, and its `remote`
+configuration takes `host`/`port`. Common placeholder kinds include `file`/
+`dir`/`cwd` (path expansion), `env` (`A=1,B=2`), `shell_args`/
+`shell_program`/`shell_rest_args` (shell-quoted splitting) and `integer`/
+`port`/`boolean`.
 
-| Role     | Meaning                       | Used by            |
-| -------- | ----------------------------- | ------------------ |
-| `target` | program / module / file       | launch             |
-| `args`   | program arguments             | launch             |
-| `cwd`    | working directory             | launch             |
-| `env`    | environment (`A=1,B=2`)       | launch             |
-| `pid`    | process id to attach to       | attach             |
-| `host`   | host to connect to            | attach             |
-| `port`   | port to connect to            | attach             |
-
-Tab-completion offers adapters, requests, and the roles available for each.
+Tab-completion offers adapters, then configuration names, then the
+placeholders available for the chosen configuration.
 
 ### Run files — versionable debug configs
 
@@ -229,13 +230,15 @@ each adapter's upstream documentation for the fields it accepts.
 ### `:Debug new_run_file` — scaffold a run file
 
 Don't remember an adapter's fields? Generate a ready-to-edit run file,
-pre-populated from the adapter's schema with defaults, placeholders and inline
-descriptions:
+pre-populated from one of the adapter's configurations with defaults,
+placeholders and inline descriptions:
 
 ```vim
 :Debug new_run_file codelldb launch
 " → writes <project root>/codelldb_launch.lua and opens it
 ```
+
+The configuration name may be omitted when the adapter declares only one.
 
 Edit the fields, then `:Debug run_file` it.
 
@@ -550,10 +553,32 @@ optional `setup`/`teardown` pair lets you spawn a server, pick a free port, or
 provision tooling before the session connects (this is how the `debugpy` and
 `js-debug` adapters work).
 
-To make an adapter work with `:Debug quick_run` and `:Debug new_run_file`, add a
-`launch_schema`/`attach_schema` describing its native fields. See
-[`lua/easydap/adapters.lua`](lua/easydap/adapters.lua) for fully worked examples,
-and [DEVELOPMENT.md](DEVELOPMENT.md) for the schema format.
+To make an adapter work with `:Debug quick_run` and `:Debug new_run_file`, give
+it one or more named `configurations` — each a `request` plus a native
+`parameters` body whose leaves may be a literal, a computed default (a
+zero-arg function), or a `"{placeholder}"`/`"{placeholder:kind}"` token:
+
+```lua
+adapters.myadapter = {
+  command = "my-debug-adapter",
+  configurations = {
+    launch = {
+      request = "launch",
+      parameters = {
+        program = "{target:file}",
+        args    = "{args:shell_args}",
+        cwd     = "{cwd:cwd}",
+      },
+    },
+  },
+}
+```
+
+See each built-in adapter under
+[`lua/easydap/adapters/`](lua/easydap/adapters/) for fully worked examples
+(e.g. [`codelldb.lua`](lua/easydap/adapters/codelldb.lua),
+[`debugpy.lua`](lua/easydap/adapters/debugpy.lua)), and
+[DEVELOPMENT.md](DEVELOPMENT.md) for the configuration format.
 
 ## Contributing
 

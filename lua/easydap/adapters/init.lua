@@ -40,6 +40,7 @@
 ---`java-debug-server`) — its `host`/`port` placeholders set the task's
 ---connection, not a body field.
 ---@class easydap.Configuration
+---@field description string
 ---@field request     "launch"|"attach"
 ---@field parameters  table    native request body; leaves may be a literal, a zero-arg function, or `"{placeholder}"`/`"{placeholder:kind}"`
 ---@field required?   string[]                    placeholder names that must be supplied

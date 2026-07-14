@@ -6,7 +6,8 @@
 return {
     command = "codelldb",
     configurations = {
-        program = {
+        launch = {
+            description = "debug an executable",
             request = "launch",
             parameters = {
                 type    = "lldb",
@@ -16,7 +17,7 @@ return {
                 env     = "{env:env}",
             },
         },
-        pid = {
+        attach = {
             request = "attach",
             parameters = {
                 type = "lldb",

@@ -97,7 +97,7 @@ end
 ---root or cwd>/<adapter>_<configuration>.lua`). Fails if the destination already
 ---exists, rather than overwriting or picking a different name. Reports a clear
 ---error for every failure mode instead of throwing.
----@param assignments string[]  positional adapter, configuration, path, e.g. { "codelldb", "program", "./foo.lua" }
+---@param assignments string[]  positional adapter, configuration, path, e.g. { "codelldb", "launch", "./foo.lua" }
 ---@return string? path  the file that was created
 function M.new_run_file(assignments)
     -- Every argument is positional: `new_run_file <adapter> [configuration] [path]`.

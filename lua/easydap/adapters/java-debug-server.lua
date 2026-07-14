@@ -11,7 +11,7 @@ return {
         -- `host`/`port` fill both the JDWP body fields (hostName/port) and the
         -- task-level connection (this adapter's own def carries host/port, so
         -- it connects to the java-debug server over TCP too).
-        remote = {
+        attach = {
             request = "attach",
             parameters = {
                 hostName = "{host:host}",

@@ -449,9 +449,9 @@ end
 ---Scaffold a run_file from one of an adapter's configurations (fixed/default fields +
 ---placeholders) and open it for editing. `assignments` is positional: the
 ---adapter, an optional configuration name (defaults to the adapter's sole configuration),
----and an optional destination path. E.g. `new_run_file({ "codelldb", "program" })`
----writes `<root>/codelldb_program.lua`.
----@param assignments string[]  positional adapter, configuration, path, e.g. { "codelldb", "program", "./foo.lua" }
+---and an optional destination path. E.g. `new_run_file({ "codelldb", "launch" })`
+---writes `<root>/codelldb_launch.lua`.
+---@param assignments string[]  positional adapter, configuration, path, e.g. { "codelldb", "launch", "./foo.lua" }
 function M.new_run_file(assignments)
     return require("easydap.scaffold").new_run_file(assignments)
 end
@@ -471,8 +471,8 @@ end
 ---filling `{placeholder}` tokens from `placeholder=value` assignments — the
 ---command-surface entry point behind `:Debug quick_run`. `assignments` leads
 ---with the adapter and configuration name as bare positional tokens. E.g.
----`quick_run({ "codelldb", "program", "target=./a.out", "args=--verbose" })` or
----`quick_run({ "debugpy", "pid", "pid=41234" })`.
+---`quick_run({ "codelldb", "launch", "command=./a.out --verbose" })` or
+---`quick_run({ "debugpy", "attach", "pid=41234" })`.
 ---@param assignments string[]  adapter, configuration name, then "placeholder=value" tokens
 function M.quick_run(assignments)
     return require("easydap.runner").quick_run(assignments)

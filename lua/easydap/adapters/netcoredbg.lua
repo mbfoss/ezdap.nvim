@@ -6,7 +6,7 @@
 return {
     command = { "netcoredbg", "--interpreter=vscode" },
     configurations = {
-        program = {
+        launch = {
             request = "launch",
             parameters = {
                 program = "{target:file}",
@@ -15,7 +15,7 @@ return {
                 env     = "{env:env}",
             },
         },
-        pid = {
+        attach = {
             request    = "attach",
             parameters = { processId = "{pid:integer}" },
         },

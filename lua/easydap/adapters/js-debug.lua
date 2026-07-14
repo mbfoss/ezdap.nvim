@@ -64,7 +64,7 @@ return {
     -- (https://github.com/microsoft/vscode-js-debug/blob/main/OPTIONS.md). js-debug
     -- picks the debuggee's console via `console`, not runInTerminal.
     configurations = {
-        program = {
+        launch = {
             request = "launch",
             parameters = {
                 type    = "pwa-node",
@@ -74,7 +74,7 @@ return {
                 env     = "{env:env}",
             },
         },
-        pid = {
+        attach = {
             request = "attach",
             parameters = {
                 type      = "pwa-node",

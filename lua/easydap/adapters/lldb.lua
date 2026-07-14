@@ -4,7 +4,7 @@
 return {
     command = "lldb-dap",
     configurations = {
-        program = {
+        launch = {
             request = "launch",
             parameters = {
                 name    = "lldb",
@@ -15,7 +15,7 @@ return {
                 env     = "{env:env}",
             },
         },
-        pid = {
+        attach = {
             request = "attach",
             parameters = {
                 type = "lldb",
