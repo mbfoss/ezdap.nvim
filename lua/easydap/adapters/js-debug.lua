@@ -63,57 +63,31 @@ return {
     -- Field set follows vscode-js-debug's `node` launch/attach options
     -- (https://github.com/microsoft/vscode-js-debug/blob/main/OPTIONS.md). js-debug
     -- picks the debuggee's console via `console`, not runInTerminal.
-    launch_schema = {
-        type                     = { default = "pwa-node", fixed = true },
-        program                  = S.program,
-        args                     = S.args,
-        runtimeExecutable        = { type = "string", desc = "runtime to launch (e.g. node, npm)", default = "node" },
-        runtimeArgs              = { type = "list", desc = "arguments passed to the runtime executable" },
-        runtimeVersion           = { type = "string", desc = "node version to use (requires nvm/nvs)" },
-        cwd                      = S.cwd,
-        env                      = S.env,
-        envFile                  = { type = "string", kind = "file", desc = "file with environment variable definitions" },
-        console                  = {
-            type = "string",
-            kind = "enum",
-            default = "internalConsole",
-            enum = { "internalConsole", "integratedTerminal", "externalTerminal" },
-            desc = "where to launch the target"
-        },
-        stopOnEntry              = { type = "boolean", desc = "stop at entry" },
-        skipFiles                = { type = "list", desc = "glob patterns to skip while stepping" },
-        sourceMaps               = { type = "boolean", desc = "use JavaScript source maps (default true)" },
-        outFiles                 = { type = "list", desc = "glob patterns locating generated JS" },
-        smartStep                = { type = "boolean", desc = "automatically step over un-source-mapped lines" },
-        autoAttachChildProcesses = { type = "boolean", desc = "attach to child processes automatically" },
-    },
-    attach_schema = {
-        type             = { default = "pwa-node", fixed = true },
-        port             = { type = "integer", kind = "port", desc = "inspector port", default = 9229 },
-        address          = { type = "string", kind = "host", desc = "inspector host", default = "localhost" },
-        processId        = { type = "integer", desc = "process id to attach to" },
-        continueOnAttach = { type = "boolean", desc = "continue the program if it is paused when attached" },
-        restart          = { type = "boolean", desc = "reconnect if the connection is lost" },
-        cwd              = S.cwd,
-        localRoot        = { type = "string", kind = "dir", desc = "local directory containing the program" },
-        remoteRoot       = { type = "string", desc = "remote directory containing the program" },
-        skipFiles        = { type = "list", desc = "glob patterns to skip while stepping" },
-        sourceMaps       = { type = "boolean", desc = "use JavaScript source maps (default true)" },
-        outFiles         = { type = "list", desc = "glob patterns locating generated JS" },
-        timeout          = { type = "integer", desc = "retry connecting for this many milliseconds" },
-    },
-    presets     = {
+    presets = {
         program = {
-            request    = "launch",
-            parameters = { program = "{target}", args = "{args}", cwd = "{cwd}", env = "{env}" },
+            request = "launch",
+            parameters = {
+                type    = "pwa-node",
+                program = "{target:file}",
+                args    = "{args:shell_args}",
+                cwd     = "{cwd:cwd}",
+                env     = "{env:env}",
+            },
         },
-        pid     = {
-            request    = "attach",
-            parameters = { processId = "{pid}" },
+        pid = {
+            request = "attach",
+            parameters = {
+                type      = "pwa-node",
+                processId = "{pid:integer}",
+            },
         },
-        remote  = {
-            request    = "attach",
-            parameters = { address = "{host}", port = "{port}" },
+        remote = {
+            request = "attach",
+            parameters = {
+                type    = "pwa-node",
+                address = "{host:host}",
+                port    = "{port:port}",
+            },
         },
     },
 }

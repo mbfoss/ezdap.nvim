@@ -3,13 +3,10 @@
 -- itself stays minimal.
 ---@type easydap.AdapterDef
 return {
-    host          = "127.0.0.1",
-    port          = 0,
-    request       = "attach",
-    attach_schema = {
-        stopOnEntry = { type = "boolean", desc = "stop at entry" },
-    },
-    presets     = {
+    host    = "127.0.0.1",
+    port    = 0,
+    request = "attach",
+    presets = {
         connect = {
             request    = "attach",
             parameters = {},

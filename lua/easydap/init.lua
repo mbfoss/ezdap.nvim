@@ -327,15 +327,15 @@ local function _register_user_commands()
             return _quick_run_complete(schema, { unpack(rest, 2) }, arg_lead)
         end
         if rest[1] == "new_run_file" then
-            -- Positional: <adapter> [request] [path]. The path names a new file to
+            -- Positional: <adapter> [preset] [path]. The path names a new file to
             -- create, so it has no completion.
             local schema = require("easydap.schema")
             local used   = { unpack(rest, 2) }
             local pos    = #used + 1 -- 1-based position of the token being completed
             if pos == 1 then
-                return schema.adapter_names()
+                return schema.quick_run_adapters()
             elseif pos == 2 then
-                return schema.requests(used[1])
+                return schema.preset_names(used[1])
             end
             return {}
         end
@@ -446,11 +446,12 @@ function M.run_file(path)
     return runner.run_file(path)
 end
 
----Scaffold a run_file from an adapter's schema (defaults + placeholders +
----descriptions) and open it for editing. `assignments` is positional: the adapter,
----an optional request, and an optional destination path. E.g. `new_run_file({
----"codelldb", "launch" })` writes `<root>/codelldb_launch.lua`.
----@param assignments string[]  positional adapter, request, path, e.g. { "codelldb", "launch", "./foo.lua" }
+---Scaffold a run_file from one of an adapter's presets (fixed/default fields +
+---placeholders) and open it for editing. `assignments` is positional: the
+---adapter, an optional preset name (defaults to the adapter's sole preset),
+---and an optional destination path. E.g. `new_run_file({ "codelldb", "program" })`
+---writes `<root>/codelldb_program.lua`.
+---@param assignments string[]  positional adapter, preset, path, e.g. { "codelldb", "program", "./foo.lua" }
 function M.new_run_file(assignments)
     return require("easydap.scaffold").new_run_file(assignments)
 end

@@ -59,80 +59,34 @@ local function _setup(config, ctx, callback)
     end, 5000)
 end
 
--- Delve's `LaunchAttachCommonConfig` — the fields shared by every launch and
--- attach mode (service/dap/config.go). These are DAP request-body fields the
--- `dlv dap` server itself reads; client-only options like vscode-go's `showLog`
--- / `dlvFlags` are NOT part of it and are deliberately omitted.
----@type table<string, easydap.ParamSpec>
-local _common = {
-    stopOnEntry          = { type = "boolean", desc = "stop at the program entry point" },
-    backend              = {
-        type = "string",
-        kind = "enum",
-        enum = { "default", "native", "lldb", "rr" },
-        desc = "backend used by delve (dlv --backend)"
-    },
-    stackTraceDepth      = { type = "integer", desc = "max stack trace depth collected from delve" },
-    showGlobalVariables  = { type = "boolean", desc = "show global package variables" },
-    showRegisters        = { type = "boolean", desc = "show register contents while debugging" },
-    hideSystemGoroutines = { type = "boolean", desc = "hide system/runtime goroutines from the goroutine list" },
-    showPprofLabels      = { type = "list", desc = "pprof label keys to show for each goroutine" },
-    goroutineFilters     = { type = "string", desc = "goroutine filters (dlv `goroutines -with/-without`)" },
-    substitutePath       = { type = "table", desc = "local<->remote path maps: array of {from, to}" },
-}
-
 ---@type easydap.AdapterDef
 return {
-    command       = { "dlv", "dap" },
-    setup         = _setup,
-    teardown      = function(_, ctx) if ctx and ctx.handle then ctx.handle.stop() end end,
-    -- Launch modes and their per-mode fields (LaunchConfig, service/dap/config.go):
-    --   debug/test : program (+ buildFlags, output, noDebug)
-    --   exec       : program (+ noDebug)   — program is a pre-built binary
-    --   core       : program + corefilePath
-    --   replay     : traceDirPath
-    -- `dlvCwd`/`env` apply to every mode. Per-mode "required" fields can't be
-    -- gated here, so all target-ish fields stay optional (the mode dictates which
-    -- the server actually needs).
-    launch_schema = vim.tbl_extend("error", {
-        mode         = {
-            type = "string",
-            kind = "enum",
-            default = "debug",
-            enum = { "debug", "test", "exec", "replay", "core" },
-            desc = "dlv launch mode"
-        },
-        program      = {
-            type = "string",
-            kind = "file",
-            desc = "package or binary to debug (defaults to cwd; debug/test/exec/core)",
-            default = function() return vim.fn.getcwd() end
-        },
-        args         = S.args,
-        cwd          = S.cwd,
-        env          = S.env,
-        dlvCwd       = { type = "string", kind = "dir", desc = "working directory for the dlv process itself" },
-        buildFlags   = { type = "string", desc = "build flags passed to the Go compiler (single string; debug/test)" },
-        output       = { type = "string", kind = "file", desc = "output path for the compiled debug binary (debug/test)" },
-        noDebug      = { type = "boolean", desc = "run the program without debugging (debug/test/exec)" },
-        corefilePath = { type = "string", kind = "file", desc = "core dump to open (core mode)" },
-        traceDirPath = { type = "string", kind = "dir", desc = "trace directory to replay (replay mode)" },
-    }, _common),
-    -- Only `dlv dap`-served attach mode is "local" (attach to a process the server
-    -- can see); "remote" attach is served by `dlv --headless` and configured at the
-    -- connection level, not through this launched-server body.
-    attach_schema = vim.tbl_extend("error", {
-        mode      = { type = "string", kind = "enum", enum = { "local", "remote" }, default = "local", desc = "dlv attach mode" },
-        processId = { type = "integer", desc = "PID to attach to (local mode)" },
-    }, _common),
-    presets     = {
+    command  = { "dlv", "dap" },
+    setup    = _setup,
+    teardown = function(_, ctx) if ctx and ctx.handle then ctx.handle.stop() end end,
+    presets  = {
+        -- Launch mode defaults to "debug" (LaunchConfig, service/dap/config.go);
+        -- `dlvCwd`/per-mode fields (buildFlags, corefilePath, …) aren't set by
+        -- this preset — add them to the run file directly if needed.
         program = {
-            request    = "launch",
-            parameters = { program = "{target}", args = "{args}", cwd = "{cwd}", env = "{env}" },
+            request = "launch",
+            parameters = {
+                mode    = "debug",
+                program = "{target:file}",
+                args    = "{args:shell_args}",
+                cwd     = "{cwd:cwd}",
+                env     = "{env:env}",
+            },
         },
-        pid     = {
-            request    = "attach",
-            parameters = { processId = "{pid}" },
+        -- Only `dlv dap`-served attach mode is "local" (attach to a process the
+        -- server can see); "remote" attach is served by `dlv --headless` and
+        -- configured at the connection level, not through this launched-server body.
+        pid = {
+            request = "attach",
+            parameters = {
+                mode      = "local",
+                processId = "{pid:integer}",
+            },
         },
     },
 }

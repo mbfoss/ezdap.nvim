@@ -358,10 +358,10 @@ end
 ---strictly the adapter and preset name (`{ "codelldb", "program", … }`);
 ---every argument from `[3]` on is a `placeholder=value` assignment filled into
 ---the preset via `schema.fill_preset` (see `schema.preset_placeholders`
----for the set a preset accepts). A placeholder left unset falls back to its
----ParamSpec's `default`, or is only rejected when that spec marks it
----`required` — it is not mandatory just for appearing in the preset. A
----preset's optional `connect` block sets the task's connection endpoint for
+---for the set a preset accepts). A placeholder left unset is simply omitted
+---from the assembled body, unless the preset lists it in `required` — only
+---then is leaving it unset an error. A preset's optional `connect` block sets
+---the task's connection endpoint for
 ---adapters that connect over a task-level TCP endpoint (e.g. `remote`/
 ---`java-debug-server`).
 ---@param assignments string[]  adapter, preset name, then "placeholder=value" tokens, e.g. { "codelldb", "program", "target=./a.out" }
