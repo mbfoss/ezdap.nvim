@@ -197,17 +197,11 @@ function M.adapter_names()
     return names
 end
 
----A leaf value shaped like a placeholder — `"{name}"`, or `"{name:kind}"` to
----pin the coercion `kind` inline (overriding whatever `kind` the matching
----schema leaf declares, or standing alone where there is no schema leaf at
----all, e.g. a template's `connect.host`/`connect.port`). Returns nil when `value`
----isn't placeholder-shaped.
+---A leaf value shaped like a placeholder (`"{name}"`), or nil.
 ---@param value any
----@return string? name, string? kind
+---@return string?
 local function _placeholder(value)
     if type(value) ~= "string" then return nil end
-    local name, kind = value:match("^{([%w_]+):([%w_]+)}$")
-    if name then return name, kind end
     return value:match("^{([%w_]+)}$")
 end
 
@@ -410,15 +404,13 @@ end
 
 ---Fill one placeholder-bearing body (a template's `parameters` or `connect`),
 ---coercing each supplied value by the ParamSpec at its dotted native path in
----`schema`, with an inline `{name:kind}` overriding (or, where the path has no
----schema leaf — e.g. `connect.host`/`connect.port` — entirely standing in for)
----that spec's `kind`. A `values[name]` that is already non-string (e.g.
----`run_target`'s pre-split args) is used as-is, skipping coercion. A
----placeholder the caller left unset is only an error when its ParamSpec marks
----it `required`; otherwise it falls back to the spec's `default` (when set) or
----is simply omitted from the body — mirroring `M.build`'s own default/required
----handling. `default`/`required` always come from the schema, never from the
----template, even when `kind` is overridden inline.
+---`schema` (falling back to a bare passthrough when the path has no spec — e.g.
+---a `connect.host`/`connect.port` field, which lives outside the body schema).
+---A `values[name]` that is already non-string (e.g. `run_target`'s pre-split
+---args) is used as-is, skipping coercion. A placeholder the caller left unset
+---is only an error when its ParamSpec marks it `required`; otherwise it falls
+---back to the spec's `default` (when set) or is simply omitted from the body —
+---mirroring `M.build`'s own default/required handling.
 ---@param schema table?  the template's request schema, for spec lookup by path
 ---@param body table
 ---@param values table<string, any>
@@ -433,13 +425,13 @@ local function _fill_body(schema, body, values, missing, errs, prefix)
         if type(v) == "table" then
             out[key] = _fill_body(schema, v, values, missing, errs, path)
         else
-            local name, inline_kind = _placeholder(v)
+            local name = _placeholder(v)
             if not name then
                 out[key] = v
             else
                 local raw = values[name]
-                local spec = schema and _find_leaf(schema, path) or nil
                 if raw == nil then
+                    local spec = schema and _find_leaf(schema, path) or nil
                     if spec and spec.default ~= nil then
                         out[key] = M.resolve_default(spec)
                     elseif spec and spec.required then
@@ -448,10 +440,8 @@ local function _fill_body(schema, body, values, missing, errs, prefix)
                 elseif type(raw) ~= "string" then
                     out[key] = raw
                 else
-                    local eff_spec = inline_kind
-                        and vim.tbl_extend("force", {}, spec or {}, { kind = inline_kind })
-                        or spec or {}
-                    local val, cerr = M.coerce(eff_spec, raw)
+                    local spec = schema and _find_leaf(schema, path) or nil
+                    local val, cerr = M.coerce(spec or {}, raw)
                     if cerr then
                         errs[#errs + 1] = name .. ": " .. cerr
                     else
@@ -481,30 +471,27 @@ function M.fill_template(adapter, template_name, values)
     local missing, errs = {}, {}
     local body = _fill_body(request_schema, tmpl.parameters or {}, values, missing, errs)
 
-    -- `connect` is task-level, not a body field, so it has no schema leaf of
-    -- its own: `M.coerce` runs on the inline `:kind` alone, falling back to the
-    -- key's own name as its kind (`host`/`port`) when the template leaves it
-    -- unannotated — an unset host/port is always optional, since the resolved
-    -- AdapterDef's own host/port apply instead.
     local connect
     if tmpl.connect then
         connect = {}
         for key, v in pairs(tmpl.connect) do
-            local name, inline_kind = _placeholder(v)
+            local name = _placeholder(v)
+            local raw = name and values[name]
             if not name then
                 connect[key] = v
-            else
-                local raw = values[name]
-                if type(raw) == "string" then
-                    local val, cerr = M.coerce({ kind = inline_kind or key }, raw)
-                    if cerr then
-                        errs[#errs + 1] = name .. ": " .. cerr
-                    else
-                        connect[key] = val
-                    end
-                elseif raw ~= nil then
-                    connect[key] = raw
+            elseif raw == nil then
+                -- No ParamSpec governs `connect` (it's task-level, not a body
+                -- field), so an unset host/port is always optional: the
+                -- resolved AdapterDef's own host/port apply instead.
+            elseif key == "port" then
+                local n = type(raw) == "number" and raw or tonumber(raw)
+                if not n or n ~= math.floor(n) then
+                    errs[#errs + 1] = name .. (": expected an integer port, got %q"):format(tostring(raw))
+                else
+                    connect.port = math.floor(n)
                 end
+            else
+                connect[key] = raw
             end
         end
     end
