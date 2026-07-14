@@ -85,7 +85,6 @@
 ---@type table<string, easydap.AdapterDef>
 local M = {
     debugpy               = require("easydap.adapters.debugpy"),
-    ["debugpy-remote"]    = require("easydap.adapters.debugpy-remote"),
     codelldb              = require("easydap.adapters.codelldb"),
     gdb                   = require("easydap.adapters.gdb"),
     netcoredbg            = require("easydap.adapters.netcoredbg"),

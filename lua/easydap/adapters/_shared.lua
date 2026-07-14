@@ -2,7 +2,7 @@
 ---
 ---Holds the generic `program`/`args`/`cwd`/`env` ParamSpecs, small helpers
 ---(`lldb_cmds`, `unique_buf_name`, `free_port`), and the debugpy `setup`/`common`
----fields that both the `debugpy` and `debugpy-remote` adapter files use.
+---fields used by the `debugpy` adapter file (local launch/attach and remote attach).
 ---Adapter-specific field sets that live in a single file (lldb, codelldb, delve, …)
 ---stay local to that file instead of here.
 
@@ -55,7 +55,7 @@ function S.lldb_cmds(desc)
     return { type = "list", desc = desc }
 end
 
--- ── debugpy (shared by `debugpy` and `debugpy-remote`) ─────────────────────
+-- ── debugpy ──────────────────────────────────────────────────────────────
 
 -- debugpy's "Debugger Settings" — the toggles shared by launch and attach per the
 -- debugpy wiki (https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings).

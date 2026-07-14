@@ -113,7 +113,7 @@ The `role` only *locates* a field across adapters (e.g. `target` is `program` fo
 codelldb, `file` for `local-lua-debugger`);
 coercion still follows the field's `kind`/`type`. See
 [adapters.lua](lua/easydap/adapters.lua) for worked examples of every shape,
-including nested `schema` groups (`debugpy-remote`'s `connect`,
+including nested `schema` groups (`debugpy`'s `connect`,
 `local-lua-debugger`'s `program`).
 
 ## Conventions

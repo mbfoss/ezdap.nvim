@@ -152,8 +152,7 @@ table. You can override any of them or add your own — see
 
 | Adapter              | Language(s)          | Requests          | Tooling                                                       |
 | -------------------- | -------------------- | ----------------- | ------------------------------------------------------------- |
-| `debugpy`            | Python               | launch / attach   | `debugpy` (auto-resolved from Mason, else system `python3`)   |
-| `debugpy-remote`     | Python (remote)      | attach            | as `debugpy`; connects to a remote debugpy endpoint          |
+| `debugpy`            | Python (local/remote)| launch / attach   | `debugpy` (auto-resolved from Mason, else system `python3`)   |
 | `codelldb`           | C / C++ / Rust       | launch / attach   | `codelldb` on `PATH`                                          |
 | `lldb`               | C / C++ / Rust       | launch / attach   | `lldb-dap` on `PATH`                                          |
 | `gdb`                | C / C++ / native     | launch / attach   | `gdb` (>= 14, `--interpreter=dap`) on `PATH`                  |
