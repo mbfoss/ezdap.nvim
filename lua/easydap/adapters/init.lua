@@ -43,15 +43,19 @@
 
 ---A named `quick_run` preset for one adapter. `parameters` is a native request
 ---body (mirroring the shape of `launch_schema`/`attach_schema`'s output) whose
----leaf values may be the literal placeholder string `"{name}"`; `easydap.schema`
----fills those from `quick_run`'s `name=value` tokens, coercing each by the
----ParamSpec found at that field's native path in the adapter's `request` schema.
----`connect` is the same mechanism for adapters that connect over a task-level TCP
----endpoint (an `AdapterDef` `host`/`port`, e.g. `remote`/`java-debug-server`) —
----its `host`/`port` placeholders set the task's connection, not a body field.
+---leaf values may be the placeholder string `"{name}"` or `"{name:kind}"`;
+---`easydap.schema` fills those from `quick_run`'s `name=value` tokens, coercing
+---each by the ParamSpec found at that field's native path in the adapter's
+---`request` schema — or, with the `:kind` form, by that inline `kind` instead
+---(overriding the schema leaf's own `kind`, or standing alone where the path has
+---no schema leaf at all). `connect` is the same mechanism for adapters that
+---connect over a task-level TCP endpoint (an `AdapterDef` `host`/`port`, e.g.
+---`remote`/`java-debug-server`) — its `host`/`port` placeholders set the task's
+---connection, not a body field, and default to `kind = "host"`/`"port"` when
+---left unannotated.
 ---@class easydap.Template
 ---@field request     "launch"|"attach"
----@field parameters  table    native request body; leaves may be `"{placeholder}"`
+---@field parameters  table    native request body; leaves may be `"{placeholder}"`/`"{placeholder:kind}"`
 ---@field connect?    {host?: string, port?: string}   task-level connection placeholders
 
 ---A static adapter definition — the launch/attach template for one adapter.

@@ -262,8 +262,8 @@ local function _register_user_commands()
         end
     end
 
-    ---Completion for `:Debug quick_run …` tokens: the adapter (1st bare
-    ---positional), then the template name (2nd bare positional), then
+    ---Completion for `:Debug quick_run …` tokens: strictly the adapter (1st
+    ---positional), then the template name (2nd positional), then
     ---placeholder names (as `name=`) not yet supplied, or a value once `=` has
     ---been typed (file paths for a path-like placeholder).
     ---@param schema table
@@ -271,22 +271,16 @@ local function _register_user_commands()
     ---@param arg_lead string   the token being completed
     ---@return string[]
     local function _quick_run_complete(schema, used, arg_lead)
-        local adapter, template_name
+        local adapter, template_name = used[1], used[2]
         local supplied = {}
-        for _, tok in ipairs(used) do
-            local e = tok:find("=", 1, true)
-            if e then
-                supplied[tok:sub(1, e - 1)] = true
-            elseif not adapter then
-                adapter = tok
-            elseif not template_name then
-                template_name = tok
-            end
+        for i = 3, #used do
+            local e = used[i]:find("=", 1, true)
+            if e then supplied[used[i]:sub(1, e - 1)] = true end
         end
 
         local eq = arg_lead:find("=", 1, true)
         if eq then
-            if not adapter or not template_name then return {} end
+            if not adapter or not template_name or #used < 2 then return {} end
             local name = arg_lead:sub(1, eq - 1)
             local pfx  = arg_lead:sub(1, eq)
             local val  = arg_lead:sub(eq + 1)
@@ -299,9 +293,9 @@ local function _register_user_commands()
         end
 
         -- No `=` yet: complete the adapter, then the template, then placeholder names.
-        if not adapter then
+        if #used == 0 then
             return schema.quick_run_adapters()
-        elseif not template_name then
+        elseif #used == 1 then
             return schema.template_names(adapter)
         end
         local out = {}
