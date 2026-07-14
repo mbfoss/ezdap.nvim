@@ -8,6 +8,7 @@ return {
     configurations = {
         -- `quick_run bash-debug-adapter bash_script script=./run.sh`.
         bash_script = {
+            description = "debug a bash script",
             request = "launch",
             parameters = {
                 type = "bashdb",

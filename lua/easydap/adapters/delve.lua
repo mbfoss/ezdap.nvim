@@ -69,6 +69,7 @@ return {
         -- `dlvCwd`/per-mode fields (buildFlags, corefilePath, …) aren't set by
         -- this configuration — add them to the run file directly if needed.
         launch = {
+            description = "debug a Go package/binary",
             request = "launch",
             parameters = {
                 mode    = "debug",
@@ -82,6 +83,7 @@ return {
         -- server can see); "remote" attach is served by `dlv --headless` and
         -- configured at the connection level, not through this launched-server body.
         attach = {
+            description = "attach to a running process by pid",
             request = "attach",
             parameters = {
                 mode      = "local",

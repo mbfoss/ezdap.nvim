@@ -68,6 +68,7 @@ return {
     teardown = function(_, ctx) if ctx then ctx.handle.stop() end end,
     configurations = {
         launch = {
+            description = "debug a Python file",
             request = "launch",
             parameters = {
                 type            = "python",
@@ -80,6 +81,7 @@ return {
             },
         },
         attach = {
+            description = "attach to a running process by pid",
             request = "attach",
             parameters = {
                 type            = "python",
@@ -92,6 +94,7 @@ return {
         -- configuration-level `connect` block (that's reserved for a task-level TCP
         -- endpoint, which this adapter's def doesn't declare).
         remote = {
+            description = "attach to a remote debugpy process over host/port",
             request = "attach",
             parameters = {
                 type = "python",

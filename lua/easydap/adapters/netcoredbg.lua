@@ -7,6 +7,7 @@ return {
     command = { "netcoredbg", "--interpreter=vscode" },
     configurations = {
         launch = {
+            description = "debug a .NET assembly",
             request = "launch",
             parameters = {
                 program = "{target:file}",
@@ -16,6 +17,7 @@ return {
             },
         },
         attach = {
+            description = "attach to a running process by pid",
             request    = "attach",
             parameters = { processId = "{pid:integer}" },
         },

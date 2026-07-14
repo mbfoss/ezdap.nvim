@@ -5,6 +5,7 @@ return {
     command = "lldb-dap",
     configurations = {
         launch = {
+            description = "debug an executable",
             request = "launch",
             parameters = {
                 name    = "lldb",
@@ -16,6 +17,7 @@ return {
             },
         },
         attach = {
+            description = "attach to a running process by pid",
             request = "attach",
             parameters = {
                 type = "lldb",
@@ -25,6 +27,7 @@ return {
         -- lldb-dap's `gdb-remote-*` are plain body fields (this stdio adapter is
         -- not task-level TCP), so this configuration has no `connect` block.
         gdb_remote = {
+            description = "attach over a gdb-remote (gdbserver) connection",
             request = "attach",
             parameters = {
                 type                 = "lldb",

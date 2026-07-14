@@ -8,6 +8,7 @@ return {
     request = "attach",
     configurations = {
         connect = {
+            description = "attach to a DAP server listening on host:port",
             request    = "attach",
             parameters = {},
             connect    = { host = "{host}", port = "{port}" },

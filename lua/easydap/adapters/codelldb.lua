@@ -18,6 +18,7 @@ return {
             },
         },
         attach = {
+            description = "attach to a running process by pid",
             request = "attach",
             parameters = {
                 type = "lldb",

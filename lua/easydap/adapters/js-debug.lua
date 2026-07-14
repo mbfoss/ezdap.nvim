@@ -65,6 +65,7 @@ return {
     -- picks the debuggee's console via `console`, not runInTerminal.
     configurations = {
         launch = {
+            description = "debug a Node.js/JS/TS file",
             request = "launch",
             parameters = {
                 type    = "pwa-node",
@@ -75,6 +76,7 @@ return {
             },
         },
         attach = {
+            description = "attach to a running process by pid",
             request = "attach",
             parameters = {
                 type      = "pwa-node",
@@ -82,6 +84,7 @@ return {
             },
         },
         remote = {
+            description = "attach to a remote Node.js process over host/port",
             request = "attach",
             parameters = {
                 type    = "pwa-node",

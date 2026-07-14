@@ -18,6 +18,7 @@ return {
     -- launch configuration.
     configurations = {
         launch = {
+            description = "debug a Lua script",
             request = "launch",
             parameters = {
                 type = "lua-local",

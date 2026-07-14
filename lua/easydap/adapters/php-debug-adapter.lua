@@ -5,6 +5,7 @@ return {
     command = "php-debug-adapter",
     configurations = {
         listen = {
+            description = "listen for an incoming Xdebug connection",
             request = "launch",
             parameters = {
                 type = "php",

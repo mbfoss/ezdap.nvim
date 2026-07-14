@@ -12,6 +12,7 @@ return {
         -- task-level connection (this adapter's own def carries host/port, so
         -- it connects to the java-debug server over TCP too).
         attach = {
+            description = "attach to an external java-debug server (e.g. via nvim-jdtls)",
             request = "attach",
             parameters = {
                 hostName = "{host:host}",
