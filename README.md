@@ -223,8 +223,6 @@ pre-populated from one of the adapter's configurations.
 " → writes <project root>/codelldb_launch.lua and opens it
 ```
 
-The configuration name may be omitted when the adapter declares only one.
-
 Edit the fields, then `:Debug run_file` it.
 
 ### From Lua
