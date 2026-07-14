@@ -215,9 +215,8 @@ each adapter's upstream documentation for the fields it accepts.
 
 ### `:Debug new_run_file` — scaffold a run file
 
-Don't remember an adapter's fields? Generate a ready-to-edit run file,
-pre-populated from one of the adapter's configurations with defaults,
-placeholders and inline descriptions:
+Generate a ready-to-edit run file,
+pre-populated from one of the adapter's configurations.
 
 ```vim
 :Debug new_run_file codelldb launch
