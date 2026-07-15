@@ -55,11 +55,11 @@ Re-exports client signals so consumers depend only on `manager`.
 - [runner.lua](lua/easydap/runner.lua) — the standalone run frontend: run files,
   `quick_run`, `rerun`, and the run panel.
 - [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run` and
-  the reader for `new_run_file`. Reads adapters' `configurations` to fill a
-  configuration's `{placeholder}` tokens (`fill_configuration`) and assemble the
-  resulting native request body / task-level connection.
-- [scaffold.lua](lua/easydap/scaffold.lua) — `:Debug new_run_file`: renders one of
-  an adapter's configurations into a runnable Lua run file and opens it.
+  the reader for `new_run_file`. Coerces a configuration's declared `inputs` from
+  `name=value` arguments and calls its `fill`/`connect` (`fill_configuration`) to
+  assemble the resulting native request body / task-level connection.
+- [scaffold.lua](lua/easydap/scaffold.lua) — `:Debug new_run_file`: renders a
+  configuration's `template` into a runnable Lua run file and opens it.
 
 **Persistence** — [store.lua](lua/easydap/store.lua)
 A thin path + read/write helper. The project root is the nearest ancestor of the
@@ -99,64 +99,61 @@ no separate schema of their own: each configuration is wholly self-describing.
 
 Each `easydap.Configuration`:
 
-| Field          | Meaning                                                                         |
-| -------------- | ------------------------------------------------------------------------------- |
-| `request`      | `"launch"` or `"attach"`                                                       |
-| `placeholders` | the configuration's declared inputs — `name -> easydap.Placeholder`; see below   |
-| `parameters`   | the native request body, sent (mostly) verbatim; see leaf shapes below          |
-| `connect`      | placeholder mechanism for adapters that connect over a task-level TCP endpoint (an `AdapterDef` `host`/`port`, e.g. `remote`/`java-debug-server`) — its `host`/`port` placeholders set the task's connection, not a body field |
+| Field         | Meaning                                                                         |
+| ------------- | ------------------------------------------------------------------------------- |
+| `request`     | `"launch"` or `"attach"`                                                        |
+| `inputs`      | what the configuration accepts — `name -> easydap.Input`; see below             |
+| `fill`        | `fun(params, inputs)` — assembles the native request body for `quick_run`       |
+| `template`    | a static native body, seeded with example values, that `new_run_file` scaffolds |
+| `connect`     | `fun(inputs): {host, port}` for adapters that connect over a task-level TCP endpoint (an `AdapterDef` `host`/`port`, e.g. `remote`/`java-debug-server`) — the task's connection, not a body field |
 
-Each `easydap.Placeholder` declares one input up front:
+Each `easydap.Input` declares one input up front:
 
 | Field      | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
-| `type`     | what the input *is* — how its raw `quick_run` string is read: one of `string`/`boolean`/`integer`/`number`/`file`/`dir`/`cwd`/`env`/`host`/`port`/`list`/`shell_args` (`easydap.schema.coerce` does the reading). It also drives type-aware value completion and the blank a scaffolded run_file is seeded with. Defaults to `string` — omit it for an input taken verbatim, including one whose every use carries a transform, since the declared type is then never consulted |
-| `required` | when `true`, leaving it unset is a `quick_run` error; any other unset placeholder is simply omitted from the body |
+| `type`     | what the input *is* — how its raw `quick_run` string is read: one of `string`/`boolean`/`integer`/`number`/`file`/`dir`/`cwd`/`env`/`host`/`port`/`list`/`shell_args` (`easydap.schema.coerce` does the reading). It also drives type-aware value completion. Defaults to `string` — omit it for an input taken verbatim |
+| `required` | when `true`, leaving it unset is a `quick_run` error; any other unset input simply arrives at `fill` as nil |
 | `description` | a few words on what the input means, e.g. `"process id to attach to"` |
 
-A `parameters` (or `connect`) leaf value is one of:
+### `fill` and `template` are separate paths
 
-- a **literal** (string/boolean/number/table) — an identity field the
-  configuration pins itself (e.g. `type`/`name`) or a fixed default it always
-  sends;
-- a **zero-arg function** — a computed default resolved at fill time (e.g.
-  `function() return vim.fn.getcwd() end`);
-- a **`"{name}"` token** naming a declared placeholder, read by that
-  placeholder's `type`. Tokens may also be embedded in a longer string
-  (`"target create {program}"`), which interpolates; if any embedded token is
-  unset, the whole leaf is dropped.
+They serve different commands and never meet. Keeping them apart is the point of
+the format — each answers one question honestly instead of one table half-answering
+both:
 
-### Types vs transforms
+- **`fill(params, inputs)`** builds the body for `quick_run`. `params` starts
+  empty; assign into it from the coerced `inputs`. Identity fields the adapter
+  pins (`type`/`name`) and fixed defaults are assigned here too, as plain
+  literals. An unset input is nil, and Lua drops nil-valued keys, so
+  `params.cwd = inputs.cwd` omits `cwd` when it wasn't supplied — assign
+  unconditionally and optional fields take care of themselves. Guard only when a
+  field is *derived* from an input (`if inputs.program then params.targetCreateCommands
+  = { "target create " .. inputs.program } end`), since indexing nil would throw.
+- **`template`** is what `new_run_file` renders into the generated run file. A
+  run file's `parameters` goes to the adapter verbatim (`easydap.task`), so it
+  never passes through `fill`. A leaf may be a literal or a zero-arg function
+  resolved at scaffold time (`vim.fn.getcwd`, `function() return
+  vim.fn.exepath("lua") end`). Seed it with realistic values a reader can edit —
+  `program = "./a.out"`, not `program = ""` — since nothing else in the generated
+  file explains the field.
 
-These are two distinct vocabularies, and it's worth keeping them straight:
+The field list appears in both, and nothing checks they agree. That's the price:
+drift costs scaffold quality (a field the run file doesn't seed), never
+`quick_run` correctness.
 
-- a **type** says what an input *is* (`file`, `port`, `env`, …). It's declared on
-  a placeholder, and it's how a bare `"{name}"` is read.
-- a **transform** says what one field takes *from* an input. It is never a
-  placeholder's `type` — only ever written in a token, as `"{name:transform}"`.
-  There are two, and both slice a shell command line: `shell_program` (its first
-  word, expanded as a path) and `shell_rest_args` (everything after).
+Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are easydap's
+own user-facing vocabulary — the `name=value` tokens typed at `quick_run` — not
+the adapter's. The `params` keys they fill keep whatever casing the adapter's
+wire protocol uses, so pairings like `params.stopOnEntry = inputs.stop_on_entry`
+are normal and correct.
 
-Transforms exist for the one case where a single input feeds two fields
-differently: the `launch` configurations of `codelldb`/`gdb`/`lldb` split one
-`command` command line into `program = "{command:shell_program}"` and
-`args = "{command:shell_rest_args}"`. Outside that, prefer a bare `"{name}"` and
-a declared `type`. `easydap.schema.coerce` accepts either — a type or a
-transform — which the annotations call an `easydap.PlaceholderKind`.
-
-Placeholder *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are
-easydap's own user-facing vocabulary — the `name=value` tokens typed at
-`quick_run` — not the adapter's. The `parameters` keys they fill keep whatever
-casing the adapter's wire protocol uses, so pairings like
-`stopOnEntry = "{stop_on_entry}"` or `waitFor = "{wait_for}"` are normal and correct.
-
-Which names a configuration takes is still up to it — there is no portable role
-vocabulary across adapters (e.g. codelldb's `launch` configuration takes
-`command`, a full shell command line, while debugpy's `launch` configuration
-takes `target`/`args` separately). See each file under
-[adapters/](lua/easydap/adapters/) for worked examples of every shape,
-including nested `connect` groups (`debugpy`'s `remote` configuration) and
-computed defaults.
+Which names a configuration takes is up to it — there is no portable role
+vocabulary across adapters — but by convention a `launch` configuration takes one
+`command` input (`type = "shell_args"`) carrying the whole command line, and
+`fill` splits it into that adapter's own program/args fields. See each file under
+[adapters/](lua/easydap/adapters/) for worked examples of every shape, including
+nested `connect` groups (`debugpy`'s `remote` configuration), custom-launch
+command strings (`codelldb`'s `core`) and computed template seeds.
 
 ## Conventions
 

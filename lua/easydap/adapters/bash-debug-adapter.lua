@@ -10,17 +10,17 @@ return {
         bash_script = {
             description = "debug a bash script",
             request = "launch",
-            placeholders = {
+            inputs = {
                 script = { type = "file", description = "bash script to debug" },
                 cwd    = { type = "cwd", description = "working directory" },
                 env    = { type = "env", description = "environment variables" },
             },
-            parameters = {
+            template = {
                 type = "bashdb",
                 name = "Launch Bash Script",
-                program = "{script}",
-                cwd     = "{cwd}",
-                env     = "{env}",
+                program = "./run.sh",
+                cwd     = vim.fn.getcwd,
+                env     = { EXAMPLE = "value" },
                 pathBash      = "bash",
                 pathBashdb    = "bash-debug-adapter",
                 pathBashdbLib = function()
@@ -31,6 +31,21 @@ return {
                 pathPkill    = "pkill",
                 terminalKind = "integrated",
             },
+            fill = function(params, inputs)
+                params.type    = "bashdb"
+                params.name    = "Launch Bash Script"
+                params.program = inputs.script
+                params.cwd     = inputs.cwd
+                params.env     = inputs.env
+                params.pathBash      = "bash"
+                params.pathBashdb    = "bash-debug-adapter"
+                params.pathBashdbLib =
+                    vim.fs.joinpath(vim.fn.stdpath("data"), "mason", "packages", "bash-debug-adapter")
+                params.pathCat      = "cat"
+                params.pathMkfifo   = "mkfifo"
+                params.pathPkill    = "pkill"
+                params.terminalKind = "integrated"
+            end,
         },
     },
 }

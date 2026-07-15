@@ -41,36 +41,39 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   definitions as a plain `name -> easydap.AdapterDef` table (one file per adapter
   under `easydap/adapters/`, assembled here): native DAP process/connection config
   plus an optional `configurations` table (`name -> easydap.Configuration`) of
-  launch/attach templates. Each `Configuration` is self-describing — a
-  `placeholders` table declaring its inputs (`name -> easydap.Placeholder`, each
-  with a `type`, `description`, and optional `required`), plus a native request
-  body (`parameters`) whose leaves may be literals, zero-arg functions, or
-  `"{name}"` tokens referring to those placeholders. Users add/override keys
-  directly. The DAP core never reads the configurations — only `easydap.schema`
-  does.
+  launch/attach templates. Each `Configuration` is self-describing: an `inputs`
+  table declaring what it accepts (`name -> easydap.Input`, each with a `type`,
+  `description`, and optional `required`), a `fill(params, inputs)` that assembles
+  the native request body, a `template` (a static native body seeded with example
+  values, for scaffolding), and an optional `connect(inputs)` returning a
+  task-level `host`/`port`. Users add/override keys directly. The DAP core never
+  reads the configurations — only `easydap.schema` does.
 - [task.lua](lua/easydap/task.lua) — task runner (`easydap.TaskTypeDef`); the
   `run` backend for external task runners. Consumes a native task
   (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`/
   `raw_messages`) and sends `parameters` as the DAP request body verbatim.
 - [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run` and
-  the configuration reader for `new_run_file`. Reads the adapters' `configurations`
-  and fills each `Configuration`'s `parameters`/`connect` body, substituting
-  `"{name}"` tokens. `fill_configuration` reads `quick_run`'s `name=value` inputs
-  by each placeholder's declared `type` (`coerce`) and assembles the native request
-  body plus any task-level connection; placeholders marked `required` are errors
-  when left unset, other unset placeholders are omitted. Types and transforms are
-  distinct: a *type* (`file`, `port`, …) says what an input is and may be declared
-  on a placeholder; a *transform* (`shell_program`/`shell_rest_args`) says what one
-  field takes *from* an input, appears only in a `"{name:transform}"` token, and is
-  reserved for one input feeding two fields differently (a `command` line split
-  into `program`/`args`). Introspection helpers —
+  the configuration reader for `new_run_file`. `fill_configuration` reads
+  `quick_run`'s `name=value` arguments by each input's declared `type` (`coerce`),
+  then calls the configuration's `fill`/`connect` to assemble the native request
+  body and any task-level connection; inputs marked `required` are errors when
+  left unset, other unset inputs arrive at `fill` as nil (so Lua drops the fields
+  assigned from them). Introspection helpers —
   `configurations`/`configuration`/`configuration_names`,
-  `configuration_placeholders`/`configuration_placeholder_types`/
-  `configuration_required`, `requests`, `quick_run_adapters` — drive completion and
-  scaffolding. Native keys throughout — no portable/generic field vocabulary.
+  `configuration_input_names`/`configuration_input_types`/`configuration_required`,
+  `requests`, `quick_run_adapters` — drive completion and scaffolding. Native keys
+  throughout — no portable/generic field vocabulary.
 - [scaffold.lua](lua/easydap/scaffold.lua) — run-file creation behind `:Debug
-  new_run_file`: renders one of an adapter's `configurations` (via `easydap.schema`)
-  into a runnable Lua run_file, seeded with defaults/placeholders, then opens it.
+  new_run_file`: renders a configuration's `template` (via `easydap.schema`) into a
+  runnable Lua run_file, then opens it.
+
+  `fill` and `template` are deliberately separate and never meet: `quick_run` goes
+  `inputs -> fill -> body -> task`, while `new_run_file` goes `template -> Lua
+  source -> user edits -> task` (a run file's `parameters` is sent verbatim, never
+  filled). One table serving both is what forced the old `"{name}"`/`"{name:transform}"`
+  token grammar, which leaked unsubstituted tokens into scaffolded files. The field
+  list living in both `fill` and `template` is the accepted cost: drift there hurts
+  scaffold quality, never `quick_run` correctness.
 
 **Persistence** — [store.lua](lua/easydap/store.lua)
 - A thin path + read/write helper. The project root is the nearest ancestor of

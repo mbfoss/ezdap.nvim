@@ -236,7 +236,7 @@ function M.start(config, callbacks)
         return start_id
     end
 
-    progress("config resolved: " .. vim.inspect(cfg))
+    progress("config resolved:\n" .. vim.inspect(cfg))
 
     if cfg.port then
         M._start_tcp(cfg, callbacks, progress)

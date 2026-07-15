@@ -6,29 +6,41 @@
 return {
     command = { "netcoredbg", "--interpreter=vscode" },
     configurations = {
+        -- One `command` input carries the whole command line; `fill` splits it into
+        -- `program` (the first word) and `args` (the rest).
         launch = {
             description = "debug a .NET assembly",
             request = "launch",
-            placeholders = {
-                target = { type = "file", description = ".NET assembly to run" },
-                args   = { type = "shell_args", description = "arguments to the program" },
-                cwd    = { type = "cwd", description = "working directory" },
-                env    = { type = "env", description = "environment variables" },
+            inputs = {
+                command = { type = "shell_args", description = "command line to debug" },
+                cwd     = { type = "cwd", description = "working directory" },
+                env     = { type = "env", description = "environment variables" },
             },
-            parameters = {
-                program = "{target}",
-                args    = "{args}",
-                cwd     = "{cwd}",
-                env     = "{env}",
+            template = {
+                program = "./bin/Debug/net8.0/App.dll",
+                args    = { "--verbose" },
+                cwd     = vim.fn.getcwd,
+                env     = { EXAMPLE = "value" },
             },
+            fill = function(params, inputs)
+                if inputs.command then
+                    params.program = vim.fn.expand(inputs.command[1] or "")
+                    params.args    = { unpack(inputs.command, 2) }
+                end
+                params.cwd = inputs.cwd
+                params.env = inputs.env
+            end,
         },
         attach = {
             description = "attach to a running process by pid",
             request    = "attach",
-            placeholders = {
+            inputs = {
                 pid = { type = "integer", description = "process id to attach to" },
             },
-            parameters = { processId = "{pid}" },
+            template = { processId = 0 },
+            fill = function(params, inputs)
+                params.processId = inputs.pid
+            end,
         },
     },
 }

@@ -10,12 +10,14 @@ return {
         connect = {
             description = "attach to a DAP server listening on host:port",
             request    = "attach",
-            placeholders = {
+            inputs = {
                 host = { type = "host", description = "DAP server host" },
                 port = { type = "port", description = "DAP server port" },
             },
-            parameters = {},
-            connect    = { host = "{host}", port = "{port}" },
+            template = {},
+            connect = function(inputs)
+                return { host = inputs.host, port = inputs.port }
+            end,
         },
     },
 }

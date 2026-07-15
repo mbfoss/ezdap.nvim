@@ -7,15 +7,21 @@ return {
         listen = {
             description = "listen for an incoming Xdebug connection",
             request = "launch",
-            placeholders = {
+            inputs = {
                 cwd = { type = "cwd", description = "working directory" },
             },
-            parameters = {
+            template = {
                 type = "php",
                 name = "Listen for Xdebug",
-                cwd  = "{cwd}",
+                cwd  = vim.fn.getcwd,
                 port = 9003,
             },
+            fill = function(params, inputs)
+                params.type = "php"
+                params.name = "Listen for Xdebug"
+                params.cwd  = inputs.cwd
+                params.port = 9003
+            end,
         },
     },
 }

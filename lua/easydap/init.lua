@@ -277,9 +277,9 @@ local function _register_user_commands()
     end
 
     ---Completion for `:Debug quick_run …` tokens: the adapter (1st bare
-    ---positional), then the configuration name (2nd bare positional), then
-    ---placeholder names (as `name=`) not yet supplied, or a value once `=` has
-    ---been typed (file paths for a path-like placeholder).
+    ---positional), then the configuration name (2nd bare positional), then input
+    ---names (as `name=`) not yet supplied, or a value once `=` has been typed
+    ---(file paths for a path-like input).
     ---@param schema table
     ---@param used string[]     already-typed tokens preceding the one being completed
     ---@param arg_lead string   the token being completed
@@ -304,25 +304,24 @@ local function _register_user_commands()
             local name = arg_lead:sub(1, eq - 1)
             local pfx  = arg_lead:sub(1, eq)
             local val  = arg_lead:sub(eq + 1)
-            -- Completing a placeholder's value: offer paths for a path-typed
-            -- placeholder, per the `type` its configuration declares; nothing
-            -- for the rest.
-            local ptype = schema.configuration_placeholder_types(adapter, configuration_name)[name]
-            local comp_type = (ptype == "file" and "file")
-                or ((ptype == "dir" or ptype == "cwd") and "dir")
+            -- Completing an input's value: offer paths for a path-typed input,
+            -- per the `type` its configuration declares; nothing for the rest.
+            local itype = schema.configuration_input_types(adapter, configuration_name)[name]
+            local comp_type = (itype == "file" and "file")
+                or ((itype == "dir" or itype == "cwd") and "dir")
                 or nil
             if not comp_type then return {} end
             return vim.tbl_map(function(f) return pfx .. f end, vim.fn.getcompletion(val, comp_type))
         end
 
-        -- No `=` yet: complete the adapter, then the configuration, then placeholder names.
+        -- No `=` yet: complete the adapter, then the configuration, then input names.
         if not adapter then
             return schema.quick_run_adapters()
         elseif not configuration_name then
             return schema.configuration_names(adapter)
         end
         local out = {}
-        for _, name in ipairs(schema.configuration_placeholders(adapter, configuration_name)) do
+        for _, name in ipairs(schema.configuration_input_names(adapter, configuration_name)) do
             if not supplied[name] then out[#out + 1] = name .. "=" end
         end
         return out
@@ -339,7 +338,7 @@ local function _register_user_commands()
             return vim.fn.getcompletion(arg_lead, "file")
         end
         if rest[1] == "quick_run" then
-            -- <adapter> <configuration> <placeholder>=<value>…
+            -- <adapter> <configuration> <input>=<value>…
             local schema = require("easydap.schema")
             return _quick_run_complete(schema, { unpack(rest, 2) }, arg_lead)
         end
@@ -468,11 +467,11 @@ function M.run_file(path)
     return runner.run_file(path)
 end
 
----Scaffold a run_file from one of an adapter's configurations (fixed/default fields +
----placeholders) and open it for editing. `assignments` is positional: the
----adapter, an optional configuration name (defaults to the adapter's sole configuration),
----and an optional destination path. E.g. `new_run_file({ "codelldb", "launch" })`
----writes `<root>/codelldb_launch.lua`.
+---Scaffold a run_file from one of an adapter's configurations — its `template`, a
+---native body seeded with example values — and open it for editing. `assignments`
+---is positional: the adapter, an optional configuration name (defaults to the
+---adapter's sole configuration), and an optional destination path. E.g.
+---`new_run_file({ "codelldb", "launch" })` writes `<root>/codelldb_launch.lua`.
 ---@param assignments string[]  positional adapter, configuration, path, e.g. { "codelldb", "launch", "./foo.lua" }
 function M.new_run_file(assignments)
     _require_setup("new_run_file")
@@ -480,12 +479,12 @@ function M.new_run_file(assignments)
 end
 
 ---Launch or attach under an adapter using one of its declared `configurations`,
----filling `{placeholder}` tokens from `placeholder=value` assignments — the
----command-surface entry point behind `:Debug quick_run`. `assignments` leads
----with the adapter and configuration name as bare positional tokens. E.g.
+---assembling the request body from `input=value` assignments — the command-surface
+---entry point behind `:Debug quick_run`. `assignments` leads with the adapter and
+---configuration name as bare positional tokens. E.g.
 ---`quick_run({ "codelldb", "launch", "command=./a.out --verbose" })` or
 ---`quick_run({ "debugpy", "attach", "pid=41234" })`.
----@param assignments string[]  adapter, configuration name, then "placeholder=value" tokens
+---@param assignments string[]  adapter, configuration name, then "input=value" tokens
 function M.quick_run(assignments)
     _require_setup("quick_run")
     return require("easydap.runner").quick_run(assignments)

@@ -67,57 +67,81 @@ return {
     setup    = _debugpy_setup,
     teardown = function(_, ctx) if ctx then ctx.handle.stop() end end,
     configurations = {
+        -- One `command` input carries the whole command line; `fill` splits it into
+        -- `program` (the first word) and `args` (the rest).
         launch = {
             description = "debug a Python file",
             request = "launch",
-            placeholders = {
-                target = { type = "file", description = "Python file to run" },
-                args   = { type = "shell_args", description = "arguments to the program" },
-                cwd    = { type = "cwd", description = "working directory" },
-                env    = { type = "env", description = "environment variables" },
+            inputs = {
+                command = { type = "shell_args", description = "command line to debug" },
+                cwd     = { type = "cwd", description = "working directory" },
+                env     = { type = "env", description = "environment variables" },
             },
-            parameters = {
+            template = {
                 type            = "python",
-                program         = "{target}",
-                args            = "{args}",
-                cwd             = "{cwd}",
-                env             = "{env}",
+                program         = "./main.py",
+                args            = { "--verbose" },
+                cwd             = vim.fn.getcwd,
+                env             = { EXAMPLE = "value" },
                 justMyCode      = false,
                 showReturnValue = true,
             },
+            fill = function(params, inputs)
+                params.type = "python"
+                if inputs.command then
+                    params.program = vim.fn.expand(inputs.command[1] or "")
+                    params.args    = { unpack(inputs.command, 2) }
+                end
+                params.cwd = inputs.cwd
+                params.env = inputs.env
+                params.justMyCode      = false
+                params.showReturnValue = true
+            end,
         },
         attach = {
             description = "attach to a running process by pid",
             request = "attach",
-            placeholders = {
+            inputs = {
                 pid = { type = "integer", description = "process id to attach to" },
             },
-            parameters = {
+            template = {
                 type            = "python",
-                processId       = "{pid}",
+                processId       = 0,
                 justMyCode      = false,
                 showReturnValue = true,
             },
+            fill = function(params, inputs)
+                params.type      = "python"
+                params.processId = inputs.pid
+                params.justMyCode      = false
+                params.showReturnValue = true
+            end,
         },
         -- The `connect.*` body group targets the remote process — not the
-        -- configuration-level `connect` block (that's reserved for a task-level TCP
-        -- endpoint, which this adapter's def doesn't declare).
+        -- configuration-level `connect` function (that's reserved for a task-level
+        -- TCP endpoint, which this adapter's def doesn't declare).
         remote = {
             description = "attach to a remote debugpy process over host/port",
             request = "attach",
-            placeholders = {
+            inputs = {
                 host = { type = "host", description = "remote debugpy host" },
                 port = { type = "port", description = "remote debugpy port" },
             },
-            parameters = {
+            template = {
                 type = "python",
                 connect = {
-                    host = "{host}",
-                    port = "{port}",
+                    host = "127.0.0.1",
+                    port = 5678,
                 },
                 justMyCode      = false,
                 showReturnValue = true,
             },
+            fill = function(params, inputs)
+                params.type    = "python"
+                params.connect = { host = inputs.host, port = inputs.port }
+                params.justMyCode      = false
+                params.showReturnValue = true
+            end,
         },
     },
 }

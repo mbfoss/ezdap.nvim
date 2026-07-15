@@ -68,22 +68,32 @@ return {
         -- Launch mode defaults to "debug" (LaunchConfig, service/dap/config.go);
         -- `dlvCwd`/per-mode fields (buildFlags, corefilePath, …) aren't set by
         -- this configuration — add them to the run file directly if needed.
+        -- One `command` input carries the whole command line; `fill` splits it into
+        -- `program` (the first word) and `args` (the rest).
         launch = {
             description = "debug a Go package/binary",
             request = "launch",
-            placeholders = {
-                target = { type = "file", description = "Go package or binary to run" },
-                args   = { type = "shell_args", description = "arguments to the program" },
-                cwd    = { type = "cwd", description = "working directory" },
-                env    = { type = "env", description = "environment variables" },
+            inputs = {
+                command = { type = "shell_args", description = "command line to debug" },
+                cwd     = { type = "cwd", description = "working directory" },
+                env     = { type = "env", description = "environment variables" },
             },
-            parameters = {
+            template = {
                 mode    = "debug",
-                program = "{target}",
-                args    = "{args}",
-                cwd     = "{cwd}",
-                env     = "{env}",
+                program = ".",
+                args    = { "--verbose" },
+                cwd     = vim.fn.getcwd,
+                env     = { EXAMPLE = "value" },
             },
+            fill = function(params, inputs)
+                params.mode = "debug"
+                if inputs.command then
+                    params.program = vim.fn.expand(inputs.command[1] or "")
+                    params.args    = { unpack(inputs.command, 2) }
+                end
+                params.cwd = inputs.cwd
+                params.env = inputs.env
+            end,
         },
         -- Only `dlv dap`-served attach mode is "local" (attach to a process the
         -- server can see); "remote" attach is served by `dlv --headless` and
@@ -91,13 +101,17 @@ return {
         attach = {
             description = "attach to a running process by pid",
             request = "attach",
-            placeholders = {
+            inputs = {
                 pid = { type = "integer", description = "process id to attach to" },
             },
-            parameters = {
+            template = {
                 mode      = "local",
-                processId = "{pid}",
+                processId = 0,
             },
+            fill = function(params, inputs)
+                params.mode      = "local"
+                params.processId = inputs.pid
+            end,
         },
     },
 }

@@ -23,7 +23,7 @@
 
 ---What an input *is* — how its raw `quick_run` string is read into a value
 ---(`easydap.schema.coerce` does the reading).
----@alias easydap.PlaceholderType
+---@alias easydap.InputType
 ---| "string"      # taken verbatim (the default)
 ---| "boolean"     # true/1/yes, false/0/no
 ---| "integer"
@@ -37,60 +37,49 @@
 ---| "list"        # "a,b" → { "a", "b" }
 ---| "shell_args"  # a shell-quoted command line → a list of arguments
 
----How one field takes a *slice* of an input, applied per-use via
----`"{name:transform}"`. A transform is never a placeholder's own `type`: it says
----what a field takes *from* an input, not what the input is. Both of these split
----a shell command line, so a single `command` input can fill a `program`/`args`
----pair.
----@alias easydap.PlaceholderTransform
----| "shell_program"    # the command line's first word, expanded as a path
----| "shell_rest_args"  # everything after the first word
-
----A type or a transform — what `easydap.schema.coerce` accepts.
----@alias easydap.PlaceholderKind easydap.PlaceholderType|easydap.PlaceholderTransform
-
----One declared input of a configuration — the `name=value` tokens `quick_run`
----accepts and the fields `new_run_file` seeds. `type` says how the raw CLI string
----is read; it also drives type-aware value completion and the blank a scaffolded
----run_file is seeded with. Omit it for an input taken verbatim as a string —
----including one whose every use carries a `"{name:transform}"` override, since the
----declared type is then never consulted. A placeholder with `required = true` must
----be supplied — leaving it unset is a `quick_run` error; any other unset
----placeholder is simply omitted from the body.
----@class easydap.Placeholder
----@field type?        easydap.PlaceholderType  default `string`
+---One declared input of a configuration — the `name=value` arguments `quick_run`
+---accepts. `type` says how the raw CLI string is read; it also drives type-aware
+---value completion. Omit it for an input taken verbatim as a string. An input with
+---`required = true` must be supplied — leaving it unset is a `quick_run` error;
+---any other input simply arrives at `fill` as nil.
+---@class easydap.Input
+---@field type?        easydap.InputType  default `string`
 ---@field required?    boolean  unset is an error (default false)
 ---@field description? string   a few words on what the input means
 
 ---A named `quick_run`/`new_run_file` configuration for one adapter.
 ---
----`placeholders` declares the configuration's inputs up front (name →
----`easydap.Placeholder`); `parameters` is a native request body that refers to
----them. A `parameters` leaf may be:
----  * a literal (string/boolean/number/table), for identity fields the
----    adapter pins itself (`type`/`name`) or fixed defaults it wants sent
----    regardless of user input;
----  * a zero-arg function, resolved at fill time (a computed default, e.g.
----    `function() return vim.fn.getcwd() end`);
----  * a `"{name}"` token naming a declared placeholder, read by that
----    placeholder's `type`. Tokens may also be embedded in a longer string
----    (`"target create {program}"`), which interpolates.
----The `"{name:transform}"` form applies an `easydap.PlaceholderTransform` for that
----one use instead. It exists for the case where a single input feeds two fields
----differently — a shell command line split into `program` (`shell_program`) and
----`args` (`shell_rest_args`) — and is otherwise unnecessary: prefer a bare
----`"{name}"` and a declared `type`.
+---`inputs` declares what the configuration accepts (name → `easydap.Input`); the
+---two commands then read it along separate paths that never meet:
 ---
----`connect` is the same placeholder mechanism for adapters that connect over a
----task-level TCP endpoint (an `AdapterDef` `host`/`port`, e.g. `remote`/
----`java-debug-server`) — its `host`/`port` placeholders set the task's
----connection, not a body field.
+---  * `fill(params, inputs)` builds the native request body for `quick_run`,
+---    assigning into the empty `params` from the coerced `inputs`. An unset input
+---    is nil, and Lua drops nil-valued keys, so `params.cwd = inputs.cwd` omits
+---    `cwd` entirely when it wasn't supplied — assign unconditionally and optional
+---    fields take care of themselves. Identity fields the adapter pins (`type`/
+---    `name`) and fixed defaults are assigned here too, as plain literals.
+---  * `template` is what `new_run_file` scaffolds: a static native body, seeded
+---    with example values, rendered straight into the generated run file. A leaf
+---    may be a literal or a zero-arg function (resolved at scaffold time, e.g.
+---    `function() return vim.fn.exepath("lua") end`). It never reaches an adapter
+---    through `fill` — a run file's `parameters` is sent verbatim — so seed it with
+---    realistic values a reader can edit, not blanks.
+---
+---Keeping the field list in both is deliberate: they answer different questions
+---(what to send vs. what to show someone starting a run file), and drift between
+---them costs scaffold quality, never `quick_run` correctness.
+---
+---`connect(inputs)` returns the task-level TCP endpoint for adapters that connect
+---over one (an `AdapterDef` `host`/`port`, e.g. `remote`/`java-debug-server`) —
+---the task's connection, not a body field. Returning nils leaves the adapter def's
+---own host/port in force.
 ---@class easydap.Configuration
----@field description    string
----@field request        "launch"|"attach"
----@field placeholders?  table<string, easydap.Placeholder>  the configuration's declared inputs
----@field parameters     table    native request body; leaves may be a literal, a zero-arg function, or a `"{placeholder}"` token
----@field connect?       {host?: string, port?: string}   task-level connection placeholders
+---@field description  string
+---@field request      "launch"|"attach"
+---@field inputs?      table<string, easydap.Input>  the configuration's declared inputs
+---@field template?    table    static native body rendered into a scaffolded run file
+---@field fill?        fun(params: table, inputs: table<string, any>)  assemble the native request body
+---@field connect?     fun(inputs: table<string, any>): {host?: string, port?: integer}
 
 ---A static adapter definition — the launch/attach template for one adapter.
 ---Entries of this module are values of this type. It is NOT the per-run config

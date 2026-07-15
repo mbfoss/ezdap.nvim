@@ -106,14 +106,14 @@ require("easydap").setup()
 
 Then start debugging. The fastest path is `:Debug quick_run`, which launches
 (or attaches to) an adapter using one of its named configurations, filled in
-with a few `placeholder=value` arguments:
+with a few `input=value` arguments:
 
 ```vim
 " Launch a native binary under codelldb
 :Debug quick_run codelldb launch command="./a.out --verbose"
 
 " Debug a Python file
-:Debug quick_run debugpy launch target=./main.py
+:Debug quick_run debugpy launch command="./main.py --verbose"
 
 " Attach to a running process
 :Debug quick_run debugpy attach pid=41234
@@ -163,26 +163,26 @@ version-controlled run files.
 ### `:Debug quick_run` — one-shot launch/attach
 
 Each adapter declares one or more named **configurations** (`launch`, `attach`,
-`remote`, …), each with its own `{placeholder}` fields. Fill them in with
-`placeholder=value` tokens; the adapter and configuration name come first as
-bare words:
+`remote`, …), each declaring the **inputs** it accepts. Supply them as
+`input=value` tokens; the adapter and configuration name come first as bare
+words:
 
 ```vim
-:Debug quick_run <adapter> <configuration> [placeholder=value ...]
+:Debug quick_run <adapter> <configuration> [input=value ...]
 ```
 
-Placeholders are native to each adapter/configuration — e.g. codelldb's
-`launch` configuration takes `command` (a full shell command line) and `cwd`,
-while debugpy's `launch` configuration takes `target`, `args`, `cwd` and
-`env`; debugpy's `attach` configuration takes `pid`, and its `remote`
-configuration takes `host`/`port`. Each placeholder declares a **type** that
-decides how your value is read: `file`/`dir`/`cwd` (path expansion), `env`
-(`A=1,B=2`), `shell_args` (shell-quoted splitting) and
-`integer`/`port`/`boolean`.
+Inputs are specific to each adapter/configuration — e.g. every `launch`
+configuration takes `command` (a full shell command line, split into the
+adapter's own program/args fields) plus `cwd` and `env`; an `attach`
+configuration takes `pid`, and a `remote` one takes `host`/`port`. Each input
+declares a **type** that decides how your value is read: `file`/`dir`/`cwd`
+(path expansion), `env` (`A=1,B=2`), `shell_args` (shell-quoted splitting) and
+`integer`/`port`/`boolean`. An input left out is simply omitted from the
+request, unless the configuration marks it required.
 
-Tab-completion offers adapters, then configuration names, then the
-placeholders available for the chosen configuration — and, once you type `=`,
-path completion for placeholders whose type is path-like.
+Tab-completion offers adapters, then configuration names, then the inputs
+available for the chosen configuration — and, once you type `=`, path
+completion for inputs whose type is path-like.
 
 ### Run files — versionable debug configs
 
@@ -216,15 +216,17 @@ each adapter's upstream documentation for the fields it accepts.
 
 ### `:Debug new_run_file` — scaffold a run file
 
-Generate a ready-to-edit run file,
-pre-populated from one of the adapter's configurations.
+Generate a ready-to-edit run file from one of the adapter's configurations,
+seeded with example values for that adapter's native fields.
 
 ```vim
 :Debug new_run_file codelldb launch
 " → writes <project root>/codelldb_launch.lua and opens it
 ```
 
-Edit the fields, then `:Debug run_file` it.
+Edit the fields, then `:Debug run_file` it. The generated `parameters` is a
+plain native body with no easydap syntax in it — it goes to the adapter
+verbatim, so anything the adapter accepts can be added by hand.
 
 ### From Lua
 
@@ -237,7 +239,7 @@ local easydap = require("easydap")
 easydap.run({ adapter = "delve", request = "launch", parameters = { mode = "test" } })
 
 -- The quick_run / run_file / new_run_file / rerun entry points, too
-easydap.quick_run({ "debugpy", "launch", "target=./main.py" })
+easydap.quick_run({ "debugpy", "launch", "command=./main.py" })
 easydap.run_file("debug.lua")
 easydap.rerun()
 ```
@@ -411,7 +413,7 @@ Everything is under the `:Debug` command, with completion for every subcommand.
 | Subcommand            | Description                                        |
 | --------------------- | ------------------------------------------------- |
 | `run_file [path]`     | Run a Lua task file, or pick from a directory     |
-| `quick_run …`         | Launch/attach from `role=value` tokens            |
+| `quick_run …`         | Launch/attach from `input=value` tokens           |
 | `new_run_file …`      | Scaffold a run file from an adapter's schema       |
 | `rerun`               | Re-launch the most recently run task              |
 | `view`                | Open/focus the debug panel                        |
@@ -535,36 +537,49 @@ provision tooling before the session connects (this is how the `debugpy` and
 `js-debug` adapters work).
 
 To make an adapter work with `:Debug quick_run` and `:Debug new_run_file`, give
-it one or more named `configurations` — each a `request`, a `placeholders` table
-declaring its inputs, and a native `parameters` body whose leaves may be a
-literal, a computed default (a zero-arg function), or a `"{name}"` token
-referring to a declared placeholder:
+it one or more named `configurations`. Each declares an `inputs` table, a `fill`
+function that turns those inputs into the adapter's native request body, and a
+`template` — a static native body, seeded with example values, that
+`new_run_file` scaffolds:
 
 ```lua
 adapters.myadapter = {
   command = "my-debug-adapter",
   configurations = {
     launch = {
+      description = "debug an executable",
       request = "launch",
-      placeholders = {
-        target = { type = "file", required = true },
-        args   = { type = "shell_args" },
-        cwd    = { type = "cwd" },
+      inputs = {
+        command = { type = "shell_args", required = true, description = "command line to debug" },
+        cwd     = { type = "cwd", description = "working directory" },
       },
-      parameters = {
-        program = "{target}",
-        args    = "{args}",
-        cwd     = "{cwd}",
+      template = {
+        program = "./a.out",
+        args    = { "--verbose" },
+        cwd     = vim.fn.getcwd,
       },
+      fill = function(params, inputs)
+        params.program = vim.fn.expand(inputs.command[1])
+        params.args    = { unpack(inputs.command, 2) }
+        params.cwd     = inputs.cwd
+      end,
     },
   },
 }
 ```
 
-A placeholder's `type` decides how its `quick_run` string is coerced (`file`,
-`cwd`, `env`, `integer`, `port`, `boolean`, `shell_args`, …), and `required`
-makes leaving it unset an error — any other unset placeholder is simply omitted
-from the body.
+An input's `type` decides how its `quick_run` string is coerced (`file`, `cwd`,
+`env`, `integer`, `port`, `boolean`, `shell_args`, …), and `required` makes
+leaving it unset an error. Any other unset input simply arrives at `fill` as
+nil, and since Lua drops nil-valued keys, `params.cwd = inputs.cwd` omits `cwd`
+from the body on its own — assign unconditionally and optional fields take care
+of themselves.
+
+`fill` and `template` serve different commands and never meet: `fill` builds the
+body for `quick_run`, while `template` is only ever rendered into a scaffolded
+run file, whose `parameters` goes to the adapter verbatim. Adapters that connect
+over a task-level TCP endpoint add `connect = function(inputs) ... end` returning
+`host`/`port` (see [`remote.lua`](lua/easydap/adapters/remote.lua)).
 
 See each built-in adapter under
 [`lua/easydap/adapters/`](lua/easydap/adapters/) for fully worked examples

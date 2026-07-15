@@ -297,25 +297,24 @@ end
 
 ---Launch or attach under an adapter using one of its declared `configurations`.
 ---`assignments[1]`/`[2]` are strictly the adapter and configuration name (`{ "codelldb", "launch", … }`);
----every argument from `[3]` on is a `placeholder=value` assignment filled into
----the configuration via `schema.fill_configuration` (see `schema.configuration_placeholders`
----for the set a configuration accepts). A placeholder left unset is simply omitted
----from the assembled body, unless its `placeholders` entry marks it
----`required = true` — only then is leaving it unset an error. A configuration's
----optional `connect` block sets the task's connection endpoint for
----adapters that connect over a task-level TCP endpoint (e.g. `remote`/
----`java-debug-server`).
----@param assignments string[]  adapter, configuration name, then "placeholder=value" tokens, e.g. { "codelldb", "launch", "command=./a.out" }
+---every argument from `[3]` on is an `input=value` assignment, assembled into a
+---native body via `schema.fill_configuration` (see `schema.configuration_input_names`
+---for the set a configuration accepts). An input left unset is simply omitted from
+---the assembled body, unless its `inputs` entry marks it `required = true` — only
+---then is leaving it unset an error. A configuration's optional `connect` function
+---sets the task's connection endpoint for adapters that connect over a task-level
+---TCP endpoint (e.g. `remote`/`java-debug-server`).
+---@param assignments string[]  adapter, configuration name, then "input=value" tokens, e.g. { "codelldb", "launch", "command=./a.out" }
 ---@return easydap.runner.Run?
 function M.quick_run(assignments)
     local schema = require("easydap.schema")
 
     -- The adapter and configuration name are strictly the first two positional
     -- arguments (`quick_run codelldb launch …`); every argument from the
-    -- third on is a `placeholder=value` assignment.
+    -- third on is an `input=value` assignment.
     local adapter, configuration_name = assignments[1], assignments[2]
     if not adapter or adapter == "" or adapter:find("=", 1, true) then
-        _warn("quick_run: usage: quick_run <adapter> <configuration> [placeholder=value]…")
+        _warn("quick_run: usage: quick_run <adapter> <configuration> [input=value]…")
         return
     end
     if not require("easydap.adapters")[adapter] then
@@ -324,7 +323,7 @@ function M.quick_run(assignments)
         return
     end
     if not configuration_name or configuration_name == "" or configuration_name:find("=", 1, true) then
-        _warn("quick_run: usage: quick_run " .. adapter .. " <configuration> [placeholder=value]…"
+        _warn("quick_run: usage: quick_run " .. adapter .. " <configuration> [input=value]…"
             .. " (configurations: " .. table.concat(schema.configuration_names(adapter), ", ") .. ")")
         return
     end
@@ -340,7 +339,7 @@ function M.quick_run(assignments)
         local tok = assignments[i]
         local eq = tok:find("=", 1, true)
         if not eq then
-            _warn("quick_run: expected placeholder=value, got '" .. tok .. "'")
+            _warn("quick_run: expected input=value, got '" .. tok .. "'")
             return
         end
         values[tok:sub(1, eq - 1)] = tok:sub(eq + 1)
