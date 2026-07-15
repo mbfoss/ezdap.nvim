@@ -74,9 +74,9 @@ return {
             description = "debug a Go package/binary",
             request = "launch",
             inputs = {
-                command = { type = "shell_args", description = "command line to debug" },
-                cwd     = { type = "cwd", description = "working directory" },
-                env     = { type = "env", description = "environment variables" },
+                command = { type = "table", format = "shell_args", description = "command line to debug" },
+                cwd     = { type = "string", format = "cwd", description = "working directory" },
+                env     = { type = "table", format = "env", description = "environment variables" },
             },
             build = function(params, _, inputs)
                 params.mode = "debug"

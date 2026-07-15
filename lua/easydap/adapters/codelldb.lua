@@ -21,9 +21,9 @@ return {
             description = "debug an executable",
             request = "launch",
             inputs = {
-                command       = { type = "shell_args", required = true, description = "command line to debug" },
-                cwd           = { type = "cwd", description = "working directory" },
-                env           = { type = "env", description = "environment variables" },
+                command       = { type = "table", format = "shell_args", required = true, description = "command line to debug" },
+                cwd           = { type = "string", format = "cwd", description = "working directory" },
+                env           = { type = "table", format = "env", description = "environment variables" },
                 stop_on_entry = { type = "boolean", description = "break at program entry" },
             },
             build = function(params, _, inputs)
@@ -66,7 +66,7 @@ return {
             description = "attach to a process by executable, optionally waiting for it to launch",
             request = "attach",
             inputs = {
-                program  = { type = "file", required = true, description = "executable to attach to" },
+                program  = { type = "string", format = "file", required = true, description = "executable to attach to" },
                 wait_for = { type = "boolean", description = "wait for the process to launch" },
             },
             build = function(params, _, inputs)
@@ -88,8 +88,8 @@ return {
             description = "post-mortem debug from a core file (custom launch)",
             request = "launch",
             inputs = {
-                program  = { type = "file", description = "executable that produced the core" },
-                corefile = { type = "file", description = "core file to load" },
+                program  = { type = "string", format = "file", description = "executable that produced the core" },
+                corefile = { type = "string", format = "file", description = "core file to load" },
             },
             build = function(params, _, inputs)
                 params.name = "codelldb"
@@ -112,9 +112,9 @@ return {
             description = "attach over a gdb-remote (gdbserver) connection (custom launch)",
             request = "launch",
             inputs = {
-                program = { type = "file", description = "executable for symbols" },
-                host    = { type = "host", description = "gdbserver host" },
-                port    = { type = "port", description = "gdbserver port" },
+                program = { type = "string", format = "file", description = "executable for symbols" },
+                host    = { type = "string", format = "host", description = "gdbserver host" },
+                port    = { type = "integer", format = "port", description = "gdbserver port" },
             },
             build = function(params, _, inputs)
                 params.name = "codelldb"

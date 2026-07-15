@@ -8,7 +8,7 @@ return {
             description = "listen for an incoming Xdebug connection",
             request = "launch",
             inputs = {
-                cwd = { type = "cwd", description = "working directory" },
+                cwd = { type = "string", format = "cwd", description = "working directory" },
             },
             build = function(params, _, inputs)
                 params.type = "php"

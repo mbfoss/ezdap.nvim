@@ -16,9 +16,9 @@ return {
             description = "debug a native executable",
             request = "launch",
             inputs = {
-                command       = { type = "shell_args", required = true, description = "command line to debug" },
-                cwd           = { type = "cwd", description = "working directory" },
-                env           = { type = "env", description = "environment variables" },
+                command       = { type = "table", format = "shell_args", required = true, description = "command line to debug" },
+                cwd           = { type = "string", format = "cwd", description = "working directory" },
+                env           = { type = "table", format = "env", description = "environment variables" },
                 stop_on_entry = { type = "boolean", description = "break at program entry" },
                 stop_at_main  = { type = "boolean", description = "break at the start of main" },
             },
@@ -59,7 +59,7 @@ return {
             request    = "attach",
             inputs = {
                 connection = { type = "string", required = true, description = "remote target, e.g. host:port" },
-                target     = { type = "file", description = "local binary for symbols" },
+                target     = { type = "string", format = "file", description = "local binary for symbols" },
             },
             build = function(params, _, inputs)
                 params.target  = inputs.connection
@@ -74,8 +74,8 @@ return {
             description = "post-mortem debug from a core file",
             request    = "attach",
             inputs = {
-                corefile = { type = "file", required = true, description = "core file to load" },
-                target   = { type = "file", description = "executable that produced the core" },
+                corefile = { type = "string", format = "file", required = true, description = "core file to load" },
+                target   = { type = "string", format = "file", description = "executable that produced the core" },
             },
             build = function(params, _, inputs)
                 params.coreFile = inputs.corefile

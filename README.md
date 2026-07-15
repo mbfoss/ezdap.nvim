@@ -567,8 +567,10 @@ adapters.myadapter = {
 }
 ```
 
-An input's `type` decides how its `quick_run` string is coerced (`file`, `cwd`,
-`env`, `integer`, `port`, `boolean`, `shell_args`, …), and `required` makes
+An input's `type` is the Lua type `build` receives (`string`, `boolean`,
+`integer`, `number`, `table`), and its `format` decides how the `quick_run` string
+is read into that type (`file`, `cwd`, `env`, `port`, `shell_args`, …) — omit the
+format and the string is read by `type` alone. `required` makes
 leaving it unset an error. Any other unset input simply arrives at `build` as
 nil, and since Lua drops nil-valued keys, `params.cwd = inputs.cwd` omits `cwd`
 from the body on its own — assign unconditionally and optional fields take care

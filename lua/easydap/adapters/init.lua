@@ -21,29 +21,37 @@
 ---@field add_bufnr fun(bufnr: integer, opts?: easydap.AddBufOpts)
 ---@field report    fun(message: string)
 
----What an input *is* — how its raw `quick_run` string is read into a value
----(`easydap.schema.coerce` does the reading).
+---What an input *is* — the Lua type of the value `build` receives.
 ---@alias easydap.InputType
----| "string"      # taken verbatim (the default)
----| "boolean"     # true/1/yes, false/0/no
+---| "string"   # the default
+---| "boolean"
 ---| "integer"
 ---| "number"
----| "file"        # a path, expanded
----| "dir"         # a path, expanded
----| "cwd"         # a path, expanded and made absolute
----| "env"         # "A=1,B=2" → a table
----| "host"
----| "port"        # an integer, range-checked
----| "list"        # "a,b" → { "a", "b" }
----| "shell_args"  # a shell-quoted command line → a list of arguments
+---| "table"    # always needs a `format` to say how the string becomes one
+
+---How an input's raw `quick_run` string is read into a value of its `type`
+---(`easydap.schema.coerce` does the reading). Omit it and the string is read by
+---`type` alone: verbatim for a string, `tonumber` for a number/integer, true/1/yes
+---or false/0/no for a boolean. A format never changes the declared `type` — it only
+---says how to get there, and which values are legal on the way.
+---@alias easydap.InputFormat
+---| "file"        # → string: a path, expanded
+---| "dir"         # → string: a path, expanded
+---| "cwd"         # → string: a path, expanded and made absolute
+---| "host"        # → string: taken verbatim
+---| "port"        # → integer: range-checked (0-65535)
+---| "env"         # → table: "A=1,B=2" → { A = "1", B = "2" }
+---| "list"        # → table: "a,b" → { "a", "b" }
+---| "shell_args"  # → table: a shell-quoted command line → a list of arguments
 
 ---One declared input of a configuration — the `name=value` arguments `quick_run`
----accepts. `type` says how the raw CLI string is read; it also drives type-aware
----value completion. Omit it for an input taken verbatim as a string. An input with
----`required = true` must be supplied — leaving it unset is a `quick_run` error;
----any other input simply arrives at `fill` as nil.
+---accepts. `type` is what `build` receives; `format` says how the raw CLI string is
+---read into it, and drives path-aware value completion. Omit both for an input taken
+---verbatim as a string. An input with `required = true` must be supplied — leaving it
+---unset is a `quick_run` error; any other input simply arrives at `build` as nil.
 ---@class easydap.Input
----@field type?        easydap.InputType  default `string`
+---@field type?        easydap.InputType    default `string`
+---@field format?      easydap.InputFormat  default: read by `type` alone
 ---@field required?    boolean  unset is an error (default false)
 ---@field description? string   a few words on what the input means
 

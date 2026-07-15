@@ -11,8 +11,8 @@ return {
             description = "attach to a DAP server listening on host:port",
             request    = "attach",
             inputs = {
-                host = { type = "host", description = "DAP server host" },
-                port = { type = "port", description = "DAP server port" },
+                host = { type = "string", format = "host", description = "DAP server host" },
+                port = { type = "integer", format = "port", description = "DAP server port" },
             },
             build = function(_, connect, inputs)
                 connect.host = inputs.host

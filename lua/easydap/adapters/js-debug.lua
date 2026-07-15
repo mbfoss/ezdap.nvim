@@ -70,9 +70,9 @@ return {
             description = "debug a Node.js/JS/TS file",
             request = "launch",
             inputs = {
-                command = { type = "shell_args", description = "command line to debug" },
-                cwd     = { type = "cwd", description = "working directory" },
-                env     = { type = "env", description = "environment variables" },
+                command = { type = "table", format = "shell_args", description = "command line to debug" },
+                cwd     = { type = "string", format = "cwd", description = "working directory" },
+                env     = { type = "table", format = "env", description = "environment variables" },
             },
             build = function(params, _, inputs)
                 params.type = "pwa-node"
@@ -110,8 +110,8 @@ return {
             description = "attach to a remote Node.js process over host/port",
             request = "attach",
             inputs = {
-                host = { type = "host", description = "remote Node.js host" },
-                port = { type = "port", description = "remote Node.js debug port" },
+                host = { type = "string", format = "host", description = "remote Node.js host" },
+                port = { type = "integer", format = "port", description = "remote Node.js debug port" },
             },
             build = function(params, _, inputs)
                 params.type    = "pwa-node"

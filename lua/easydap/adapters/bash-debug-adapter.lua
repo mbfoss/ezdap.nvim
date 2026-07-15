@@ -11,9 +11,9 @@ return {
             description = "debug a bash script",
             request = "launch",
             inputs = {
-                script = { type = "file", description = "bash script to debug" },
-                cwd    = { type = "cwd", description = "working directory" },
-                env    = { type = "env", description = "environment variables" },
+                script = { type = "string", format = "file", description = "bash script to debug" },
+                cwd    = { type = "string", format = "cwd", description = "working directory" },
+                env    = { type = "table", format = "env", description = "environment variables" },
             },
             build = function(params, _, inputs)
                 params.type    = "bashdb"

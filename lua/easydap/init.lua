@@ -304,11 +304,11 @@ local function _register_user_commands()
             local name = arg_lead:sub(1, eq - 1)
             local pfx  = arg_lead:sub(1, eq)
             local val  = arg_lead:sub(eq + 1)
-            -- Completing an input's value: offer paths for a path-typed input,
-            -- per the `type` its configuration declares; nothing for the rest.
-            local itype = schema.configuration_input_types(adapter, configuration_name)[name]
-            local comp_type = (itype == "file" and "file")
-                or ((itype == "dir" or itype == "cwd") and "dir")
+            -- Completing an input's value: offer paths for a path-formatted input,
+            -- per the `format` its configuration declares; nothing for the rest.
+            local fmt = schema.configuration_input_formats(adapter, configuration_name)[name]
+            local comp_type = (fmt == "file" and "file")
+                or ((fmt == "dir" or fmt == "cwd") and "dir")
                 or nil
             if not comp_type then return {} end
             return vim.tbl_map(function(f) return pfx .. f end, vim.fn.getcompletion(val, comp_type))

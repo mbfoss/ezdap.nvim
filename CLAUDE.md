@@ -42,8 +42,8 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   under `easydap/adapters/`, assembled here): native DAP process/connection config
   plus an optional `configurations` table (`name -> easydap.Configuration`) of
   launch/attach templates. Each `Configuration` is self-describing: an `inputs`
-  table declaring what it accepts (`name -> easydap.Input`, each with a `type`,
-  `description`, and optional `required`), a `build(params, connect, inputs)` that
+  table declaring what it accepts (`name -> easydap.Input`, each with a `type` and
+  `description`, plus an optional `format` and `required`), a `build(params, connect, inputs)` that
   assembles the native request body — and any task-level `host`/`port` — in place,
   and a `template` (Lua **source text** for the body a scaffolded run file gets,
   seeded with example values and its own comments). Users add/override keys
@@ -55,13 +55,15 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   `raw_messages`) and sends `parameters` as the DAP request body verbatim.
 - [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run` and
   the configuration reader for `new_run_file`. `fill_configuration` reads
-  `quick_run`'s `name=value` arguments by each input's declared `type` (`coerce`),
+  `quick_run`'s `name=value` arguments by each input's declared `type` (the Lua
+  type `build` receives) and optional `format` (how the string is read into it) —
+  `coerce` —
   then calls the configuration's `build` to assemble the native request body and
   any task-level connection; inputs marked `required` are errors when left unset,
   other unset inputs arrive at `build` as nil (so Lua drops the fields assigned
   from them). Introspection helpers —
   `configurations`/`configuration`/`configuration_names`,
-  `configuration_input_names`/`configuration_input_types`/`configuration_required`,
+  `configuration_input_names`/`configuration_input_formats`/`configuration_required`,
   `requests`, `quick_run_adapters` — drive completion and scaffolding. Native keys
   throughout — no portable/generic field vocabulary.
 - [scaffold.lua](lua/easydap/scaffold.lua) — run-file creation behind `:Debug

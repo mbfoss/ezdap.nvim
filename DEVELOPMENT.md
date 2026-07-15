@@ -110,7 +110,8 @@ Each `easydap.Input` declares one input up front:
 
 | Field      | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
-| `type`     | what the input *is* — how its raw `quick_run` string is read: one of `string`/`boolean`/`integer`/`number`/`file`/`dir`/`cwd`/`env`/`host`/`port`/`list`/`shell_args` (`easydap.schema.coerce` does the reading). It also drives type-aware value completion. Defaults to `string` — omit it for an input taken verbatim |
+| `type`     | what the input *is* — the Lua type `build` receives: one of `string`/`boolean`/`integer`/`number`/`table`. Defaults to `string` |
+| `format`   | how its raw `quick_run` string is read into that type: one of `file`/`dir`/`cwd`/`host`/`port`/`env`/`list`/`shell_args` (`easydap.schema.coerce` does the reading). It also drives path-aware value completion. Omit it and the string is read by `type` alone — verbatim for a string, `tonumber` for a number/integer, true/1/yes or false/0/no for a boolean. A `table` input always needs one |
 | `required` | when `true`, leaving it unset is a `quick_run` error; any other unset input simply arrives at `fill` as nil |
 | `description` | a few words on what the input means, e.g. `"process id to attach to"` |
 
