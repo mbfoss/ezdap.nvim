@@ -97,21 +97,28 @@ end
 
 -- ── Introspection ──────────────────────────────────────────────────────────
 
----A leaf value shaped like a placeholder (`"{name}"` or `"{name:kind}"`), or
----nil.
+-- One placeholder token — `{name}` or `{name:kind}` — anywhere in a string.
+-- Captures the name, then the kind (empty when the `:kind` suffix is absent).
+local _PLACEHOLDER_PAT = "{([%w_]+):?([%w_]*)}"
+
+---A leaf value that is *entirely* one placeholder (`"{name}"` or `"{name:kind}"`),
+---or nil. A whole-string placeholder is filled with its coerced typed value (which
+---may be non-string — a list, integer, …); placeholders merely *embedded* in a
+---longer string are handled separately, by interpolation (see `_fill_leaf`).
 ---@param value any
 ---@return string? name, string? kind
 local function _placeholder(value)
     if type(value) ~= "string" then return nil end
-    local name, kind = value:match("^{([%w_]+):?([%w_]*)}$")
+    local name, kind = value:match("^" .. _PLACEHOLDER_PAT .. "$")
     if not name then return nil end
     return name, kind
 end
 
 ---Walk a (possibly nested) plain body table — a configuration's `parameters` or
----`connect` — calling `fn(dotted_key, placeholder_name, kind)` for every leaf
----shaped like a placeholder. Keys are visited in sorted order for a stable
----traversal.
+---`connect` — calling `fn(dotted_key, placeholder_name, kind)` for every
+---placeholder token found in a leaf. A single string leaf may hold several tokens
+---(e.g. `"gdb-remote {host:host}:{port:port}"`), each reported in turn. Keys are
+---visited in sorted order for a stable traversal.
 ---@param body table
 ---@param fn fun(key: string, name: string, kind: string)
 local function _walk_placeholders(body, fn)
@@ -124,9 +131,10 @@ local function _walk_placeholders(body, fn)
             local path = prefix == "" and k or (prefix .. "." .. k)
             if type(v) == "table" then
                 rec(v, path)
-            else
-                local name, kind = _placeholder(v)
-                if name then fn(path, name, kind) end
+            elseif type(v) == "string" then
+                for name, kind in v:gmatch(_PLACEHOLDER_PAT) do
+                    fn(path, name, kind)
+                end
             end
         end
     end
@@ -228,14 +236,75 @@ end
 
 -- ── Configurations (quick_run / new_run_file) ──────────────────────────────────────
 
+-- Sentinel returned by `_fill_leaf` when a leaf resolves to nothing (an unset,
+-- non-required whole-string placeholder): its key is dropped from the body.
+local _OMIT = {}
+
+---Fill one leaf of a body table by placeholder-kind.
+---
+---Three shapes are handled:
+--- * a leaf that is *entirely* one placeholder yields that placeholder's coerced
+---   typed value (which may be non-string — a list, integer, …); an already-typed
+---   `values[name]` is used verbatim, and an unset value returns `_OMIT` (a
+---   `required` miss is recorded);
+--- * a string with placeholder token(s) *embedded* in surrounding text is
+---   interpolated — each token coerced then stringified in place (so
+---   `"target create {program:file}"` becomes `"target create /path/a.out"`);
+---   an unset embedded token expands to the empty string (a `required` miss is
+---   still recorded);
+--- * any other leaf is a literal, resolved via `M.resolve_value` (so a zero-arg
+---   function default is called at fill time) — this is how a configuration pins
+---   identity fields (`type`/`name`) or computed defaults directly in `parameters`.
+---@param v any
+---@param values table<string, any>
+---@param required table<string, boolean>
+---@param missing string[]  required placeholder names with no value, appended in place
+---@param errs string[]     "name: message" coercion errors, appended in place
+---@return any value  the filled value, or the `_OMIT` sentinel to drop the key
+local function _fill_leaf(v, values, required, missing, errs)
+    -- Whole-string placeholder → coerced typed value.
+    local name, kind = _placeholder(v)
+    if name then
+        local raw = values[name]
+        if raw == nil then
+            if required[name] then missing[#missing + 1] = name end
+            return _OMIT
+        elseif type(raw) ~= "string" then
+            return raw
+        end
+        local val, cerr = M.coerce(kind, raw)
+        if cerr then
+            errs[#errs + 1] = name .. ": " .. cerr
+            return _OMIT
+        end
+        return val
+    end
+
+    -- String with embedded placeholder token(s) → interpolate.
+    if type(v) == "string" and v:find(_PLACEHOLDER_PAT) then
+        return (v:gsub(_PLACEHOLDER_PAT, function(pname, pkind)
+            local raw = values[pname]
+            if raw == nil then
+                if required[pname] then missing[#missing + 1] = pname end
+                return ""
+            elseif type(raw) ~= "string" then
+                return tostring(raw)
+            end
+            local val, cerr = M.coerce(pkind, raw)
+            if cerr then
+                errs[#errs + 1] = pname .. ": " .. cerr
+                return ""
+            end
+            return tostring(val)
+        end))
+    end
+
+    -- Plain literal.
+    return M.resolve_value(v)
+end
+
 ---Fill one placeholder-bearing body (a configuration's `parameters` or `connect`),
----coercing each supplied value by the placeholder's own `kind`. A
----`values[name]` that is already non-string is used as-is, skipping coercion. A literal (non-placeholder) leaf is
----resolved via `M.resolve_value` (so a zero-arg function default is called at
----fill time) and kept as-is otherwise — this is how a configuration pins identity
----fields (`type`/`name`) or computed defaults directly in `parameters`. An
----unset placeholder is only an error when its name is listed in the configuration's
----`required`; otherwise it is simply omitted from the body.
+---coercing each supplied value by the placeholder's own `kind` (see `_fill_leaf`).
 ---@param body table
 ---@param values table<string, any>
 ---@param required table<string, boolean>
@@ -248,23 +317,9 @@ local function _fill_body(body, values, required, missing, errs)
         if type(v) == "table" then
             out[key] = _fill_body(v, values, required, missing, errs)
         else
-            local name, kind = _placeholder(v)
-            if not name then
-                out[key] = M.resolve_value(v)
-            else
-                local raw = values[name]
-                if raw == nil then
-                    if required[name] then missing[#missing + 1] = name end
-                elseif type(raw) ~= "string" then
-                    out[key] = raw
-                else
-                    local val, cerr = M.coerce(kind, raw)
-                    if cerr then
-                        errs[#errs + 1] = name .. ": " .. cerr
-                    else
-                        out[key] = val
-                    end
-                end
+            local val = _fill_leaf(v, values, required, missing, errs)
+            if val ~= _OMIT then
+                out[key] = val
             end
         end
     end
