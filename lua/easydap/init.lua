@@ -495,6 +495,14 @@ function M.run(task)
     return runner.run(task)
 end
 
+--- function intended to be called by custom plugins that manages their own task UI
+---@param task easydap.Task
+---@param callbacks easydap.TaskCallback
+function M.start_task(task, callbacks)
+    _require_setup("start_task")
+    require("easydap.task").start(task, callbacks)
+end
+
 ---Re-run the most recently run task from scratch. Warns when nothing has run yet.
 function M.rerun()
     _require_setup("rerun")
