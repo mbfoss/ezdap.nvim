@@ -15,6 +15,20 @@ local _debug_view
 ---@type easydap.DisassemblyView?
 local _disassembly_view
 local _initialized = false
+-- Whether `setup()` has run. The public API (session runners, views, project
+-- state) relies on the autocmds, UI wiring and restored breakpoints that setup
+-- installs; calling in before then would silently do the wrong thing (no
+-- persistence, no auto-shown view, empty breakpoint set), so those entry points
+-- fail loudly instead.
+local _setup_done = false
+
+---Guard a public API entry point: raise a clear error — pointed at the caller —
+---when `setup()` has not been called yet.
+---@param fn string  the API name, for the message
+local function _require_setup(fn)
+    if _setup_done then return end
+    error(("[easydap] require('easydap').setup() must be called before %s()"):format(fn), 3)
+end
 
 -- Persistence seam: the engine deals in absolute source paths; on-disk state
 -- uses project-relative paths for portability. The path conversion lives here,
@@ -415,6 +429,7 @@ M.adapters = nil
 ---Return the singleton DebugView, creating it on first call.
 ---@return easydap.DebugView
 function M.debug_view()
+    _require_setup("debug_view")
     if not _debug_view then
         _debug_view = require("easydap.ui.DebugView").new()
     end
@@ -423,12 +438,14 @@ end
 
 ---Open the DebugView in a vertical split (or focus if already visible).
 function M.open_debug_view()
+    _require_setup("open_debug_view")
     M.debug_view():open()
 end
 
 ---Return the singleton DisassemblyView, creating it on first call.
 ---@return easydap.DisassemblyView
 function M.disassembly_view()
+    _require_setup("disassembly_view")
     if not _disassembly_view then
         _disassembly_view = require("easydap.ui.DisassemblyView").new()
     end
@@ -437,11 +454,13 @@ end
 
 ---Open the disassembly pane for the active session's current frame.
 function M.open_disassembly_view()
+    _require_setup("open_disassembly_view")
     M.disassembly_view():open()
 end
 
 ---@param path string a Lua file returning a single task, or a folder to pick one from
 function M.run_file(path)
+    _require_setup("run_file")
     local runner = require("easydap.runner")
     return runner.run_file(path)
 end
@@ -453,6 +472,7 @@ end
 ---writes `<root>/codelldb_launch.lua`.
 ---@param assignments string[]  positional adapter, configuration, path, e.g. { "codelldb", "launch", "./foo.lua" }
 function M.new_run_file(assignments)
+    _require_setup("new_run_file")
     return require("easydap.scaffold").new_run_file(assignments)
 end
 
@@ -464,17 +484,20 @@ end
 ---`quick_run({ "debugpy", "attach", "pid=41234" })`.
 ---@param assignments string[]  adapter, configuration name, then "placeholder=value" tokens
 function M.quick_run(assignments)
+    _require_setup("quick_run")
     return require("easydap.runner").quick_run(assignments)
 end
 
 ---@param task easydap.Task
 function M.run(task)
+    _require_setup("run")
     local runner = require("easydap.runner")
     return runner.run(task)
 end
 
 ---Re-run the most recently run task from scratch. Warns when nothing has run yet.
 function M.rerun()
+    _require_setup("rerun")
     require("easydap.runner").rerun()
 end
 
@@ -482,6 +505,7 @@ end
 ---data file (and whether that file exists on disk yet). Echoed to the command
 ---line rather than notified, so it reads as a status query.
 function M.project_info()
+    _require_setup("project_info")
     local store = require("easydap.store")
     local root  = store.root()
     if not root then
@@ -509,6 +533,7 @@ function M.setup(opts)
     _init()
     _load()
     _register_user_commands()
+    _setup_done = true
 end
 
 return M
