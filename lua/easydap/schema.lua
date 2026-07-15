@@ -10,7 +10,7 @@
 ---`required` lists placeholder names that must be supplied. This module reads
 ---those configurations to fill a configuration's placeholders from `quick_run`'s
 ---`name=value` inputs (`fill_configuration`) and to scaffold a run_file template
----(`easydap.scaffold`, via `configuration_placeholder_kind`/`configuration`/`configurations`). It
+---(`easydap.scaffold`, via `configuration_placeholder_kinds`/`configuration`/`configurations`). It
 ---speaks each adapter's native keys directly — no portable field vocabulary
 ---between adapters.
 
@@ -159,50 +159,43 @@ function M.configuration_names(adapter)
     return out
 end
 
+---The placeholder → `kind` map a configuration declares across its `parameters`
+---and `connect` bodies: for each distinct placeholder, the part after `:` in
+---`"{name:kind}"` (`""` for a plain string placeholder). Built in a single walk
+---of both bodies; when a name recurs the first occurrence (`parameters` before
+---`connect`) wins. This is the primitive behind `configuration_placeholders`;
+---callers that need every placeholder's kind should read it once rather than
+---looking up kinds name-by-name.
+---@param adapter string
+---@param configuration_name string
+---@return table<string, string>
+function M.configuration_placeholder_kinds(adapter, configuration_name)
+    local configuration = M.configuration(adapter, configuration_name)
+    local kinds = {}
+    if not configuration then return kinds end
+    local function collect(body)
+        if not body then return end
+        _walk_placeholders(body, function(_, name, kind)
+            if kinds[name] == nil then kinds[name] = kind end
+        end)
+    end
+    collect(configuration.parameters)
+    collect(configuration.connect)
+    return kinds
+end
+
 ---The distinct placeholder names a configuration's `parameters`/`connect` declare,
 ---sorted, de-duplicated. These are the `name=value` tokens `quick_run` accepts.
 ---@param adapter string
 ---@param configuration_name string
 ---@return string[]
 function M.configuration_placeholders(adapter, configuration_name)
-    local configuration = M.configuration(adapter, configuration_name)
-    if not configuration then return {} end
-    local seen, out = {}, {}
-    local function collect(body)
-        if not body then return end
-        _walk_placeholders(body, function(_, name)
-            if not seen[name] then
-                seen[name] = true
-                out[#out + 1] = name
-            end
-        end)
+    local out = {}
+    for name in pairs(M.configuration_placeholder_kinds(adapter, configuration_name)) do
+        out[#out + 1] = name
     end
-    collect(configuration.parameters)
-    collect(configuration.connect)
     table.sort(out)
     return out
-end
-
----The `kind` governing a configuration's placeholder (the part after `:` in
----`"{name:kind}"`, `""` for a plain string placeholder), or nil when the
----placeholder isn't found in `parameters` or `connect`.
----@param adapter string
----@param configuration_name string
----@param placeholder_name string
----@return string?
-function M.configuration_placeholder_kind(adapter, configuration_name, placeholder_name)
-    local configuration = M.configuration(adapter, configuration_name)
-    if not configuration then return nil end
-    local found
-    local function scan(body)
-        if not body or found then return end
-        _walk_placeholders(body, function(_, name, kind)
-            if name == placeholder_name and not found then found = kind end
-        end)
-    end
-    scan(configuration.parameters)
-    scan(configuration.connect)
-    return found
 end
 
 ---Adapter names `quick_run`/`new_run_file` can drive — those declaring at
