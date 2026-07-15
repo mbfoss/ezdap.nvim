@@ -144,10 +144,16 @@ differently: the `launch` configurations of `codelldb`/`gdb`/`lldb` split one
 a declared `type`. `easydap.schema.coerce` accepts either — a type or a
 transform — which the annotations call an `easydap.PlaceholderKind`.
 
-Placeholder *names* are native to each adapter/configuration — there is no
-portable role vocabulary across adapters (e.g. codelldb's `launch`
-configuration takes `command`, a full shell command line, while debugpy's
-`launch` configuration takes `target`/`args` separately). See each file under
+Placeholder *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are
+easydap's own user-facing vocabulary — the `name=value` tokens typed at
+`quick_run` — not the adapter's. The `parameters` keys they fill keep whatever
+casing the adapter's wire protocol uses, so pairings like
+`stopOnEntry = "{stop_on_entry}"` or `waitFor = "{wait_for}"` are normal and correct.
+
+Which names a configuration takes is still up to it — there is no portable role
+vocabulary across adapters (e.g. codelldb's `launch` configuration takes
+`command`, a full shell command line, while debugpy's `launch` configuration
+takes `target`/`args` separately). See each file under
 [adapters/](lua/easydap/adapters/) for worked examples of every shape,
 including nested `connect` groups (`debugpy`'s `remote` configuration) and
 computed defaults.

@@ -25,10 +25,10 @@ return {
             description = "debug an executable",
             request = "launch",
             placeholders = {
-                command     = { required = true, description = "command line to debug" },
-                cwd         = { type = "cwd", description = "working directory" },
-                env         = { type = "env", description = "environment variables" },
-                stopOnEntry = { type = "boolean", description = "break at program entry" },
+                command       = { required = true, description = "command line to debug" },
+                cwd           = { type = "cwd", description = "working directory" },
+                env           = { type = "env", description = "environment variables" },
+                stop_on_entry = { type = "boolean", description = "break at program entry" },
             },
             parameters = {
                 name        = "codelldb",
@@ -37,7 +37,7 @@ return {
                 args        = "{command:shell_rest_args}",
                 cwd         = "{cwd}",
                 env         = "{env}",
-                stopOnEntry = "{stopOnEntry}",
+                stopOnEntry = "{stop_on_entry}",
             },
         },
         attach = {
@@ -56,14 +56,14 @@ return {
             description = "attach to a process by executable, optionally waiting for it to launch",
             request = "attach",
             placeholders = {
-                program = { type = "file", required = true, description = "executable to attach to" },
-                waitFor = { type = "boolean", description = "wait for the process to launch" },
+                program  = { type = "file", required = true, description = "executable to attach to" },
+                wait_for = { type = "boolean", description = "wait for the process to launch" },
             },
             parameters = {
                 name    = "codelldb",
                 type    = "lldb",
                 program = "{program}",
-                waitFor = "{waitFor}",
+                waitFor = "{wait_for}",
             },
         },
         core = {
