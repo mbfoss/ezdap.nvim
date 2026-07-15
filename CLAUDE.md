@@ -43,10 +43,11 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   plus an optional `configurations` table (`name -> easydap.Configuration`) of
   launch/attach templates. Each `Configuration` is self-describing — a
   `placeholders` table declaring its inputs (`name -> easydap.Placeholder`, each
-  with a `type` and optional `required`), plus a native request body
-  (`parameters`) whose leaves may be literals, zero-arg functions, or `"{name}"`
-  tokens referring to those placeholders. Users add/override keys directly. The
-  DAP core never reads the configurations — only `easydap.schema` does.
+  with a `type`, `description`, and optional `required`), plus a native request
+  body (`parameters`) whose leaves may be literals, zero-arg functions, or
+  `"{name}"` tokens referring to those placeholders. Users add/override keys
+  directly. The DAP core never reads the configurations — only `easydap.schema`
+  does.
 - [task.lua](lua/easydap/task.lua) — task runner (`easydap.TaskTypeDef`); the
   `run` backend for external task runners. Consumes a native task
   (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`/
@@ -54,14 +55,17 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 - [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run` and
   the configuration reader for `new_run_file`. Reads the adapters' `configurations`
   and fills each `Configuration`'s `parameters`/`connect` body, substituting
-  `"{name}"` tokens. `fill_configuration` coerces `quick_run`'s `name=value` inputs
+  `"{name}"` tokens. `fill_configuration` reads `quick_run`'s `name=value` inputs
   by each placeholder's declared `type` (`coerce`) and assembles the native request
   body plus any task-level connection; placeholders marked `required` are errors
-  when left unset, other unset placeholders are omitted. A `"{name:kind}"` token
-  overrides the coercion for one use — reserved for one input feeding two fields
-  differently (a `command` line split into `program`/`args`). Introspection
-  helpers — `configurations`/`configuration`/`configuration_names`,
-  `configuration_placeholders`/`configuration_placeholder_kinds`/
+  when left unset, other unset placeholders are omitted. Types and transforms are
+  distinct: a *type* (`file`, `port`, …) says what an input is and may be declared
+  on a placeholder; a *transform* (`shell_program`/`shell_rest_args`) says what one
+  field takes *from* an input, appears only in a `"{name:transform}"` token, and is
+  reserved for one input feeding two fields differently (a `command` line split
+  into `program`/`args`). Introspection helpers —
+  `configurations`/`configuration`/`configuration_names`,
+  `configuration_placeholders`/`configuration_placeholder_types`/
   `configuration_required`, `requests`, `quick_run_adapters` — drive completion and
   scaffolding. Native keys throughout — no portable/generic field vocabulary.
 - [scaffold.lua](lua/easydap/scaffold.lua) — run-file creation behind `:Debug

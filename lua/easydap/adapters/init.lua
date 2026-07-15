@@ -21,16 +21,44 @@
 ---@field add_bufnr fun(bufnr: integer, opts?: easydap.AddBufOpts)
 ---@field report    fun(message: string)
 
+---What an input *is* — how its raw `quick_run` string is read into a value
+---(`easydap.schema.coerce` does the reading).
+---@alias easydap.PlaceholderType
+---| "string"      # taken verbatim (the default)
+---| "boolean"     # true/1/yes, false/0/no
+---| "integer"
+---| "number"
+---| "file"        # a path, expanded
+---| "dir"         # a path, expanded
+---| "cwd"         # a path, expanded and made absolute
+---| "env"         # "A=1,B=2" → a table
+---| "host"
+---| "port"        # an integer, range-checked
+---| "list"        # "a,b" → { "a", "b" }
+---| "shell_args"  # a shell-quoted command line → a list of arguments
+
+---How one field takes a *slice* of an input, applied per-use via
+---`"{name:transform}"`. A transform is never a placeholder's own `type`: it says
+---what a field takes *from* an input, not what the input is. Both of these split
+---a shell command line, so a single `command` input can fill a `program`/`args`
+---pair.
+---@alias easydap.PlaceholderTransform
+---| "shell_program"    # the command line's first word, expanded as a path
+---| "shell_rest_args"  # everything after the first word
+
+---A type or a transform — what `easydap.schema.coerce` accepts.
+---@alias easydap.PlaceholderKind easydap.PlaceholderType|easydap.PlaceholderTransform
+
 ---One declared input of a configuration — the `name=value` tokens `quick_run`
----accepts and the fields `new_run_file` seeds. `type` names the coercion applied
----to the raw CLI string (see `easydap.schema.coerce`); it also drives type-aware
----value completion and the blank a scaffolded run_file is seeded with. Omit it
----for an input taken verbatim as a string — including one whose every use carries
----a `"{name:kind}"` override, since the declared type is then never consulted. A
----placeholder with `required = true` must be supplied — leaving it unset is a
----`quick_run` error; any other unset placeholder is simply omitted from the body.
+---accepts and the fields `new_run_file` seeds. `type` says how the raw CLI string
+---is read; it also drives type-aware value completion and the blank a scaffolded
+---run_file is seeded with. Omit it for an input taken verbatim as a string —
+---including one whose every use carries a `"{name:transform}"` override, since the
+---declared type is then never consulted. A placeholder with `required = true` must
+---be supplied — leaving it unset is a `quick_run` error; any other unset
+---placeholder is simply omitted from the body.
 ---@class easydap.Placeholder
----@field type?        "string"|"boolean"|"integer"|"number"|"file"|"dir"|"cwd"|"env"|"host"|"port"|"list"|"shell_args"|"shell_program"|"shell_rest_args"  default `string`
+---@field type?        easydap.PlaceholderType  default `string`
 ---@field required?    boolean  unset is an error (default false)
 ---@field description? string   a few words on what the input means
 
@@ -44,13 +72,14 @@
 ---    regardless of user input;
 ---  * a zero-arg function, resolved at fill time (a computed default, e.g.
 ---    `function() return vim.fn.getcwd() end`);
----  * a `"{name}"` token naming a declared placeholder, coerced by that
+---  * a `"{name}"` token naming a declared placeholder, read by that
 ---    placeholder's `type`. Tokens may also be embedded in a longer string
 ---    (`"target create {program}"`), which interpolates.
----The `"{name:kind}"` form overrides the coercion for that one use. It exists for
----the case where a single input feeds two fields differently — a shell command
----line split into `program` (`shell_program`) and `args` (`shell_rest_args`) —
----and is otherwise unnecessary: prefer a bare `"{name}"` and a declared `type`.
+---The `"{name:transform}"` form applies an `easydap.PlaceholderTransform` for that
+---one use instead. It exists for the case where a single input feeds two fields
+---differently — a shell command line split into `program` (`shell_program`) and
+---`args` (`shell_rest_args`) — and is otherwise unnecessary: prefer a bare
+---`"{name}"` and a declared `type`.
 ---
 ---`connect` is the same placeholder mechanism for adapters that connect over a
 ---task-level TCP endpoint (an `AdapterDef` `host`/`port`, e.g. `remote`/

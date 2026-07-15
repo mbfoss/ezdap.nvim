@@ -110,7 +110,7 @@ Each `easydap.Placeholder` declares one input up front:
 
 | Field      | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
-| `type`     | the coercion applied to the raw `quick_run` string — one of `string`/`boolean`/`integer`/`number`/`file`/`dir`/`cwd`/`env`/`host`/`port`/`list`/`shell_args`/`shell_program`/`shell_rest_args` (`easydap.schema.coerce` does the coercion). It also drives type-aware value completion and the blank a scaffolded run_file is seeded with. Defaults to `string` — omit it for an input taken verbatim, including one whose every use carries a `"{name:kind}"` override, since the declared type is then never consulted |
+| `type`     | what the input *is* — how its raw `quick_run` string is read: one of `string`/`boolean`/`integer`/`number`/`file`/`dir`/`cwd`/`env`/`host`/`port`/`list`/`shell_args` (`easydap.schema.coerce` does the reading). It also drives type-aware value completion and the blank a scaffolded run_file is seeded with. Defaults to `string` — omit it for an input taken verbatim, including one whose every use carries a transform, since the declared type is then never consulted |
 | `required` | when `true`, leaving it unset is a `quick_run` error; any other unset placeholder is simply omitted from the body |
 | `description` | a few words on what the input means, e.g. `"process id to attach to"` |
 
@@ -121,17 +121,28 @@ A `parameters` (or `connect`) leaf value is one of:
   sends;
 - a **zero-arg function** — a computed default resolved at fill time (e.g.
   `function() return vim.fn.getcwd() end`);
-- a **`"{name}"` token** naming a declared placeholder, coerced by that
+- a **`"{name}"` token** naming a declared placeholder, read by that
   placeholder's `type`. Tokens may also be embedded in a longer string
   (`"target create {program}"`), which interpolates; if any embedded token is
   unset, the whole leaf is dropped.
 
-The `"{name:kind}"` form overrides the coercion for one use. It exists for the
-case where a single input feeds two fields differently — the `launch`
-configurations of `codelldb`/`gdb`/`lldb` split one `command` command line into
-`program` (`shell_program`, the first word) and `args` (`shell_rest_args`, the
-rest) — and is otherwise unnecessary: prefer a bare `"{name}"` and a declared
-`type`.
+### Types vs transforms
+
+These are two distinct vocabularies, and it's worth keeping them straight:
+
+- a **type** says what an input *is* (`file`, `port`, `env`, …). It's declared on
+  a placeholder, and it's how a bare `"{name}"` is read.
+- a **transform** says what one field takes *from* an input. It is never a
+  placeholder's `type` — only ever written in a token, as `"{name:transform}"`.
+  There are two, and both slice a shell command line: `shell_program` (its first
+  word, expanded as a path) and `shell_rest_args` (everything after).
+
+Transforms exist for the one case where a single input feeds two fields
+differently: the `launch` configurations of `codelldb`/`gdb`/`lldb` split one
+`command` command line into `program = "{command:shell_program}"` and
+`args = "{command:shell_rest_args}"`. Outside that, prefer a bare `"{name}"` and
+a declared `type`. `easydap.schema.coerce` accepts either — a type or a
+transform — which the annotations call an `easydap.PlaceholderKind`.
 
 Placeholder *names* are native to each adapter/configuration — there is no
 portable role vocabulary across adapters (e.g. codelldb's `launch`

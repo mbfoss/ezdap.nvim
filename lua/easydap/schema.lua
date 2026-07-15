@@ -3,19 +3,26 @@
 ---Adapters carry no launch/attach schema of their own — each adapter's
 ---`configurations` (named `easydap.Configuration` templates, in `easydap.adapters`)
 ---are wholly self-describing. A configuration declares its inputs up front in a
----`placeholders` table — `name -> { type = <kind>, required = <bool>,
+---`placeholders` table — `name -> { type = <type>, required = <bool>,
 ---description = <string> }` — and its `parameters` is a native request body whose
 ---leaves may be a literal value (including a zero-arg function, resolved at fill
 ---time — e.g. a computed default), an identity field the configuration pins itself
 ---(e.g. `type`/`name`), or a `"{name}"` token referring to a declared placeholder.
----A token is coerced by its placeholder's declared `type` (see `M.coerce`); the
----`"{name:kind}"` form overrides that coercion for one use, which is how a single
----input feeds two fields differently (a shell command line split into
----`program`/`args`). A placeholder with `required = true` must be supplied.
+---A token is read by its placeholder's declared `type` (see `M.coerce`); the
+---`"{name:transform}"` form applies an `easydap.PlaceholderTransform` for one use
+---instead, which is how a single input feeds two fields differently (a shell
+---command line split into `program`/`args`). A placeholder with `required = true`
+---must be supplied.
+---
+---Types and transforms are distinct vocabularies: a *type* says what an input is
+---(`file`, `port`, `env`, …) and may be declared on a placeholder; a *transform*
+---(`shell_program`, `shell_rest_args`) says what one field takes *from* an input
+---and only ever appears in a token. `M.coerce` accepts either — an
+---`easydap.PlaceholderKind`.
 ---
 ---This module reads those configurations to fill a configuration's placeholders
 ---from `quick_run`'s `name=value` inputs (`fill_configuration`) and to scaffold a
----run_file template (`easydap.scaffold`, via `configuration_placeholder_kinds`/
+---run_file template (`easydap.scaffold`, via `configuration_placeholder_types`/
 ---`configuration`/`configurations`). It speaks each adapter's native keys directly
 --- — no portable field vocabulary between adapters.
 
@@ -25,10 +32,10 @@ local M = {}
 
 -- ── Coercion ───────────────────────────────────────────────────────────────
 
----Coerce a raw CLI string into the value a placeholder's `type` describes (or
----the per-use `kind` override in `"{name:kind}"`; an empty/absent kind means a
----plain string).
----@param kind string?
+---Read a raw CLI string into a value, by a placeholder's declared `type` or by
+---the per-use transform in `"{name:transform}"` — an `easydap.PlaceholderKind`.
+---An empty/absent kind means a plain string.
+---@param kind easydap.PlaceholderKind?
 ---@param raw string
 ---@return any? value, string? err
 function M.coerce(kind, raw)
@@ -102,31 +109,31 @@ end
 
 -- ── Introspection ──────────────────────────────────────────────────────────
 
--- One placeholder token — `{name}` or `{name:kind}` — anywhere in a string.
--- Captures the name, then the per-use kind override (empty when absent, i.e.
--- when the placeholder's declared `type` applies).
+-- One placeholder token — `{name}` or `{name:transform}` — anywhere in a string.
+-- Captures the name, then the per-use transform (empty when absent, i.e. when the
+-- placeholder's declared `type` applies).
 local _PLACEHOLDER_PAT = "{([%w_]+):?([%w_]*)}"
 
 ---A leaf value that is *entirely* one placeholder token (`"{name}"` or
----`"{name:kind}"`), or nil. A whole-string token is filled with its coerced typed
+---`"{name:transform}"`), or nil. A whole-string token is filled with its read
 ---value (which may be non-string — a list, integer, …); tokens merely *embedded*
 ---in a longer string are handled separately, by interpolation (see `_fill_leaf`).
 ---@param value any
----@return string? name, string? kind  `kind` is the per-use override, `""` when absent
+---@return string? name, string? transform  `""` when the token carries none
 local function _placeholder(value)
     if type(value) ~= "string" then return nil end
-    local name, kind = value:match("^" .. _PLACEHOLDER_PAT .. "$")
+    local name, transform = value:match("^" .. _PLACEHOLDER_PAT .. "$")
     if not name then return nil end
-    return name, kind
+    return name, transform
 end
 
 ---Walk a (possibly nested) plain body table — a configuration's `parameters` or
----`connect` — calling `fn(dotted_key, placeholder_name, kind)` for every
+---`connect` — calling `fn(dotted_key, placeholder_name, transform)` for every
 ---placeholder token found in a leaf. A single string leaf may hold several tokens
 ---(e.g. `"gdb-remote {host}:{port}"`), each reported in turn. Keys are visited in
 ---sorted order for a stable traversal.
 ---@param body table
----@param fn fun(key: string, name: string, kind: string)
+---@param fn fun(key: string, name: string, transform: string)
 local function _walk_placeholders(body, fn)
     local function rec(node, prefix)
         local keys = {}
@@ -138,8 +145,8 @@ local function _walk_placeholders(body, fn)
             if type(v) == "table" then
                 rec(v, path)
             elseif type(v) == "string" then
-                for name, kind in v:gmatch(_PLACEHOLDER_PAT) do
-                    fn(path, name, kind)
+                for name, transform in v:gmatch(_PLACEHOLDER_PAT) do
+                    fn(path, name, transform)
                 end
             end
         end
@@ -150,25 +157,25 @@ end
 ---The placeholder → declared `type` map for one configuration: every name its
 ---`placeholders` table declares, mapped to that placeholder's `type` (`""` for an
 ---untyped/plain-string placeholder). A token naming a placeholder the
----configuration never declared is still accepted — it takes its kind from the
----token itself — so a configuration written against the older inline-kind style
----keeps working.
+---configuration never declared is still accepted — it falls back to the token's
+---own transform — so a configuration written against the older inline style keeps
+---working.
 ---@param configuration easydap.Configuration
 ---@return table<string, string>
-local function _kinds(configuration)
-    local kinds = {}
+local function _types(configuration)
+    local types = {}
     for name, spec in pairs(configuration.placeholders or {}) do
-        kinds[name] = spec.type or ""
+        types[name] = spec.type or ""
     end
     local function collect(body)
         if not body then return end
-        _walk_placeholders(body, function(_, name, kind)
-            if kinds[name] == nil then kinds[name] = kind end
+        _walk_placeholders(body, function(_, name, transform)
+            if types[name] == nil then types[name] = transform end
         end)
     end
     collect(configuration.parameters)
     collect(configuration.connect)
-    return kinds
+    return types
 end
 
 ---The set of placeholder names a configuration insists on — those its
@@ -183,15 +190,15 @@ local function _required(configuration)
     return required
 end
 
----The coercion kind for one token use: the token's own `:kind` override when it
----carries one, else the placeholder's declared `type`.
----@param kinds table<string, string>
+---What to read one token use by: its own transform when it carries one, else the
+---placeholder's declared `type`.
+---@param types table<string, string>
 ---@param name string
----@param token_kind string?
----@return string
-local function _kind_of(kinds, name, token_kind)
-    if token_kind and token_kind ~= "" then return token_kind end
-    return kinds[name] or ""
+---@param transform string?
+---@return easydap.PlaceholderKind
+local function _kind_of(types, name, transform)
+    if transform and transform ~= "" then return transform end
+    return types[name] or ""
 end
 
 ---An adapter's declared `configurations`, or an empty table.
@@ -224,15 +231,15 @@ end
 ---placeholder). This is the primitive behind `configuration_placeholders`, and
 ---what drives type-aware value completion and run_file seeding; callers that need
 ---every placeholder's type should read it once rather than looking types up
----name-by-name. A per-use `"{name:kind}"` override in a body is *not* reflected
----here — this is the placeholder's own declared type.
+---name-by-name. A per-use `"{name:transform}"` in a body is *not* reflected here —
+---this is the placeholder's own declared type.
 ---@param adapter string
 ---@param configuration_name string
 ---@return table<string, string>
-function M.configuration_placeholder_kinds(adapter, configuration_name)
+function M.configuration_placeholder_types(adapter, configuration_name)
     local configuration = M.configuration(adapter, configuration_name)
     if not configuration then return {} end
-    return _kinds(configuration)
+    return _types(configuration)
 end
 
 ---The distinct placeholder names a configuration declares, sorted. These are the
@@ -242,7 +249,7 @@ end
 ---@return string[]
 function M.configuration_placeholders(adapter, configuration_name)
     local out = {}
-    for name in pairs(M.configuration_placeholder_kinds(adapter, configuration_name)) do
+    for name in pairs(M.configuration_placeholder_types(adapter, configuration_name)) do
         out[#out + 1] = name
     end
     table.sort(out)
@@ -313,15 +320,16 @@ local function _dedupe(list)
     return out
 end
 
----Fill one leaf of a body table, coercing each token by its placeholder's type.
+---Fill one leaf of a body table, reading each token by its placeholder's type (or
+---its own transform).
 ---
 ---Three shapes are handled:
---- * a leaf that is *entirely* one token yields that placeholder's coerced typed
----   value (which may be non-string — a list, integer, …); an already-typed
+--- * a leaf that is *entirely* one token yields that placeholder's read value
+---   (which may be non-string — a list, integer, …); an already-typed
 ---   `values[name]` is used verbatim, and an unset value returns `_OMIT` (a
 ---   `required` miss is recorded);
 --- * a string with token(s) *embedded* in surrounding text is interpolated —
----   each token coerced then stringified in place (so `"target create {program}"`
+---   each token read then stringified in place (so `"target create {program}"`
 ---   becomes `"target create /path/a.out"`) — but only when *every* token has a
 ---   value; if any embedded token is unset the whole leaf is dropped (returns
 ---   `_OMIT`), so an optional command string simply vanishes when its input is
@@ -331,14 +339,14 @@ end
 ---   identity fields (`type`/`name`) or computed defaults directly in `parameters`.
 ---@param v any
 ---@param values table<string, any>
----@param kinds table<string, string>  placeholder name → declared type
+---@param types table<string, string>  placeholder name → declared type
 ---@param required table<string, boolean>
 ---@param missing string[]  required placeholder names with no value, appended in place
 ---@param errs string[]     "name: message" coercion errors, appended in place
 ---@return any value  the filled value, or the `_OMIT` sentinel to drop the key
-local function _fill_leaf(v, values, kinds, required, missing, errs)
-    -- Whole-string token → coerced typed value.
-    local name, token_kind = _placeholder(v)
+local function _fill_leaf(v, values, types, required, missing, errs)
+    -- Whole-string token → read value.
+    local name, transform = _placeholder(v)
     if name then
         local raw = values[name]
         if raw == nil then
@@ -347,7 +355,7 @@ local function _fill_leaf(v, values, kinds, required, missing, errs)
         elseif type(raw) ~= "string" then
             return raw
         end
-        local val, cerr = M.coerce(_kind_of(kinds, name, token_kind), raw)
+        local val, cerr = M.coerce(_kind_of(types, name, transform), raw)
         if cerr then
             errs[#errs + 1] = name .. ": " .. cerr
             return _OMIT
@@ -359,7 +367,7 @@ local function _fill_leaf(v, values, kinds, required, missing, errs)
     -- resolves; any unset token drops the whole leaf.
     if type(v) == "string" and v:find(_PLACEHOLDER_PAT) then
         local omit = false
-        local filled = v:gsub(_PLACEHOLDER_PAT, function(pname, pkind)
+        local filled = v:gsub(_PLACEHOLDER_PAT, function(pname, ptransform)
             local raw = values[pname]
             if raw == nil then
                 if required[pname] then missing[#missing + 1] = pname end
@@ -368,7 +376,7 @@ local function _fill_leaf(v, values, kinds, required, missing, errs)
             elseif type(raw) ~= "string" then
                 return tostring(raw)
             end
-            local val, cerr = M.coerce(_kind_of(kinds, pname, pkind), raw)
+            local val, cerr = M.coerce(_kind_of(types, pname, ptransform), raw)
             if cerr then
                 errs[#errs + 1] = pname .. ": " .. cerr
                 return ""
@@ -384,21 +392,21 @@ local function _fill_leaf(v, values, kinds, required, missing, errs)
 end
 
 ---Fill one placeholder-bearing body (a configuration's `parameters` or `connect`),
----coercing each supplied value by its placeholder's type (see `_fill_leaf`).
+---reading each supplied value by its placeholder's type (see `_fill_leaf`).
 ---@param body table
 ---@param values table<string, any>
----@param kinds table<string, string>
+---@param types table<string, string>
 ---@param required table<string, boolean>
 ---@param missing string[]  required placeholder names with no value, appended in place
 ---@param errs string[]     "name: message" coercion errors, appended in place
 ---@return table
-local function _fill_body(body, values, kinds, required, missing, errs)
+local function _fill_body(body, values, types, required, missing, errs)
     local out = {}
     for key, v in pairs(body) do
         if type(v) == "table" then
-            out[key] = _fill_body(v, values, kinds, required, missing, errs)
+            out[key] = _fill_body(v, values, types, required, missing, errs)
         else
-            local val = _fill_leaf(v, values, kinds, required, missing, errs)
+            local val = _fill_leaf(v, values, types, required, missing, errs)
             if val ~= _OMIT then
                 out[key] = val
             end
@@ -421,11 +429,11 @@ function M.fill_configuration(adapter, configuration_name, values)
         return nil, nil, ("adapter %s has no configuration %q (available: %s)")
             :format(adapter, tostring(configuration_name), table.concat(M.configuration_names(adapter), ", "))
     end
-    local kinds    = _kinds(configuration)
+    local types    = _types(configuration)
     local required = _required(configuration)
 
     local missing, errs = {}, {}
-    local body = _fill_body(configuration.parameters or {}, values, kinds, required, missing, errs)
+    local body = _fill_body(configuration.parameters or {}, values, types, required, missing, errs)
 
     local connect
     if configuration.connect then

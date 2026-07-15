@@ -177,8 +177,8 @@ while debugpy's `launch` configuration takes `target`, `args`, `cwd` and
 `env`; debugpy's `attach` configuration takes `pid`, and its `remote`
 configuration takes `host`/`port`. Each placeholder declares a **type** that
 decides how your value is read: `file`/`dir`/`cwd` (path expansion), `env`
-(`A=1,B=2`), `shell_args`/`shell_program`/`shell_rest_args` (shell-quoted
-splitting) and `integer`/`port`/`boolean`.
+(`A=1,B=2`), `shell_args` (shell-quoted splitting) and
+`integer`/`port`/`boolean`.
 
 Tab-completion offers adapters, then configuration names, then the
 placeholders available for the chosen configuration — and, once you type `=`,
