@@ -6,8 +6,9 @@
 local ui_util = require "easydap.util.ui_util"
 
 ---@class easydap.OutputBuffer
----@field private _bufnr     integer?  nil once the buffer is deleted/wiped
----@field private _max_lines integer  0 = unlimited
+---@field private _bufnr      integer?  nil once the buffer is deleted/wiped
+---@field private _max_lines  integer   0 = unlimited
+---@field private _autoscroll boolean   keep windows pinned to the last line
 local OutputBuffer = {}
 OutputBuffer.__index = OutputBuffer
 
@@ -16,13 +17,16 @@ OutputBuffer.__index = OutputBuffer
 ---@field listed?    boolean  whether the buffer is listed (default true)
 ---@field max_lines? integer  cap on retained lines; oldest are trimmed past it (0/nil = unlimited)
 ---@field on_delete? fun()    called when the buffer is deleted/wiped
+---@field autoscroll boolean? autoscroll the buffer in all visible windows when the cursor is on the last line 
+---@field ansi_colors boolean? parse and render ansi colors
 
 ---@param opts easydap.OutputBuffer.Opts
 ---@return easydap.OutputBuffer
 function OutputBuffer.new(opts)
     local self = setmetatable({
-        _bufnr     = nil,
-        _max_lines = opts.max_lines or 0,
+        _bufnr      = nil,
+        _max_lines  = opts.max_lines or 0,
+        _autoscroll = opts.autoscroll or false,
     }, OutputBuffer)
     self:_init(opts)
     return self
@@ -61,6 +65,19 @@ end
 function OutputBuffer:append(lines)
     local buf = self._bufnr
     if #lines == 0 or buf == nil or not vim.api.nvim_buf_is_valid(buf) then return end
+
+    -- Snapshot which windows are pinned to the bottom before the buffer grows,
+    -- so we only follow along in windows the user hadn't scrolled away from.
+    local pinned = {}
+    if self._autoscroll then
+        local last = vim.api.nvim_buf_line_count(buf)
+        for _, win in ipairs(vim.fn.win_findbuf(buf)) do
+            if vim.api.nvim_win_get_cursor(win)[1] >= last then
+                pinned[#pinned + 1] = win
+            end
+        end
+    end
+
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
     if self._max_lines > 0 then
@@ -70,6 +87,13 @@ function OutputBuffer:append(lines)
         end
     end
     vim.bo[buf].modifiable = false
+
+    local last = vim.api.nvim_buf_line_count(buf)
+    for _, win in ipairs(pinned) do
+        if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_set_cursor(win, { last, 0 })
+        end
+    end
 end
 
 return OutputBuffer
