@@ -48,10 +48,11 @@ local function _lua_literal(v)
 end
 
 ---Build the `values = { … }` lines for a configuration: one `name = <seed>,` entry
----per declared input, sorted by name, each padded and trailed by a `-- description`
----comment (with `(required)` appended for required inputs). Returns nil when the
----configuration declares no inputs, so the caller can emit `values = {}` instead of
----an empty sandwich.
+---per declared input, sorted by name, each trailed by a `-- description` comment.
+---Required inputs are written active; every other input is commented out, so the
+---scaffolded file supplies only what a run needs and the reader uncomments the rest.
+---Returns nil when the configuration declares no inputs, so the caller can emit
+---`values = {}` instead of an empty sandwich.
 ---@param adapter string
 ---@param configuration_name string
 ---@return string[]?  the interior lines, already indented to sit inside `values`
@@ -60,25 +61,22 @@ local function _values_lines(adapter, configuration_name)
     if #names == 0 then return nil end
     local specs = schema.configuration_inputs(adapter, configuration_name)
 
-    -- Two passes: assemble each `name = <seed>,` assignment, then pad them all to a
-    -- common width so the trailing comments line up.
-    local assigns, width = {}, 0
+    -- Two passes: build each input's code — a `name = <seed>,` assignment, commented
+    -- out unless the input is required — then pad them all to a common width so the
+    -- trailing `-- description` comments line up.
+    local codes, width = {}, 0
     for i, name in ipairs(names) do
         local assign = ("%s = %s,"):format(name, _lua_literal(inputs_registry.seed(specs[name])))
-        assigns[i] = assign
-        width = math.max(width, #assign)
+        codes[i] = specs[name].required and assign or ("-- " .. assign)
+        width = math.max(width, #codes[i])
     end
 
     local lines = {}
     for i, name in ipairs(names) do
-        local spec = specs[name]
-        local comment = spec.description or ""
-        if spec.required then
-            comment = comment == "" and "required" or (comment .. " (required)")
-        end
-        local line = "        " .. assigns[i]
+        local comment = specs[name].description or ""
+        local line = "        " .. codes[i]
         if comment ~= "" then
-            line = line .. string.rep(" ", width - #assigns[i]) .. "  -- " .. comment
+            line = line .. string.rep(" ", width - #codes[i]) .. "  -- " .. comment
         end
         lines[i] = line
     end
