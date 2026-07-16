@@ -190,7 +190,7 @@ A run file is a Lua file that returns a single task table. Keep it in your
 project and run it whenever you need it. Two shapes are accepted, told apart by
 whether a `configuration` field is present.
 
-**Inputs-based** — names a `configuration` and fills in its declared inputs. It
+**Inputs-based** — names a `configuration` and answers its declared inputs. It
 resolves exactly like `:Debug quick_run`, so a required input left unset is an
 error and an attach with no `pid` pops a process picker:
 
@@ -200,12 +200,19 @@ return {
   name          = "debug app",    -- run/panel label (defaults to "debug")
   adapter       = "codelldb",     -- an entry in require("easydap.adapters")
   configuration = "launch",       -- one of the adapter's named configurations
-  values        = {               -- the configuration's declared inputs
+  inputs = {                      -- answers to the configuration's declared inputs
     command = "./build/app --verbose",
     cwd     = vim.fn.getcwd(),
   },
+  parameters = {                  -- optional: raw DAP fields merged over the built body
+    initCommands = { "settings set target.x86-disassembly-flavor intel" },
+  },
 }
 ```
+
+`parameters` here is the escape hatch: the configuration's `inputs` cover the
+common fields, and anything they don't expose you patch in raw. Drop it if you
+don't need it.
 
 **Native** — no `configuration`; you supply the adapter's raw DAP body directly
 under `parameters`, forwarded to the adapter verbatim:
@@ -246,9 +253,9 @@ commented out with its description, so you uncomment just what you need:
 " → writes <project root>/codelldb_launch.lua and opens it
 ```
 
-Fill in the `values`, then `:Debug run_file` it. It resolves through the same
+Fill in the `inputs`, then `:Debug run_file` it. It resolves through the same
 path as `:Debug quick_run`. (Prefer the native shape above instead? Just drop
-the `configuration`/`values` keys and write `request` + `parameters` by hand.)
+the `configuration`/`inputs` keys and write `request` + `parameters` by hand.)
 
 ### From Lua
 
@@ -607,7 +614,7 @@ that error, which is how a cancelled picker is reported.
 
 `:Debug new_run_file` scaffolds a run file straight from `inputs`: required inputs
 active, the rest commented out with their descriptions. The resulting file names
-the `configuration` and its `values`, and `:Debug run_file` resolves it through
+the `configuration` and its `inputs`, and `:Debug run_file` resolves it through
 `build` — the same path `quick_run` takes.
 
 See each built-in adapter under

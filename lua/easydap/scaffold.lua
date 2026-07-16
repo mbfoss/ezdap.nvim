@@ -2,11 +2,13 @@
 ---
 ---Writes a runnable Lua run_file for an adapter + one of its `configurations`. The
 ---generated file is inputs-based, exactly like `:Debug quick_run`: it names the
----`adapter` and `configuration` and lists that configuration's declared `inputs`
----under `values`, each seeded with a starting value (`easydap.inputs`' `seed`) and
+---`adapter` and `configuration` and lists that configuration's declared inputs
+---under `inputs`, each seeded with a starting value (`easydap.inputs`' `seed`) and
 ---annotated with its `description`. `:Debug run_file` resolves it through the
 ---configuration's `build` (see `easydap.schema`), so a run file and `quick_run`
----share one description of a configuration — its `inputs` — and never drift.
+---share one description of a configuration — its `inputs` — and never drift. A
+---`parameters` table may be added by hand to patch raw DAP fields over the built
+---body; the scaffold seeds it commented out.
 
 local schema = require("easydap.schema")
 local inputs_registry = require("easydap.inputs")
@@ -47,16 +49,16 @@ local function _lua_literal(v)
     return "nil"
 end
 
----Build the `values = { … }` lines for a configuration: one `name = <seed>,` entry
+---Build the `inputs = { … }` lines for a configuration: one `name = <seed>,` entry
 ---per declared input, sorted by name, each trailed by a `-- description` comment.
 ---Required inputs are written active; every other input is commented out, so the
 ---scaffolded file supplies only what a run needs and the reader uncomments the rest.
 ---Returns nil when the configuration declares no inputs, so the caller can emit
----`values = {}` instead of an empty sandwich.
+---`inputs = {}` instead of an empty sandwich.
 ---@param adapter string
 ---@param configuration_name string
----@return string[]?  the interior lines, already indented to sit inside `values`
-local function _values_lines(adapter, configuration_name)
+---@return string[]?  the interior lines, already indented to sit inside `inputs`
+local function _input_lines(adapter, configuration_name)
     local names = schema.configuration_input_names(adapter, configuration_name)
     if #names == 0 then return nil end
     local specs = schema.configuration_inputs(adapter, configuration_name)
@@ -160,16 +162,19 @@ function M.new_run_file(assignments)
         ("    adapter       = %q,"):format(adapter),
         ("    configuration = %q,"):format(configuration_name),
     }
-    -- A configuration with no inputs gets an empty `values` rather than a `{` / blank
+    -- A configuration with no inputs gets an empty `inputs` rather than a `{` / blank
     -- line / `}` sandwich.
-    local values = _values_lines(adapter, configuration_name)
-    if not values then
-        lines[#lines + 1] = "    values        = {},"
+    local input_lines = _input_lines(adapter, configuration_name)
+    if not input_lines then
+        lines[#lines + 1] = "    inputs        = {},"
     else
-        lines[#lines + 1] = "    values        = {"
-        vim.list_extend(lines, values)
+        lines[#lines + 1] = "    inputs        = {"
+        vim.list_extend(lines, input_lines)
         lines[#lines + 1] = "    },"
     end
+    -- Raw DAP fields, merged over the built body — a hand-editable escape hatch for
+    -- anything the configuration's inputs don't expose. Seeded commented out.
+    lines[#lines + 1] = "    -- parameters = {},  -- raw DAP fields merged over the built body"
     vim.list_extend(lines, { "}", "" })
 
     local ok, werr = require("easydap.tk.fsutil").write_content(dest, table.concat(lines, "\n"))

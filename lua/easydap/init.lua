@@ -466,7 +466,7 @@ function M.run_file(path)
 end
 
 ---Scaffold a run_file for one of an adapter's configurations — an inputs-based file
----(`adapter`/`configuration`/`values`) whose `values` are the configuration's
+---(`adapter`/`configuration`/`inputs`) whose `inputs` answer the configuration's
 ---declared inputs, seeded and commented — and open it for editing. `:Debug run_file`
 ---resolves it through `build`, the same path `quick_run` takes. `assignments` is
 ---positional: the adapter, an optional configuration name (defaults to the adapter's

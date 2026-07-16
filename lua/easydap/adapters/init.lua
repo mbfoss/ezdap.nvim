@@ -71,8 +71,9 @@
 ---`build` turns supplied values into a runnable request. Both `quick_run` and a
 ---scaffolded run file resolve the same way — through `resolve_task`/`build` — so a
 ---configuration is described in exactly one place: its `inputs`. `new_run_file`
----seeds a run file's `values` from those inputs (each input's `seed`, described by
----its `description`); the resolved task is never authored as raw `parameters`.
+---seeds a run file's `inputs` from those declarations (each input's `seed`, described
+---by its `description`); a run file may still add a raw `parameters` overlay by hand
+---for fields the inputs don't expose.
 ---
 ---`build(params, connect, inputs)` assembles everything a run needs, in place: the
 ---native request body in `params`, and — for adapters that connect over a

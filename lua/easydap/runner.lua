@@ -249,10 +249,12 @@ end
 ---its returned function produces) is run. Two run-file shapes are accepted:
 ---
 ---  * inputs-based (what `new_run_file` scaffolds): `adapter` + `configuration` +
----    `values`. It is resolved through the configuration's `build`, exactly as
----    `quick_run` does — so `values` are the configuration's declared inputs, not a
----    raw request body. `build` may open a picker (an attach resolving an unset
----    `pid`), so the run starts from the resolve callback.
+---    `inputs`. It is resolved through the configuration's `build`, exactly as
+---    `quick_run` does — so `inputs` are the answers to the configuration's declared
+---    inputs, not a raw request body. `build` may open a picker (an attach resolving
+---    an unset `pid`), so the run starts from the resolve callback. An optional
+---    `parameters` table is merged over the body `build` produced — a raw-DAP escape
+---    hatch for fields the inputs don't expose.
 ---  * native: `adapter` + `request` (`"launch"`/`"attach"`) + `parameters` (the raw
 ---    DAP body, forwarded to the adapter verbatim). No `configuration` — the two are
 ---    told apart by whether a `configuration` field is present. This is the same
@@ -305,7 +307,7 @@ function M.run_file(path)
     end
 
     -- An inputs-based run file (what `new_run_file` scaffolds) names a configuration
-    -- and its `values`; resolve it through the configuration's `build`, exactly as
+    -- and its `inputs`; resolve it through the configuration's `build`, exactly as
     -- `quick_run` does. It may open a picker, so the run starts from the callback.
     if type(spec.configuration) == "string" then
         local name = vim.fn.fnamemodify(resolved, ":t")
@@ -313,11 +315,17 @@ function M.run_file(path)
             adapter       = spec.adapter,
             configuration = spec.configuration,
             name          = spec.name,
-            values        = spec.values,
+            values        = spec.inputs,
         }, function(task, err)
             if not task then
                 _err("run: " .. name .. ": " .. tostring(err))
                 return
+            end
+            -- An optional `parameters` overlay patches raw DAP fields over the body
+            -- `build` produced (deep-merged, so nested tables extend and arrays
+            -- replace) — the escape hatch for fields the inputs don't expose.
+            if type(spec.parameters) == "table" then
+                task.parameters = vim.tbl_deep_extend("force", task.parameters or {}, spec.parameters)
             end
             task.raw_messages = spec.raw_messages
             M.run(task)

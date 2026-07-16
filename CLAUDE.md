@@ -91,16 +91,18 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   throughout — no portable/generic field vocabulary.
 - [scaffold.lua](lua/easydap/scaffold.lua) — run-file creation behind `:Debug
   new_run_file`: writes a runnable Lua run_file that names the `adapter` and
-  `configuration` and lists its declared `inputs` under `values`, each seeded (via
+  `configuration` and lists its declared inputs under `inputs`, each seeded (via
   `easydap.inputs`' `seed`) and commented with its `description`, then opens it. The
   scaffolded file is inputs-based, exactly like `quick_run`: `:Debug run_file`
-  resolves it through `resolve_task`/`build` (`values -> build -> task`), so a run
+  resolves it through `resolve_task`/`build` (`inputs -> build -> task`), so a run
   file and `quick_run` share one description of a configuration — its `inputs` — and
   cannot drift. `run_file` accepts two run-file shapes, told apart by whether a
-  `configuration` field is present: the inputs-based one above, and a **native** one
-  (`adapter` + `request` + `parameters`) whose `parameters` is the raw DAP body
-  forwarded to the adapter verbatim — the same `easydap.Task` shape
-  `run`/`start_task` take.
+  `configuration` field is present: the inputs-based one above (which may add an
+  optional `parameters` table, deep-merged over the body `build` produced, as a raw
+  escape hatch for fields the inputs don't expose), and a **native** one (`adapter` +
+  `request` + `parameters`) whose `parameters` is the raw DAP body forwarded to the
+  adapter verbatim — the same `easydap.Task` shape `run`/`start_task` take. The
+  merge lives in `run_file`; `resolve_task` itself stays overlay-free.
 
 **Persistence** — [store.lua](lua/easydap/store.lua)
 - A thin path + read/write helper. The project root is the nearest ancestor of
