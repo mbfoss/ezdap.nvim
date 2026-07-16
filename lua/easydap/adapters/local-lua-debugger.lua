@@ -16,7 +16,7 @@ return {
     -- `program` is a nested table the js-based adapter consumes; the target file
     -- is set as `program.file`. Field set follows tomblind/local-lua-debugger-vscode's
     -- launch configuration.
-    configurations = {
+    profiles       = {
         -- One `command` input carries the whole command line; `build` splits it into
         -- the script (`program.file`) and `args` (the rest).
         launch = {

@@ -46,8 +46,8 @@ Re-exports client signals so consumers depend only on `manager`.
 - [adapters/](lua/easydap/adapters/) — built-in adapter definitions, one file per
   adapter, assembled by [adapters/init.lua](lua/easydap/adapters/init.lua) into a
   plain `name → easydap.AdapterDef` table: native DAP process/connection config
-  plus optional named `configurations`. Users add/override keys directly. The DAP
-  core never reads `configurations` — only `easydap.schema` does.
+  plus optional named `profiles`. Users add/override keys directly. The DAP
+  core never reads `profiles` — only `easydap.schema` does.
 - [task.lua](lua/easydap/task.lua) — the task runner backend. Consumes a native
   task (`name`/`adapter`/`request`/`parameters` + optional
   `host`/`port`/`raw_messages`) and sends `parameters` as the DAP request body
@@ -60,12 +60,12 @@ Re-exports client signals so consumers depend only on `manager`.
   Nothing else switches on a format name, so adding one is a single row.
 - [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run`, the
   reader for `new_run_file`, and the seam easytasks' `debug` task type runs on.
-  `resolve_task` reads a configuration's declared `inputs` from a table of values
+  `resolve_task` reads a profile's declared `inputs` from a table of values
   and calls its `build`, delivering a complete `easydap.Task` to a `done` callback —
   a `build` may stop to ask the user something first, and the returned `cancel`
   drops the answer if the caller has given up by then.
 - [scaffold.lua](lua/easydap/scaffold.lua) — `:Debug new_run_file`: renders a
-  configuration's `template` into a runnable Lua run file and opens it.
+  profile's `template` into a runnable Lua run file and opens it.
 
 **Persistence** — [store.lua](lua/easydap/store.lua)
 A thin path + read/write helper. The project root is the nearest ancestor of the
@@ -95,20 +95,20 @@ LOCAL=../neotoolkit.nvim scripts/vendor-neotoolkit.sh   # sync from a local chec
 easydap's own utilities live in [lua/easydap/util/](lua/easydap/util/) and are
 untouched by the vendor script.
 
-## The adapter configuration format
+## The adapter profile format
 
 An `AdapterDef` describes how to launch a DAP adapter (`command`/`host`/`port`,
-optional `setup`/`teardown`, default `request`). Its optional `configurations` is
-a `table<string, easydap.Configuration>` — named launch/attach templates
+optional `setup`/`teardown`, default `request`). Its optional `profiles` is
+a `table<string, easydap.Profile>` — named launch/attach templates
 (`launch`, `attach`, `remote`, …) consumed only by `easydap.schema`. Adapters carry
-no separate schema of their own: each configuration is wholly self-describing.
+no separate schema of their own: each profile is wholly self-describing.
 
-Each `easydap.Configuration`:
+Each `easydap.Profile`:
 
 | Field         | Meaning                                                                         |
 | ------------- | ------------------------------------------------------------------------------- |
 | `request`     | `"launch"` or `"attach"`                                                        |
-| `inputs`      | what the configuration accepts — `name -> easydap.Input`; see below             |
+| `inputs`      | what the profile accepts — `name -> easydap.Input`; see below             |
 | `build`       | `fun(params, connect, inputs)` — assembles the native request body, and any task-level TCP endpoint, in place |
 | `template`    | Lua **source text** for the body `new_run_file` scaffolds, seeded with example values |
 
@@ -169,7 +169,7 @@ never produces anything the scaffolder reads.
   host/port in force.
 
   Omitting the field is only the *default* answer to an unset input; `build` is
-  where a configuration decides otherwise, because it alone knows what the request
+  where a profile decides otherwise, because it alone knows what the request
   means. An attach body is nothing without a process, so every attach `build`
   resolves an unset `pid` by asking the user to pick one:
 
@@ -201,8 +201,8 @@ never produces anything the scaffolder reads.
 Two prices are worth naming. The field list appears in both `build` and `template`,
 and nothing checks they agree — drift costs scaffold quality (a field the run file
 doesn't seed), never `quick_run` correctness. And the template is unvalidated text:
-a typo in it surfaces only when someone scaffolds that configuration, so scaffold
-one after editing (`:Debug new_run_file <adapter> <configuration> /tmp/x.lua`).
+a typo in it surfaces only when someone scaffolds that profile, so scaffold
+one after editing (`:Debug new_run_file <adapter> <profile> /tmp/x.lua`).
 
 Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are easydap's
 own user-facing vocabulary — the `name=value` tokens typed at `quick_run` — not
@@ -210,13 +210,13 @@ the adapter's. The `params` keys they fill keep whatever casing the adapter's
 wire protocol uses, so pairings like `params.stopOnEntry = inputs.stop_on_entry`
 are normal and correct.
 
-Which names a configuration takes is up to it — there is no portable role
-vocabulary across adapters — but by convention a `launch` configuration takes one
+Which names a profile takes is up to it — there is no portable role
+vocabulary across adapters — but by convention a `launch` profile takes one
 `command` input (`type = "shell_args"`) carrying the whole command line, and
 `build` splits it into that adapter's own program/args fields. See each file under
 [adapters/](lua/easydap/adapters/) for worked examples of every shape, including
-nested `connect` groups (`debugpy`'s `remote` configuration), custom-launch
-command strings (`codelldb`'s `core`), a `connect`-only configuration
+nested `connect` groups (`debugpy`'s `remote` profile), custom-launch
+command strings (`codelldb`'s `core`), a `connect`-only profile
 (`remote`), and one input feeding both body and connection
 (`java-debug-server`).
 

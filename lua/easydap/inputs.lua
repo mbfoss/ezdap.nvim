@@ -1,6 +1,6 @@
 ---@brief The input-format registry: one row per `easydap.InputFormat`.
 ---
----A configuration's `inputs` declares a *value space*, and each consumer wants a
+---A profile's `inputs` declares a *value space*, and each consumer wants a
 ---different projection of it — `quick_run` parses a command-line string into it,
 ---a tasks-file LSP describes it as JSON Schema, the scaffolders seed a starting
 ---document with it, and `:Debug` completion offers paths for the path-ish formats.

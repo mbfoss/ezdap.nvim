@@ -2,8 +2,8 @@
 ---
 ---The module is a plain table: each key is an adapter name, each value is an
 ---AdapterDef — native DAP process/connection config (command, host/port,
----setup/teardown, request, …) plus a `configurations` table of named `easydap.Configuration`
----launch/attach descriptions. Configurations are what `:Debug new_run_file`/`quick_run`
+---setup/teardown, request, …) plus a `profiles` table of named `easydap.Profile`
+---launch/attach descriptions. Profiles are what `:Debug new_run_file`/`quick_run`
 ---read (via `easydap.schema`) to scaffold a run file / assemble a
 ---native request body; the DAP core never touches them.
 ---
@@ -49,13 +49,13 @@
 ---| "list"        # → table: "a,b" → { "a", "b" }
 ---| "shell_args"  # → table: a shell-quoted command line → a list of arguments
 
----One declared input of a configuration — a `name=value` argument to `quick_run`, a
+---One declared input of a profile — a `name=value` argument to `quick_run`, a
 ---`parameters` key in an easytasks tasks file. `type` is what `build` receives;
 ---`format` says which authored forms reach it (and drives path-aware value
 ---completion). Omit both for an input taken verbatim as a string. An input with
 ---`required = true` must be supplied — leaving it unset is a resolve error; any
 ---other input simply arrives at `build` as nil, which a `build` is free to answer
----some other way than by omitting the field (an attach configuration asks the user
+---some other way than by omitting the field (an attach profile asks the user
 ---to pick a process for an unset `pid`, which is why no adapter marks that input
 ---`required`).
 ---@class easydap.Input
@@ -64,13 +64,13 @@
 ---@field required?    boolean  unset is an error (default false)
 ---@field description? string   a few words on what the input means
 
----A named configuration for one adapter — what `resolve_task` turns into a runnable
+---A named profile for one adapter — what `resolve_task` turns into a runnable
 ---task, and what `new_run_file` scaffolds.
 ---
----`inputs` declares what the configuration accepts (name → `easydap.Input`), and
+---`inputs` declares what the profile accepts (name → `easydap.Input`), and
 ---`build` turns supplied values into a runnable request. Both `quick_run` and a
 ---scaffolded run file resolve the same way — through `resolve_task`/`build` — so a
----configuration is described in exactly one place: its `inputs`. `new_run_file`
+---profile is described in exactly one place: its `inputs`. `new_run_file`
 ---seeds a run file's `inputs` from those declarations (each input's `seed`, described
 ---by its `description`); a run file may still add a raw `parameters` overlay by hand
 ---for fields the inputs don't expose.
@@ -88,7 +88,7 @@
 ---it in.
 ---
 ---Omitting the field is only the *default* answer to an unset input; `build` is
----where a configuration decides otherwise, because it alone knows what the request
+---where a profile decides otherwise, because it alone knows what the request
 ---means. An attach body is nothing without a process, so every attach `build`
 ---resolves an unset `pid` by asking the user to pick one (`shared.resolve_pid`) —
 ---the schema layer just reads a pid as the integer it is. Such a `build` yields;
@@ -100,10 +100,10 @@
 ---caller waiting on it hears back. A caller that gives up first cancels its resolve
 ---and stops listening, so a `build` parked forever on an unanswered picker strands
 ---nothing but itself.
----@class easydap.Configuration
+---@class easydap.Profile
 ---@field description  string
 ---@field request      "launch"|"attach"
----@field inputs?      table<string, easydap.Input>  the configuration's declared inputs
+---@field inputs?      table<string, easydap.Input>  the profile's declared inputs
 ---@field build?       fun(params: table, connect: table, inputs: table<string, any>): string?  assemble body + connection in place; return an error string to abort
 
 ---A static adapter definition — the launch/attach description for one adapter.
@@ -112,7 +112,7 @@
 ---an `easydap.dap.Config` (see [dap/client.lua](dap/client.lua)). No
 ---`request_args` here — that is a per-run value carried by the resolved config.
 ---`setup`/`teardown` receive that resolved config (setup may mutate host/port).
----`configurations` are consumed only by `easydap.schema` (for
+---`profiles` are consumed only by `easydap.schema` (for
 ---new_run_file/quick_run), never by the DAP core.
 ---@class easydap.AdapterDef
 ---@field command?               string|string[]
@@ -123,7 +123,7 @@
 ---@field type?                  string   DAP adapterID override (defaults to the adapter name)
 ---@field defer_launch_attach?   boolean
 ---@field request?               string
----@field configurations?               table<string, easydap.Configuration>
+---@field profiles?               table<string, easydap.Profile>
 ---@field setup?                 fun(config: easydap.dap.Config, ctx: easydap.AdapterSetupCtx, callback: fun(err?: string, state?: any))
 ---@field teardown?              fun(config: easydap.dap.Config, ctx: any)
 

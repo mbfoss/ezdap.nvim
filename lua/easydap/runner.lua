@@ -6,10 +6,10 @@ local ui_util  = require "easydap.util.ui_util"
 ---supplies its own callbacks via its backend; this module is the standalone
 ---equivalent (buffer presentation, progress, run lifecycle).
 ---
----One task per file: a config file returns a single task (or a function
+---One task per file: a run file returns a single task (or a function
 ---returning one):
 ---  -- debug.lua
----  return { name = "debug app", adapter = "lldb", request = "launch", parameters = { program = "a.out" } }
+---  return { name = "debug app", adapter = "lldb", configuration = { request = "launch", program = "a.out" } }
 
 local M        = {}
 
@@ -246,19 +246,18 @@ end
 
 ---Run a task from a path. A directory opens a picker of the Lua files in it (see
 ---`_run_from_dir`); a Lua file is loaded and the single value it returns (or that
----its returned function produces) is run. Two run-file shapes are accepted:
+---its returned function produces) is run. Two run-file shapes are accepted, told
+---apart by whether a `profile` or a `configuration` field is present:
 ---
----  * inputs-based (what `new_run_file` scaffolds): `adapter` + `configuration` +
----    `inputs`. It is resolved through the configuration's `build`, exactly as
----    `quick_run` does — so `inputs` are the answers to the configuration's declared
+---  * profile-based (what `new_run_file` scaffolds): `adapter` + `profile` +
+---    `parameters`. It is resolved through the profile's `build`, exactly as
+---    `quick_run` does — so `parameters` are the answers to the profile's declared
 ---    inputs, not a raw request body. `build` may open a picker (an attach resolving
----    an unset `pid`), so the run starts from the resolve callback. An optional
----    `parameters` table is merged over the body `build` produced — a raw-DAP escape
----    hatch for fields the inputs don't expose.
----  * native: `adapter` + `request` (`"launch"`/`"attach"`) + `parameters` (the raw
----    DAP body, forwarded to the adapter verbatim). No `configuration` — the two are
----    told apart by whether a `configuration` field is present. This is the same
----    `easydap.Task` shape `run`/`start_task` take.
+---    an unset `pid`), so the run starts from the resolve callback.
+---  * raw: `adapter` + `configuration`, an nvim-dap-like table of raw DAP
+---    parameters that includes `request` (`"launch"`/`"attach"`). `request` is
+---    lifted out and the rest of the table is forwarded to the adapter verbatim as
+---    the DAP body. This is the raw escape hatch — no profile, no inputs.
 ---
 ---Reports a clear error for every failure mode instead of throwing: missing/empty
 ---path, path not found, non-`.lua` file, load or runtime error, or a file that does
@@ -306,26 +305,21 @@ function M.run_file(path)
         return
     end
 
-    -- An inputs-based run file (what `new_run_file` scaffolds) names a configuration
-    -- and its `inputs`; resolve it through the configuration's `build`, exactly as
-    -- `quick_run` does. It may open a picker, so the run starts from the callback.
-    if type(spec.configuration) == "string" then
+    -- A profile-based run file (what `new_run_file` scaffolds) names a profile and
+    -- answers its inputs under `parameters`; resolve it through the profile's
+    -- `build`, exactly as `quick_run` does. It may open a picker, so the run starts
+    -- from the callback.
+    if type(spec.profile) == "string" then
         local name = vim.fn.fnamemodify(resolved, ":t")
         require("easydap.schema").resolve_task({
-            adapter       = spec.adapter,
-            configuration = spec.configuration,
-            name          = spec.name,
-            values        = spec.inputs,
+            adapter = spec.adapter,
+            profile = spec.profile,
+            name    = spec.name,
+            values  = spec.parameters,
         }, function(task, err)
             if not task then
                 _err("run: " .. name .. ": " .. tostring(err))
                 return
-            end
-            -- An optional `parameters` overlay patches raw DAP fields over the body
-            -- `build` produced (deep-merged, so nested tables extend and arrays
-            -- replace) — the escape hatch for fields the inputs don't expose.
-            if type(spec.parameters) == "table" then
-                task.parameters = vim.tbl_deep_extend("force", task.parameters or {}, spec.parameters)
             end
             task.raw_messages = spec.raw_messages
             M.run(task)
@@ -333,46 +327,64 @@ function M.run_file(path)
         return
     end
 
-    -- Native run file: `request` + `parameters` are already an `easydap.Task`, sent
-    -- to the adapter verbatim.
-    M.run(spec)
+    -- A raw run file carries an nvim-dap-like `configuration` table of raw DAP
+    -- parameters that includes `request`; lift `request` out and forward the rest
+    -- as the DAP body, an `easydap.Task` sent to the adapter verbatim.
+    if type(spec.configuration) == "table" then
+        local body = vim.deepcopy(spec.configuration)
+        local request = body.request
+        body.request = nil
+        M.run({
+            name         = spec.name,
+            adapter      = spec.adapter,
+            request      = request,
+            parameters   = body,
+            host         = spec.host,
+            port         = spec.port,
+            raw_messages = spec.raw_messages,
+        })
+        return
+    end
+
+    _err("run: " .. vim.fn.fnamemodify(resolved, ":t") ..
+        " must set either `profile` (a named profile) or `configuration` (a raw DAP table)")
 end
 
----Launch or attach under an adapter using one of its declared `configurations`.
----`assignments[1]`/`[2]` are strictly the adapter and configuration name (`{ "codelldb", "launch", … }`);
+---Launch or attach under an adapter using one of its declared `profiles`.
+---`assignments[1]`/`[2]` are strictly the adapter and profile name (`{ "codelldb", "launch", … }`);
 ---every argument from `[3]` on is an `input=value` assignment — each value written
 ---in its input's string form — resolved into a runnable task by
----`schema.resolve_task` (see `schema.configuration_input_names` for the set a
----configuration accepts). An input left unset is simply omitted from the assembled
+---`schema.resolve_task` (see `schema.profile_input_names` for the set a
+---profile accepts). An input left unset is simply omitted from the assembled
 ---body, unless its `inputs` entry marks it `required = true` — only then is leaving
----it unset an error. A configuration's `build` sets the task's connection endpoint
+---it unset an error. A profile's `build` sets the task's connection endpoint
 ---for adapters that connect over a task-level TCP endpoint (e.g.
 ---`remote`/`java-debug-server`).
 ---
----Returns nil when the configuration's `build` stops to ask the user something (an
+---Returns nil when the profile's `build` stops to ask the user something (an
 ---attach picking a process for an unset `pid`): there is no run yet to hand back —
 ---it starts once they answer.
----@param assignments string[]  adapter, configuration name, then "input=value" tokens, e.g. { "codelldb", "launch", "command=./a.out" }
+---@param assignments string[]  adapter, profile name, then "input=value" tokens, e.g. { "codelldb", "launch", "command=./a.out" }
 ---@return easydap.runner.Run?
 function M.quick_run(assignments)
     local schema = require("easydap.schema")
 
-    -- The adapter and configuration name are strictly the first two positional
+    -- The adapter and profile name are strictly the first two positional
     -- arguments (`quick_run codelldb launch …`); every argument from the
     -- third on is an `input=value` assignment.
-    local adapter, configuration_name = assignments[1], assignments[2]
+    local adapter, profile_name = assignments[1], assignments[2]
     if not adapter or adapter == "" or adapter:find("=", 1, true) then
-        _warn("quick_run: usage: quick_run <adapter> <configuration> [input=value]…")
+        _warn("quick_run: usage: quick_run <adapter> <profile> [input=value]…")
         return
     end
     if not require("easydap.adapters")[adapter] then
         _err("quick_run: unknown adapter: " .. adapter ..
-            " (available: " .. table.concat(schema.configurable_adapters(), ", ") .. ")")
+            " (available: " .. table.concat(schema.profiled_adapters(), ", ") .. ")")
         return
     end
-    if not configuration_name or configuration_name == "" or configuration_name:find("=", 1, true) then
-        _warn("quick_run: usage: quick_run " .. adapter .. " <configuration> [input=value]…"
-            .. " (configurations: " .. table.concat(schema.configuration_names(adapter), ", ") .. ")")
+    if not profile_name or profile_name == "" or profile_name:find("=", 1, true) then
+        _warn("quick_run: usage: quick_run " .. adapter .. " <profile> [input=value]…"
+            .. " (profiles: " .. table.concat(schema.profile_names(adapter), ", ") .. ")")
         return
     end
 
@@ -387,16 +399,16 @@ function M.quick_run(assignments)
         values[tok:sub(1, eq - 1)] = tok:sub(eq + 1)
     end
 
-    -- A configuration whose `build` asks the user something (an attach resolving an
+    -- A profile whose `build` asks the user something (an attach resolving an
     -- unset `pid`) resolves only once they answer, so the run is started from the
-    -- callback. Every other configuration resolves synchronously, and `run` is
+    -- callback. Every other profile resolves synchronously, and `run` is
     -- assigned before we return it.
     local run
     schema.resolve_task({
-        adapter       = adapter,
-        configuration = configuration_name,
-        name          = adapter,
-        values        = values,
+        adapter = adapter,
+        profile = profile_name,
+        name    = adapter,
+        values  = values,
     }, function(task, err)
         if not task then
             _err("quick_run: " .. tostring(err))

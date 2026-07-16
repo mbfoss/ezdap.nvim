@@ -105,7 +105,7 @@ require("easydap").setup()
 ```
 
 Then start debugging. The fastest path is `:Debug quick_run`, which launches
-(or attaches to) an adapter using one of its named configurations, filled in
+(or attaches to) an adapter using one of its named profiles, filled in
 with a few `input=value` arguments:
 
 ```vim
@@ -162,68 +162,61 @@ version-controlled run files.
 
 ### `:Debug quick_run` — one-shot launch/attach
 
-Each adapter declares one or more named **configurations** (`launch`, `attach`,
+Each adapter declares one or more named **profiles** (`launch`, `attach`,
 `remote`, …), each declaring the **inputs** it accepts. Supply them as
-`input=value` tokens; the adapter and configuration name come first as bare
+`input=value` tokens; the adapter and profile name come first as bare
 words:
 
 ```vim
-:Debug quick_run <adapter> <configuration> [input=value ...]
+:Debug quick_run <adapter> <profile> [input=value ...]
 ```
 
-Inputs are specific to each adapter/configuration — e.g. every `launch`
-configuration takes `command` (a full shell command line, split into the
+Inputs are specific to each adapter/profile — e.g. every `launch`
+profile takes `command` (a full shell command line, split into the
 adapter's own program/args fields) plus `cwd` and `env`; an `attach`
-configuration takes `pid`, and a `remote` one takes `host`/`port`. Each input
+profile takes `pid`, and a `remote` one takes `host`/`port`. Each input
 declares a **type** that decides how your value is read: `file`/`dir`/`cwd`
 (path expansion), `env` (`A=1,B=2`), `shell_args` (shell-quoted splitting) and
 `integer`/`port`/`boolean`. An input left out is simply omitted from the
-request, unless the configuration marks it required.
+request, unless the profile marks it required.
 
-Tab-completion offers adapters, then configuration names, then the inputs
-available for the chosen configuration — and, once you type `=`, path
+Tab-completion offers adapters, then profile names, then the inputs
+available for the chosen profile — and, once you type `=`, path
 completion for inputs whose type is path-like.
 
 ### Run files — versionable debug configs
 
 A run file is a Lua file that returns a single task table. Keep it in your
 project and run it whenever you need it. Two shapes are accepted, told apart by
-whether a `configuration` field is present.
+whether a `profile` or a `configuration` field is present.
 
-**Inputs-based** — names a `configuration` and answers its declared inputs. It
-resolves exactly like `:Debug quick_run`, so a required input left unset is an
-error and an attach with no `pid` pops a process picker:
+**Profile-based** — names a `profile` and answers its declared inputs under
+`parameters`. It resolves exactly like `:Debug quick_run`, so a required input
+left unset is an error and an attach with no `pid` pops a process picker:
 
 ```lua
 -- debug.lua
 return {
-  name          = "debug app",    -- run/panel label (defaults to "debug")
-  adapter       = "codelldb",     -- an entry in require("easydap.adapters")
-  configuration = "launch",       -- one of the adapter's named configurations
-  inputs = {                      -- answers to the configuration's declared inputs
+  name       = "debug app",    -- run/panel label (defaults to "debug")
+  adapter    = "codelldb",     -- an entry in require("easydap.adapters")
+  profile    = "launch",       -- one of the adapter's named profiles
+  parameters = {               -- answers to the profile's declared inputs
     command = "./build/app --verbose",
     cwd     = vim.fn.getcwd(),
-  },
-  parameters = {                  -- optional: raw DAP fields merged over the built body
-    initCommands = { "settings set target.x86-disassembly-flavor intel" },
   },
 }
 ```
 
-`parameters` here is the escape hatch: the configuration's `inputs` cover the
-common fields, and anything they don't expose you patch in raw. Drop it if you
-don't need it.
-
-**Native** — no `configuration`; you supply the adapter's raw DAP body directly
-under `parameters`, forwarded to the adapter verbatim:
+**Raw** — no `profile`; you supply an nvim-dap-like `configuration` table of raw
+DAP parameters that includes `request`, forwarded to the adapter verbatim:
 
 ```lua
 -- debug.lua
 return {
-  name       = "debug app",
-  adapter    = "codelldb",
-  request    = "launch",          -- "launch" or "attach"
-  parameters = {                  -- the adapter's native launch/attach body, sent as-is
+  name          = "debug app",
+  adapter       = "codelldb",
+  configuration = {                 -- raw DAP body; `request` selects launch/attach
+    request = "launch",             -- "launch" or "attach"
     program = "./build/app",
     args    = { "--verbose" },
     cwd     = "${workspaceFolder}",
@@ -244,8 +237,8 @@ For the native shape, see each adapter's upstream documentation for the
 
 ### `:Debug new_run_file` — scaffold a run file
 
-Generate a ready-to-edit, inputs-based run file from one of the adapter's
-configurations. Required inputs are written active; every other input is listed
+Generate a ready-to-edit, profile-based run file from one of the adapter's
+profiles. Required inputs are written active; every other input is listed
 commented out with its description, so you uncomment just what you need:
 
 ```vim
@@ -253,9 +246,9 @@ commented out with its description, so you uncomment just what you need:
 " → writes <project root>/codelldb_launch.lua and opens it
 ```
 
-Fill in the `inputs`, then `:Debug run_file` it. It resolves through the same
-path as `:Debug quick_run`. (Prefer the native shape above instead? Just drop
-the `configuration`/`inputs` keys and write `request` + `parameters` by hand.)
+Fill in the `parameters`, then `:Debug run_file` it. It resolves through the same
+path as `:Debug quick_run`. (Prefer the raw shape above instead? Just drop the
+`profile`/`parameters` keys and write a `configuration` table by hand.)
 
 ### From Lua
 
@@ -443,7 +436,7 @@ Everything is under the `:Debug` command, with completion for every subcommand.
 | --------------------- | ------------------------------------------------- |
 | `run_file [path]`     | Run a Lua task file, or pick from a directory     |
 | `quick_run …`         | Launch/attach from `input=value` tokens           |
-| `new_run_file …`      | Scaffold a run file from a configuration's inputs  |
+| `new_run_file …`      | Scaffold a run file from a profile's inputs        |
 | `rerun`               | Re-launch the most recently run task              |
 | `view`                | Open/focus the debug panel                        |
 | `continue` / `continue_all` | Continue the active / every session         |
@@ -566,13 +559,13 @@ provision tooling before the session connects (this is how the `debugpy` and
 `js-debug` adapters work).
 
 To make an adapter work with `:Debug quick_run` and `:Debug new_run_file`, give
-it one or more named `configurations`. Each declares an `inputs` table and a
+it one or more named `profiles`. Each declares an `inputs` table and a
 `build` function that turns those inputs into the adapter's native request body:
 
 ```lua
 adapters.myadapter = {
   command = "my-debug-adapter",
-  configurations = {
+  profiles = {
     launch = {
       description = "debug an executable",
       request = "launch",
@@ -591,7 +584,7 @@ adapters.myadapter = {
 ```
 
 Both `:Debug quick_run` and a `:Debug new_run_file` run file resolve through the
-same `build`, so `inputs` is the one place a configuration is described — there is
+same `build`, so `inputs` is the one place a profile is described — there is
 no separate scaffold template to keep in sync.
 
 An input's `type` is the Lua type `build` receives (`string`, `boolean`,
@@ -607,21 +600,21 @@ task-level TCP endpoint (see [`remote.lua`](lua/easydap/adapters/remote.lua));
 leave it untouched otherwise.
 
 Omitting the field is only the default answer to an unset input — `build` decides,
-and it can answer differently. Every attach configuration resolves an unset `pid`
+and it can answer differently. Every attach profile resolves an unset `pid`
 by asking, so `:Debug quick_run codelldb attach` with no `pid=` pops a process
 picker instead of failing; returning a string from `build` aborts the run with
 that error, which is how a cancelled picker is reported.
 
 `:Debug new_run_file` scaffolds a run file straight from `inputs`: required inputs
 active, the rest commented out with their descriptions. The resulting file names
-the `configuration` and its `inputs`, and `:Debug run_file` resolves it through
-`build` — the same path `quick_run` takes.
+the `profile` and answers its inputs under `parameters`, and `:Debug run_file`
+resolves it through `build` — the same path `quick_run` takes.
 
 See each built-in adapter under
 [`lua/easydap/adapters/`](lua/easydap/adapters/) for fully worked examples
 (e.g. [`codelldb.lua`](lua/easydap/adapters/codelldb.lua),
 [`debugpy.lua`](lua/easydap/adapters/debugpy.lua)), and
-[DEVELOPMENT.md](DEVELOPMENT.md) for the configuration format.
+[DEVELOPMENT.md](DEVELOPMENT.md) for the profile format.
 
 ## Contributing
 

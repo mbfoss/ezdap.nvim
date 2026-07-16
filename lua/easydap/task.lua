@@ -4,7 +4,7 @@ local ui_util      = require "easydap.util.ui_util"
 
 ---A debug task — native DAP, sent as-is. `parameters` is the adapter's raw
 ---launch/attach body, sent verbatim. This is the resolved shape `run`/`start_task`
----consume; an inputs-based run file (what `:Debug new_run_file` scaffolds) and
+---consume; a profile-based run file (what `:Debug new_run_file` scaffolds) and
 ---`:Debug quick_run` both produce it via `easydap.schema`'s `resolve_task`. Mirrors
 ---what easytasks sends as `debug.Params`; `name` defaults to "debug".
 ---@class easydap.Task

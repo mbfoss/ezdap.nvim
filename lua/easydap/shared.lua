@@ -3,7 +3,7 @@
 local M = {}
 
 ---The process id to attach to: the one already given, or one picked interactively.
----What an attach configuration's `build` calls for its `pid` input, which is why
+---What an attach profile's `build` calls for its `pid` input, which is why
 ---no adapter marks that input `required` — there is nothing the user must type.
 ---
 ---Yields (see `select_process`) only when `pid` is nil.

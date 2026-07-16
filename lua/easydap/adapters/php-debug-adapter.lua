@@ -3,7 +3,7 @@
 ---@type easydap.AdapterDef
 return {
     command = "php-debug-adapter",
-    configurations = {
+    profiles       = {
         listen = {
             description = "listen for an incoming Xdebug connection",
             request = "launch",

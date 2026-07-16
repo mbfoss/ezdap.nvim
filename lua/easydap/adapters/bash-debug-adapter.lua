@@ -5,7 +5,7 @@
 ---@type easydap.AdapterDef
 return {
     command = "bash-debug-adapter",
-    configurations = {
+    profiles       = {
         -- `quick_run bash-debug-adapter bash_script script=./run.sh`.
         bash_script = {
             description = "debug a bash script",

@@ -277,7 +277,7 @@ local function _register_user_commands()
     end
 
     ---Completion for `:Debug quick_run …` tokens: the adapter (1st bare
-    ---positional), then the configuration name (2nd bare positional), then input
+    ---positional), then the profile name (2nd bare positional), then input
     ---names (as `name=`) not yet supplied, or a value once `=` has been typed
     ---(file paths for a path-like input).
     ---@param schema table
@@ -285,7 +285,7 @@ local function _register_user_commands()
     ---@param arg_lead string   the token being completed
     ---@return string[]
     local function _quick_run_complete(schema, used, arg_lead)
-        local adapter, configuration_name
+        local adapter, profile_name
         local supplied = {}
         for _, tok in ipairs(used) do
             local e = tok:find("=", 1, true)
@@ -293,33 +293,33 @@ local function _register_user_commands()
                 supplied[tok:sub(1, e - 1)] = true
             elseif not adapter then
                 adapter = tok
-            elseif not configuration_name then
-                configuration_name = tok
+            elseif not profile_name then
+                profile_name = tok
             end
         end
 
         local eq = arg_lead:find("=", 1, true)
         if eq then
-            if not adapter or not configuration_name then return {} end
+            if not adapter or not profile_name then return {} end
             local name = arg_lead:sub(1, eq - 1)
             local pfx  = arg_lead:sub(1, eq)
             local val  = arg_lead:sub(eq + 1)
             -- Completing an input's value: whatever the input's own format says it
             -- can offer — paths for the path-ish ones, nothing for the rest.
-            local input = schema.configuration_inputs(adapter, configuration_name)[name]
+            local input = schema.profile_inputs(adapter, profile_name)[name]
             local comp_type = require("easydap.inputs").completion(input)
             if not comp_type then return {} end
             return vim.tbl_map(function(f) return pfx .. f end, vim.fn.getcompletion(val, comp_type))
         end
 
-        -- No `=` yet: complete the adapter, then the configuration, then input names.
+        -- No `=` yet: complete the adapter, then the profile, then input names.
         if not adapter then
-            return schema.configurable_adapters()
-        elseif not configuration_name then
-            return schema.configuration_names(adapter)
+            return schema.profiled_adapters()
+        elseif not profile_name then
+            return schema.profile_names(adapter)
         end
         local out = {}
-        for _, name in ipairs(schema.configuration_input_names(adapter, configuration_name)) do
+        for _, name in ipairs(schema.profile_input_names(adapter, profile_name)) do
             if not supplied[name] then out[#out + 1] = name .. "=" end
         end
         return out
@@ -336,20 +336,20 @@ local function _register_user_commands()
             return vim.fn.getcompletion(arg_lead, "file")
         end
         if rest[1] == "quick_run" then
-            -- <adapter> <configuration> <input>=<value>…
+            -- <adapter> <profile> <input>=<value>…
             local schema = require("easydap.schema")
             return _quick_run_complete(schema, { unpack(rest, 2) }, arg_lead)
         end
         if rest[1] == "new_run_file" then
-            -- Positional: <adapter> [configuration] [path]. The path names a new file to
+            -- Positional: <adapter> [profile] [path]. The path names a new file to
             -- create, so it has no completion.
             local schema = require("easydap.schema")
             local used   = { unpack(rest, 2) }
             local pos    = #used + 1 -- 1-based position of the token being completed
             if pos == 1 then
-                return schema.configurable_adapters()
+                return schema.profiled_adapters()
             elseif pos == 2 then
-                return schema.configuration_names(used[1])
+                return schema.profile_names(used[1])
             end
             return {}
         end
@@ -465,26 +465,26 @@ function M.run_file(path)
     return runner.run_file(path)
 end
 
----Scaffold a run_file for one of an adapter's configurations — an inputs-based file
----(`adapter`/`configuration`/`inputs`) whose `inputs` answer the configuration's
+---Scaffold a run_file for one of an adapter's profiles — a profile-based file
+---(`adapter`/`profile`/`parameters`) whose `parameters` answer the profile's
 ---declared inputs, seeded and commented — and open it for editing. `:Debug run_file`
 ---resolves it through `build`, the same path `quick_run` takes. `assignments` is
----positional: the adapter, an optional configuration name (defaults to the adapter's
----sole configuration), and an optional destination path. E.g.
+---positional: the adapter, an optional profile name (defaults to the adapter's
+---sole profile), and an optional destination path. E.g.
 ---`new_run_file({ "codelldb", "launch" })` writes `<root>/codelldb_launch.lua`.
----@param assignments string[]  positional adapter, configuration, path, e.g. { "codelldb", "launch", "./foo.lua" }
+---@param assignments string[]  positional adapter, profile, path, e.g. { "codelldb", "launch", "./foo.lua" }
 function M.new_run_file(assignments)
     _require_setup("new_run_file")
     return require("easydap.scaffold").new_run_file(assignments)
 end
 
----Launch or attach under an adapter using one of its declared `configurations`,
+---Launch or attach under an adapter using one of its declared `profiles`,
 ---assembling the request body from `input=value` assignments — the command-surface
 ---entry point behind `:Debug quick_run`. `assignments` leads with the adapter and
----configuration name as bare positional tokens. E.g.
+---profile name as bare positional tokens. E.g.
 ---`quick_run({ "codelldb", "launch", "command=./a.out --verbose" })` or
 ---`quick_run({ "debugpy", "attach", "pid=41234" })`.
----@param assignments string[]  adapter, configuration name, then "input=value" tokens
+---@param assignments string[]  adapter, profile name, then "input=value" tokens
 function M.quick_run(assignments)
     _require_setup("quick_run")
     return require("easydap.runner").quick_run(assignments)

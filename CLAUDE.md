@@ -40,15 +40,15 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 - [adapters/init.lua](lua/easydap/adapters/init.lua) — built-in adapter
   definitions as a plain `name -> easydap.AdapterDef` table (one file per adapter
   under `easydap/adapters/`, assembled here): native DAP process/connection config
-  plus an optional `configurations` table (`name -> easydap.Configuration`) of
-  launch/attach descriptions. Each `Configuration` is self-describing: an `inputs`
+  plus an optional `profiles` table (`name -> easydap.Profile`) of
+  launch/attach descriptions. Each `Profile` is self-describing: an `inputs`
   table declaring what it accepts (`name -> easydap.Input`, each with a `type` and
   `description`, plus an optional `format` and `required`) and a
   `build(params, connect, inputs)` that assembles the native request body — and any
   task-level `host`/`port` — in place. Both `quick_run` and a scaffolded run file
   resolve the same way (`values -> build -> task`), so `inputs` is the single
-  description of a configuration. Users add/override keys directly. The DAP core
-  never reads the configurations — only `easydap.schema` does.
+  description of a profile. Users add/override keys directly. The DAP core
+  never reads the profiles — only `easydap.schema` does.
 - [task.lua](lua/easydap/task.lua) — task runner (`easydap.TaskTypeDef`); the
   `run` backend for external task runners. Consumes a native task
   (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`/
@@ -70,39 +70,40 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   mix them per input. `shell_args` is the clearest case: `schema` is a *string* (you
   write a command line), `type` is a *table* (`build` receives an argument list).
 - [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run`, the
-  configuration reader for `new_run_file`, and the seam easytasks' `debug` task type
-  runs on. `resolve_task(spec, done)` is that seam: it reads a configuration's
+  profile reader for `new_run_file`, and the seam easytasks' `debug` task type
+  runs on. `resolve_task(spec, done)` is that seam: it reads a profile's
   declared inputs from `spec.values` (each in either authoring form, parsed via
-  `easydap.inputs`), calls the configuration's `build` to assemble the native
+  `easydap.inputs`), calls the profile's `build` to assemble the native
   request body and any task-level connection, and delivers a **complete
   `easydap.Task`** — request kind and host/port included — ready for
   `run`/`start_task`. Callers supply values and get back a task; they never rejoin
   the two themselves. Inputs marked `required` are errors when left unset, other
   unset inputs arrive at `build` as nil (so Lua drops the fields assigned from them)
   unless that `build` answers them another way. `build` runs on a coroutine — it is
-  the one thing here allowed to yield, which is how an attach configuration can ask
+  the one thing here allowed to yield, which is how an attach profile can ask
   the user to pick a process for an unset `pid` (`shared.resolve_pid`); a `build`
   that gives up returns an error string. `done` fires **exactly once**, or never if
   the returned `cancel` is called first — so a caller that gives up while a picker is
   still open need not remember that it did. Introspection helpers —
-  `configurations`/`configuration`/`configuration_names`,
-  `configuration_inputs`/`configuration_input_names`/`configuration_required`,
-  `requests`, `configurable_adapters` — drive completion and scaffolding. Native keys
+  `profiles`/`profile`/`profile_names`,
+  `profile_inputs`/`profile_input_names`/`profile_required`,
+  `requests`, `profiled_adapters` — drive completion and scaffolding. Native keys
   throughout — no portable/generic field vocabulary.
 - [scaffold.lua](lua/easydap/scaffold.lua) — run-file creation behind `:Debug
   new_run_file`: writes a runnable Lua run_file that names the `adapter` and
-  `configuration` and lists its declared inputs under `inputs`, each seeded (via
+  `profile` and lists its declared inputs under `parameters`, each seeded (via
   `easydap.inputs`' `seed`) and commented with its `description`, then opens it. The
-  scaffolded file is inputs-based, exactly like `quick_run`: `:Debug run_file`
-  resolves it through `resolve_task`/`build` (`inputs -> build -> task`), so a run
-  file and `quick_run` share one description of a configuration — its `inputs` — and
+  scaffolded file is profile-based, exactly like `quick_run`: `:Debug run_file`
+  resolves it through `resolve_task`/`build` (`parameters -> build -> task`), so a run
+  file and `quick_run` share one description of a profile — its `inputs` — and
   cannot drift. `run_file` accepts two run-file shapes, told apart by whether a
-  `configuration` field is present: the inputs-based one above (which may add an
-  optional `parameters` table, deep-merged over the body `build` produced, as a raw
-  escape hatch for fields the inputs don't expose), and a **native** one (`adapter` +
-  `request` + `parameters`) whose `parameters` is the raw DAP body forwarded to the
-  adapter verbatim — the same `easydap.Task` shape `run`/`start_task` take. The
-  merge lives in `run_file`; `resolve_task` itself stays overlay-free.
+  `profile` or a `configuration` field is present: the profile-based one above
+  (`adapter` + `profile` + `parameters`, the answers to the profile's declared
+  inputs), and a **raw** one (`adapter` + `configuration`) whose `configuration` is
+  an nvim-dap-like table of raw DAP parameters including `request` — `request` is
+  lifted out and the rest is forwarded to the adapter verbatim as the DAP body,
+  yielding the same `easydap.Task` shape `run`/`start_task` take. `resolve_task`
+  only handles the profile shape; `run_file` builds the task for the raw shape.
 
 **Persistence** — [store.lua](lua/easydap/store.lua)
 - A thin path + read/write helper. The project root is the nearest ancestor of

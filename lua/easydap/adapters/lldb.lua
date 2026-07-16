@@ -24,7 +24,7 @@ local shared = require("easydap.shared")
 ---@type easydap.AdapterDef
 return {
     command = "lldb-dap",
-    configurations = {
+    profiles       = {
         -- One `command` input carries the whole command line; `build` splits it into
         -- `program` (the first word) and `args` (the rest).
         launch = {

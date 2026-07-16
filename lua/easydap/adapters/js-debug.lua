@@ -64,7 +64,7 @@ return {
     -- Field set follows vscode-js-debug's `node` launch/attach options
     -- (https://github.com/microsoft/vscode-js-debug/blob/main/OPTIONS.md). js-debug
     -- picks the debuggee's console via `console`, not runInTerminal.
-    configurations = {
+    profiles       = {
         -- One `command` input carries the whole command line; `build` splits it into
         -- `program` (the first word) and `args` (the rest).
         launch = {

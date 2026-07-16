@@ -8,7 +8,7 @@
 -- postRunCommands, exitCommands, sourceMap, sourceLanguages, relativePathBase,
 -- terminal ("console"/"integrated"/"external"), stdio, expressions.
 --
--- The `core`/`gdb_remote` configurations use codelldb's "custom launch" form:
+-- The `core`/`gdb_remote` profiles use codelldb's "custom launch" form:
 -- rather than a `program`, they drive LLDB directly through
 -- `targetCreateCommands`/`processCreateCommands`.
 
@@ -17,7 +17,7 @@ local shared = require("easydap.shared")
 ---@type easydap.AdapterDef
 return {
     command = "codelldb",
-    configurations = {
+    profiles       = {
         -- One `command` input carries the whole command line; `build` splits it into
         -- `program` (the first word) and `args` (the rest).
         launch = {
