@@ -4,18 +4,21 @@
 ---past it. Used for the run Output and raw DAP-messages panels.
 
 local ui_util = require "easydap.util.ui_util"
+local ansi    = require "easydap.ui.ansi"
 
 ---@class easydap.OutputBuffer
 ---@field private _bufnr      integer?  nil once the buffer is deleted/wiped
 ---@field private _max_lines  integer   0 = unlimited
 ---@field private _autoscroll boolean   keep windows pinned to the last line
+---@field private _ansi_ns    integer?  namespace for ANSI highlights, nil when disabled
+---@field private _ansi_state easydap.ui.ansi.State?  running SGR state across appends
 local OutputBuffer = {}
 OutputBuffer.__index = OutputBuffer
 
 ---@class easydap.OutputBuffer.Opts
 ---@field name       string   buffer name
 ---@field listed?    boolean  whether the buffer is listed (default true)
----@field max_lines? integer  cap on retained lines; oldest are trimmed past it (0/nil = unlimited)
+---@field max_lines? integer  cap on retained lines; oldest are trimmed past it (0 = unlimited, default = 10000)
 ---@field on_delete? fun()    called when the buffer is deleted/wiped
 ---@field autoscroll boolean? autoscroll the buffer in all visible windows when the cursor is on the last line 
 ---@field ansi_colors boolean? parse and render ansi colors
@@ -25,8 +28,10 @@ OutputBuffer.__index = OutputBuffer
 function OutputBuffer.new(opts)
     local self = setmetatable({
         _bufnr      = nil,
-        _max_lines  = opts.max_lines or 0,
+        _max_lines  = opts.max_lines or 10000,
         _autoscroll = opts.autoscroll or false,
+        _ansi_ns    = opts.ansi_colors and vim.api.nvim_create_namespace("") or nil,
+        _ansi_state = opts.ansi_colors and ansi.new_state() or nil,
     }, OutputBuffer)
     self:_init(opts)
     return self
@@ -60,7 +65,8 @@ function OutputBuffer:is_valid()
 end
 
 ---Append `lines` to the end of the buffer, trimming the oldest lines if the
----configured cap is exceeded.
+---configured cap is exceeded. When `ansi_colors` is set, escape sequences are
+---stripped from the rendered text and applied as highlights instead.
 ---@param lines string[]
 function OutputBuffer:append(lines)
     local buf = self._bufnr
@@ -78,8 +84,34 @@ function OutputBuffer:append(lines)
         end
     end
 
+    -- Parse ANSI first, so what we insert is already escape-free.
+    local spans_by_line
+    if self._ansi_ns then
+        spans_by_line = {}
+        local clean = {}
+        for i, line in ipairs(lines) do
+            clean[i], spans_by_line[i] = ansi.parse(self._ansi_state, line)
+        end
+        lines = clean
+    end
+
     vim.bo[buf].modifiable = true
+    local start_row = vim.api.nvim_buf_line_count(buf)
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
+
+    -- Apply highlights before trimming; extmarks shift/drop with the lines.
+    if spans_by_line then
+        for i, spans in ipairs(spans_by_line) do
+            local row = start_row + i - 1
+            for _, span in ipairs(spans) do
+                vim.api.nvim_buf_set_extmark(buf, self._ansi_ns, row, span.s, {
+                    end_col   = span.e,
+                    hl_group  = span.hl,
+                })
+            end
+        end
+    end
+
     if self._max_lines > 0 then
         local excess = vim.api.nvim_buf_line_count(buf) - self._max_lines
         if excess > 0 then

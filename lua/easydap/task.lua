@@ -113,8 +113,10 @@ M.start            = function(task, callbacks)
         if #lines == 0 then return end
         if not out_buf then
             out_buf = OutputBuffer.new({
-                name      = ui_util.unique_buf_name("easydap://" .. run_key .. "/output"),
-                max_lines = _config.output_max_lines,
+                name        = ui_util.unique_buf_name("easydap://" .. run_key .. "/output"),
+                max_lines   = _config.output_max_lines,
+                ansi_colors = true,
+                autoscroll  = true,
             })
             local buf = assert(out_buf:bufnr())
             add_bufnr(buf, { label = "Output", priority = 0, autoscroll = true })
@@ -172,8 +174,10 @@ M.start            = function(task, callbacks)
                 if task.raw_messages then
                     local out ---@type easydap.OutputBuffer?
                     out = OutputBuffer.new({
-                        name      = ui_util.unique_buf_name("easydap://" .. run_key .. "/dap-messages"),
-                        max_lines = _config.output_max_lines,
+                        name        = ui_util.unique_buf_name("easydap://" .. run_key .. "/dap-messages"),
+                        max_lines   = _config.output_max_lines,
+                        ansi_colors = true,
+                        autoscroll  = true,
                     })
                     local buf = assert(out:bufnr())
                     add_bufnr(buf, { label = "DAP Messages", priority = -3, autoscroll = true })
