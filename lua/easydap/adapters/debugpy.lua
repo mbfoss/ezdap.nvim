@@ -42,7 +42,7 @@ local function _debugpy_setup(config, ctx, callback)
     local handle = term.spawn(
         { python, "-m", "debugpy.adapter", "--host", "127.0.0.1", "--port", tostring(port) },
         {
-            bufname = ui.unique_buf_name("easydap://" .. (config.name or config.adapter or "debug") .. "/debugpy-adapter"),
+            bufname = ui.unique_buf_name("easydap://" .. (config.name or config.adapter or "debug") .. "_debugpy-adapter"),
             cwd     = config.cwd or vim.fn.getcwd(),
             on_exit = function() done("debugpy adapter exited unexpectedly") end,
         }

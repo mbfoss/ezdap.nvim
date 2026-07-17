@@ -92,7 +92,7 @@ M.start            = function(task, callbacks)
 
     -- REPL buffer: interactive DAP expression evaluation.
     local repl = require("easydap.ui.ReplBuffer").new({
-        name     = ui_util.unique_buf_name("easydap://" .. run_key .. "/repl"),
+        name     = ui_util.unique_buf_name("easydap://" .. run_key .. "_repl"),
         evaluate = function(expr, cb)
             manager.evaluate(expr, "repl", function(body, err)
                 cb(body and body.result, err)
@@ -113,7 +113,7 @@ M.start            = function(task, callbacks)
         if #lines == 0 then return end
         if not out_buf then
             out_buf = OutputBuffer.new({
-                name        = ui_util.unique_buf_name("easydap://" .. run_key .. "/output"),
+                name        = ui_util.unique_buf_name("easydap://" .. run_key .. "_output"),
                 max_lines   = _config.output_max_lines,
                 ansi_colors = true,
                 autoscroll  = true,
@@ -174,7 +174,7 @@ M.start            = function(task, callbacks)
                 if task.raw_messages then
                     local out ---@type easydap.OutputBuffer?
                     out = OutputBuffer.new({
-                        name        = ui_util.unique_buf_name("easydap://" .. run_key .. "/dap-messages"),
+                        name        = ui_util.unique_buf_name("easydap://" .. run_key .. "_dap-messages"),
                         max_lines   = _config.output_max_lines,
                         ansi_colors = true,
                         autoscroll  = true,

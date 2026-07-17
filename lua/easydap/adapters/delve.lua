@@ -30,7 +30,7 @@ local function _setup(config, ctx, callback)
         callback(err, state)
     end
     handle = term.spawn(cmd, {
-        bufname   = ui.unique_buf_name("easydap://" .. (config.name or config.adapter or "debug") .. "/dlv-dap"),
+        bufname   = ui.unique_buf_name("easydap://" .. (config.name or config.adapter or "debug") .. "_dlv-dap"),
         cwd       = config.cwd or vim.fn.getcwd(),
         env       = config.env,
         on_stdout = function(_, data)

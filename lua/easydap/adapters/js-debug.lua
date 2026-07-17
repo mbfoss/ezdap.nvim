@@ -23,7 +23,7 @@ return {
         end
         local handle
         handle = term.spawn({ "node", server_js }, {
-            bufname = ui.unique_buf_name("easydap://" .. (config.name or config.adapter or "debug") .. "/js-debug-server"),
+            bufname = ui.unique_buf_name("easydap://" .. (config.name or config.adapter or "debug") .. "_js-debug-server"),
             on_stdout = function(_, data)
                 if resolved_port then return end
                 for _, line in ipairs(data) do

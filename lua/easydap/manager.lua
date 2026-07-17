@@ -630,7 +630,7 @@ function M.breakpoint.list()
         vim.notify("[dap] no breakpoints", vim.log.levels.INFO); return
     end
     select.open({
-        prompt         = "Go to breakpoint",
+        prompt         = "Breakpoints",
         enable_preview = true,
         items          = items,
         initial        = initial,
