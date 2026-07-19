@@ -4,10 +4,9 @@
 -- set follows microsoft/vscode-java-debug's attach configuration.
 ---@type ezdap.AdapterDef
 return {
-    host    = "127.0.0.1",
-    port    = 0,
-    request = "attach",
-    profiles       = {
+    host     = "127.0.0.1",
+    port     = 0,
+    profiles = {
         -- `host`/`port` fill both the JDWP body fields (hostName/port) and the
         -- task-level connection (this adapter's own def carries host/port, so
         -- it connects to the java-debug server over TCP too).

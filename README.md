@@ -592,7 +592,6 @@ local adapters = require("ezdap.adapters")
 
 adapters.myadapter = {
   command = { "my-dap-adapter", "--stdio" },  -- stdio adapter: spawned, framed over its pipes
-  request = "launch",                         -- default request when a task omits one
 }
 ```
 
@@ -622,7 +621,6 @@ to spawn or a `host`/`port` to connect to.
 | `cwd`, `env`          | Working directory and environment for that process.                                        |
 | `host`, `port`        | Connect over TCP instead of stdio. A task's own `host`/`port` override these.               |
 | `type`                | DAP `adapterID` sent in `initialize`; defaults to the adapter's key.                        |
-| `request`             | Default request kind (`"launch"` / `"attach"`) when a task doesn't say.                     |
 | `defer_launch_attach` | Send `launch`/`attach` only after `initialized`, for adapters that require that ordering.   |
 | `setup` / `teardown`  | Hooks around the connection — see below.                                                   |
 | `profiles`            | Named launch/attach descriptions, the subject of the next section.                          |

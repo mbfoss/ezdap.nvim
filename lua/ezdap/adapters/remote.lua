@@ -3,10 +3,9 @@
 -- itself stays minimal.
 ---@type ezdap.AdapterDef
 return {
-    host    = "127.0.0.1",
-    port    = 0,
-    request = "attach",
-    profiles       = {
+    host     = "127.0.0.1",
+    port     = 0,
+    profiles = {
         connect = {
             description = "attach to a DAP server listening on host:port",
             request    = "attach",

@@ -8,7 +8,7 @@ local ui_util      = require "ezdap.util.ui_util"
 ---@class ezdap.Task
 ---@field name?         string                     run/panel group name (defaults to "debug")
 ---@field adapter       string                     name of an entry in `ezdap.adapters`
----@field request?      "launch"|"attach"          defaults to the adapter's default
+---@field request?      "launch"|"attach"          defaults to "launch"
 ---@field parameters?   table                      native DAP launch/attach body (the adapter's own keys), sent verbatim
 ---@field host?         string                     attach/TCP connection target
 ---@field port?         integer                    attach/TCP connection target (required for the `remote` adapter)
@@ -60,7 +60,7 @@ M.start            = function(task, callbacks)
         return function() end
     end
 
-    local request = task.request or base.request or "launch"
+    local request = task.request or "launch"
 
     -- Resolve the adapter definition + this task into the per-run dap config.
     -- setup/teardown stay on the adapter def (`base`); the runtime config carries

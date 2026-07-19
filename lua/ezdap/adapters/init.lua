@@ -2,7 +2,7 @@
 ---
 ---The module is a plain table: each key is an adapter name, each value is an
 ---AdapterDef — native DAP process/connection config (command, host/port,
----setup/teardown, request, …) plus a `profiles` table of named `ezdap.Profile`
+---setup/teardown, …) plus a `profiles` table of named `ezdap.Profile`
 ---launch/attach descriptions. Profiles are what `:Debug new_run_file`/`quick_run`
 ---read (via `ezdap.schema`) to scaffold a run file / assemble a
 ---native request body; the DAP core never touches them.
@@ -11,7 +11,7 @@
 ---one AdapterDef; this module assembles them into the `name -> AdapterDef` table.
 ---Users can add adapters or override existing ones directly:
 ---  local adapters = require("ezdap.adapters")
----  adapters.myAdapter = { command = "...", request = "launch" }
+---  adapters.myAdapter = { command = "..." }
 
 -- Type annotations
 
@@ -121,7 +121,6 @@
 ---@field port?                  integer
 ---@field type?                  string   DAP adapterID override (defaults to the adapter name)
 ---@field defer_launch_attach?   boolean
----@field request?               string
 ---@field profiles?               table<string, ezdap.Profile>
 ---@field setup?                 fun(config: ezdap.dap.Config, ctx: ezdap.AdapterSetupCtx, callback: fun(err?: string, state?: any))
 ---@field teardown?              fun(config: ezdap.dap.Config, ctx: any)
