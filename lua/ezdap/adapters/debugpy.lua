@@ -1,3 +1,5 @@
+-- https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings
+
 local ui = require("ezdap.util.ui_util")
 local shared = require("ezdap.shared")
 
@@ -53,9 +55,79 @@ local function _debugpy_setup(config, ctx, callback)
     vim.defer_fn(function() done(nil, { handle = handle }) end, 500)
 end
 
--- Attach to a remote Python process: the `connect` group targets the REMOTE
--- process and goes in the body's `connect`, not the task-level connection (the
--- local adapter's port is chosen by S.debugpy_setup, which also spawns it).
+---Attributes debugpy accepts on both a launch and an attach. Declared once and
+---merged into every profile, so a field is described in one place.
+---@type table<string, ezdap.Input>
+local _common_inputs = {
+    just_my_code      = { type = "boolean", description = "debug only user-written code (default false)" },
+    show_return_value = { type = "boolean", description = "show function return values while stepping (default true)" },
+    redirect_output   = { type = "boolean", description = "route the debuggee's output to the debug console" },
+    sub_process       = { type = "boolean", description = "debug child processes too" },
+    path_mappings     = { type = "table", format = "map", description = "local=remote source path mappings" },
+    django            = { type = "boolean", description = "enable Django template debugging" },
+    jinja             = { type = "boolean", description = "enable Jinja2 template debugging" },
+    pyramid           = { type = "boolean", description = "enable Pyramid application debugging" },
+    gevent            = { type = "boolean", description = "support gevent monkey-patched code" },
+    sudo              = { type = "boolean", description = "run the debuggee with elevated permissions" },
+    log_to_file       = { type = "boolean", description = "log debugger events to a file" },
+}
+
+---A profile's own inputs on top of the common set.
+---@param extra table<string, ezdap.Input>
+---@return table<string, ezdap.Input>
+local function _inputs(extra)
+    return vim.tbl_extend("error", vim.deepcopy(_common_inputs), extra)
+end
+
+---Assign the common attributes, plus the `type` every debugpy body carries.
+---`justMyCode`/`showReturnValue` keep ezdap's defaults when left unset.
+---@param params table
+---@param inputs table<string, any>
+local function _common_build(params, inputs)
+    params.type            = "python"
+    params.justMyCode      = inputs.just_my_code == nil and false or inputs.just_my_code
+    params.showReturnValue = inputs.show_return_value == nil and true or inputs.show_return_value
+    params.redirectOutput  = inputs.redirect_output
+    params.subProcess      = inputs.sub_process
+    params.django          = inputs.django
+    params.jinja           = inputs.jinja
+    params.pyramid         = inputs.pyramid
+    params.gevent          = inputs.gevent
+    params.sudo            = inputs.sudo
+    params.logToFile       = inputs.log_to_file
+    if inputs.path_mappings then
+        local mappings = {}
+        for local_root, remote_root in pairs(inputs.path_mappings) do
+            mappings[#mappings + 1] = { localRoot = local_root, remoteRoot = remote_root }
+        end
+        params.pathMappings = mappings
+    end
+end
+
+---Launch-only attributes shared by the `program`, `module` and `code` profiles.
+---@type table<string, ezdap.Input>
+local _launch_inputs = {
+    cwd           = { type = "string", format = "cwd", description = "working directory" },
+    env           = { type = "table", format = "map", description = "environment variables" },
+    python        = { type = "table", format = "list", description = "python executable and interpreter arguments" },
+    console       = { type = "string", description = "where the debuggee's stdio goes: internalConsole|integratedTerminal|externalTerminal" },
+    stop_on_entry = { type = "boolean", description = "break at the first line of user code" },
+}
+
+---@param params table
+---@param inputs table<string, any>
+local function _launch_build(params, inputs)
+    _common_build(params, inputs)
+    params.cwd         = inputs.cwd
+    params.env         = inputs.env
+    params.python      = inputs.python
+    params.console     = inputs.console
+    params.stopOnEntry = inputs.stop_on_entry
+end
+
+-- Attach to a remote Python process: the `connect`/`listen` groups target the
+-- REMOTE process and go in the body, not the task-level connection (the local
+-- adapter's port is chosen by `_debugpy_setup`, which also spawns it).
 ---@type ezdap.AdapterDef
 return {
     command  = "python3",
@@ -67,52 +139,77 @@ return {
         launch_program = {
             description = "debug a Python file",
             request = "launch",
-            inputs = {
-                command = { type = "string", description = "command line to debug" },
-                cwd     = { type = "string", format = "cwd", description = "working directory" },
-                env     = { type = "table", format = "map", description = "environment variables" },
-            },
+            inputs = _inputs(vim.tbl_extend("error", vim.deepcopy(_launch_inputs), {
+                command = { type = "string", required = true, description = "command line to debug" },
+            })),
             build = function(params, _, inputs)
-                params.type = "python"
-                if inputs.command then
-                    params.program, params.args = shared.split_command(inputs.command)
-                end
-                params.cwd = inputs.cwd
-                params.env = inputs.env
-                params.justMyCode      = false
-                params.showReturnValue = true
+                _launch_build(params, inputs)
+                params.program, params.args = shared.split_command(inputs.command)
+            end,
+        },
+        launch_module = {
+            description = "debug a module, as `python -m`",
+            request = "launch",
+            inputs = _inputs(vim.tbl_extend("error", vim.deepcopy(_launch_inputs), {
+                module = { type = "string", required = true, description = "module name to debug" },
+                args   = { type = "table", format = "list", description = "command line arguments passed to the module" },
+            })),
+            build = function(params, _, inputs)
+                _launch_build(params, inputs)
+                params.module = inputs.module
+                params.args   = inputs.args
+            end,
+        },
+        launch_code = {
+            description = "debug a snippet of Python source, as `python -c`",
+            request = "launch",
+            inputs = _inputs(vim.tbl_extend("error", vim.deepcopy(_launch_inputs), {
+                code = { type = "string", required = true, description = "Python code to debug" },
+                args = { type = "table", format = "list", description = "command line arguments passed to the code" },
+            })),
+            build = function(params, _, inputs)
+                _launch_build(params, inputs)
+                params.code = inputs.code
+                params.args = inputs.args
             end,
         },
         attach_process = {
             description = "attach to a running process by pid",
             request = "attach",
-            inputs = {
+            inputs = _inputs {
                 pid = { type = "integer", description = "process id to attach to" },
             },
             build = function(params, _, inputs)
                 local pid, err = shared.resolve_pid(inputs.pid)
                 if not pid then return err end
-                params.type      = "python"
+                _common_build(params, inputs)
                 params.processId = pid
-                params.justMyCode      = false
-                params.showReturnValue = true
             end,
         },
-        -- The `connect.*` body group targets the remote process — not a task-level
-        -- TCP endpoint (`build`'s `connect`), which this adapter's def doesn't
-        -- declare: its own adapter port is chosen by `_debugpy_setup`.
         remote = {
             description = "attach to a remote debugpy process over host/port",
             request = "attach",
-            inputs = {
-                host = { type = "string", format = "host", description = "remote debugpy host" },
-                port = { type = "integer", format = "port", description = "remote debugpy port" },
+            inputs = _inputs {
+                host = { type = "string", format = "host", required = true, description = "remote debugpy host" },
+                port = { type = "integer", format = "port", required = true, description = "remote debugpy port" },
             },
             build = function(params, _, inputs)
-                params.type    = "python"
+                _common_build(params, inputs)
                 params.connect = { host = inputs.host, port = inputs.port }
-                params.justMyCode      = false
-                params.showReturnValue = true
+            end,
+        },
+        -- The inverse of `remote`: the adapter listens and the debuggee, started
+        -- with `debugpy --connect`, dials in.
+        listen = {
+            description = "wait for a debugpy process to connect back on host/port",
+            request = "attach",
+            inputs = _inputs {
+                host = { type = "string", format = "host", description = "host to listen on" },
+                port = { type = "integer", format = "port", required = true, description = "port to listen on" },
+            },
+            build = function(params, _, inputs)
+                _common_build(params, inputs)
+                params.listen = { host = inputs.host or "127.0.0.1", port = inputs.port }
             end,
         },
     },
