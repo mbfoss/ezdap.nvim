@@ -1,16 +1,16 @@
 # Development
 
-Internals and contributor notes for easydap.nvim. For user-facing usage, see the
+Internals and contributor notes for ezdap.nvim. For user-facing usage, see the
 [README](README.md).
 
 ## Overview
 
-easydap is a Neovim DAP client that speaks the Debug Adapter Protocol directly —
+ezdap is a Neovim DAP client that speaks the Debug Adapter Protocol directly —
 no `nvim-dap` dependency. It manages adapter processes, tracks debug
 sessions/breakpoints, and renders a tree-based debug UI. Requires Neovim >= 0.10
-(guarded in [plugin/easydap.lua](plugin/easydap.lua)).
+(guarded in [plugin/ezdap.lua](plugin/ezdap.lua)).
 
-The entry point is [lua/easydap/init.lua](lua/easydap/init.lua): `setup(opts)`
+The entry point is [lua/ezdap/init.lua](lua/ezdap/init.lua): `setup(opts)`
 merges config, wires autocmds/signals, and registers the `:Debug` user command.
 
 ## Architecture
@@ -20,17 +20,17 @@ Layers communicate through `Signal`s (pub/sub), not direct back-references: lowe
 layers emit, higher layers subscribe. `manager` is the single dependency surface
 for the UI and commands — prefer it over importing `dap/client` directly.
 
-**Public API** — [lua/easydap/init.lua](lua/easydap/init.lua)
+**Public API** — [lua/ezdap/init.lua](lua/ezdap/init.lua)
 `setup`, the run entry points (`run`, `run_file`, `quick_run`, `new_run_file`,
 `rerun`), the debug/disassembly view accessors, and the user commands.
 
-**Command surface / active session** — [lua/easydap/manager.lua](lua/easydap/manager.lua)
+**Command surface / active session** — [lua/ezdap/manager.lua](lua/ezdap/manager.lua)
 Owns the "which session is active" concept that keymaps and UI subscribe to.
 Wraps the session-id-explicit `dap/client` with active-session helpers and
 exposes the user-facing command tables `M.debug.*`, `M.breakpoint.*`, `M.view.*`.
 Re-exports client signals so consumers depend only on `manager`.
 
-**DAP core** — [lua/easydap/dap/](lua/easydap/dap/)
+**DAP core** — [lua/ezdap/dap/](lua/ezdap/dap/)
 - `client.lua` — session registry & lifecycle; spawning and session-level events.
 - `session.lua` — one DAP session: owns a Connection, holds all runtime state
   (threads, frames, scopes, variables, modules, sources) and drives the protocol
@@ -43,81 +43,81 @@ Re-exports client signals so consumers depend only on `manager`.
 - `proto.lua` — a `---@meta` file of DAP spec types; never `require()` it.
 
 **Adapters & tasks**
-- [adapters/](lua/easydap/adapters/) — built-in adapter definitions, one file per
-  adapter, assembled by [adapters/init.lua](lua/easydap/adapters/init.lua) into a
-  plain `name → easydap.AdapterDef` table: native DAP process/connection config
+- [adapters/](lua/ezdap/adapters/) — built-in adapter definitions, one file per
+  adapter, assembled by [adapters/init.lua](lua/ezdap/adapters/init.lua) into a
+  plain `name → ezdap.AdapterDef` table: native DAP process/connection config
   plus optional named `profiles`. Users add/override keys directly. The DAP
-  core never reads `profiles` — only `easydap.schema` does.
-- [task.lua](lua/easydap/task.lua) — the task runner backend. Consumes a native
+  core never reads `profiles` — only `ezdap.schema` does.
+- [task.lua](lua/ezdap/task.lua) — the task runner backend. Consumes a native
   task (`name`/`adapter`/`request`/`parameters` + optional
   `host`/`port`/`raw_messages`) and sends `parameters` as the DAP request body
   verbatim.
-- [runner.lua](lua/easydap/runner.lua) — the standalone run frontend: run files,
+- [runner.lua](lua/ezdap/runner.lua) — the standalone run frontend: run files,
   `quick_run`, `rerun`, and the run panel.
-- [inputs.lua](lua/easydap/inputs.lua) — the input-format registry: one row per
+- [inputs.lua](lua/ezdap/inputs.lua) — the input-format registry: one row per
   format, stating every way it is read (parsed from a command line, described as
   JSON Schema for a typed file, seeded into a scaffolded document, completed).
   Nothing else switches on a format name, so adding one is a single row.
-- [schema.lua](lua/easydap/schema.lua) — the engine behind `:Debug quick_run`, the
+- [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug quick_run`, the
   reader for `new_run_file`, and the seam easytasks' `debug` task type runs on.
   `resolve_task` reads a profile's declared `inputs` from a table of values
-  and calls its `build`, delivering a complete `easydap.Task` to a `done` callback —
+  and calls its `build`, delivering a complete `ezdap.Task` to a `done` callback —
   a `build` may stop to ask the user something first, and the returned `cancel`
   drops the answer if the caller has given up by then.
-- [scaffold.lua](lua/easydap/scaffold.lua) — `:Debug new_run_file`: renders a
+- [scaffold.lua](lua/ezdap/scaffold.lua) — `:Debug new_run_file`: renders a
   profile's `template` into a runnable Lua run file and opens it.
 
-**Persistence** — [store.lua](lua/easydap/store.lua)
+**Persistence** — [store.lua](lua/ezdap/store.lua)
 A thin path + read/write helper. The project root is the nearest ancestor of the
 cwd holding a `root_markers` entry; all project state lives in one JSON file at
 that root. The store knows nothing about *what* is stored — the lifecycle
 (autocmds, path conversion at the persistence seam) lives in
-[init.lua](lua/easydap/init.lua).
+[init.lua](lua/ezdap/init.lua).
 
-**UI** — [lua/easydap/ui/](lua/easydap/ui/)
+**UI** — [lua/ezdap/ui/](lua/ezdap/ui/)
 `DebugView.lua` (the main tree panel, built on `TreeBuffer`), plus
 `DisassemblyView`, `InspectView`, `ReplBuffer`, `OutputBuffer`, `Panel`, and the
 sign/inline-value modules (`breakpoints_ui`, `debugline_ui`, `inlinevars`,
 `extmarks`, `expressions`).
 
-**Toolkit** — [lua/easydap/tk/](lua/easydap/tk/)
+**Toolkit** — [lua/ezdap/tk/](lua/ezdap/tk/)
 A **vendored** copy of [neotoolkit.nvim](https://github.com/mbfoss/neotoolkit.nvim):
 `Signal` (the pub/sub primitive), `Tree`/`TreeBuffer`, `inputwin`, `floatwin`,
 `usercmd`, `term`, `spawn`, and other primitives. **Do not edit these files
 directly** — they are regenerated by [scripts/vendor-neotoolkit.sh](scripts/vendor-neotoolkit.sh),
-which clones neotoolkit and rewrites `neotoolkit.` → `easydap.tk.`:
+which clones neotoolkit and rewrites `neotoolkit.` → `ezdap.tk.`:
 
 ```sh
 scripts/vendor-neotoolkit.sh            # sync from the upstream repo
 LOCAL=../neotoolkit.nvim scripts/vendor-neotoolkit.sh   # sync from a local checkout
 ```
 
-easydap's own utilities live in [lua/easydap/util/](lua/easydap/util/) and are
+ezdap's own utilities live in [lua/ezdap/util/](lua/ezdap/util/) and are
 untouched by the vendor script.
 
 ## The adapter profile format
 
 An `AdapterDef` describes how to launch a DAP adapter (`command`/`host`/`port`,
 optional `setup`/`teardown`, default `request`). Its optional `profiles` is
-a `table<string, easydap.Profile>` — named launch/attach templates
-(`launch`, `attach`, `remote`, …) consumed only by `easydap.schema`. Adapters carry
+a `table<string, ezdap.Profile>` — named launch/attach templates
+(`launch`, `attach`, `remote`, …) consumed only by `ezdap.schema`. Adapters carry
 no separate schema of their own: each profile is wholly self-describing.
 
-Each `easydap.Profile`:
+Each `ezdap.Profile`:
 
 | Field         | Meaning                                                                         |
 | ------------- | ------------------------------------------------------------------------------- |
 | `request`     | `"launch"` or `"attach"`                                                        |
-| `inputs`      | what the profile accepts — `name -> easydap.Input`; see below             |
+| `inputs`      | what the profile accepts — `name -> ezdap.Input`; see below             |
 | `build`       | `fun(params, connect, inputs)` — assembles the native request body, and any task-level TCP endpoint, in place |
 | `template`    | Lua **source text** for the body `new_run_file` scaffolds, seeded with example values |
 
-Each `easydap.Input` declares one input up front:
+Each `ezdap.Input` declares one input up front:
 
 | Field      | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
 | `type`     | what the input *is* — the Lua type `build` receives: one of `string`/`boolean`/`integer`/`number`/`table`. Defaults to `string` |
-| `format`   | which authored forms reach that type: one of `file`/`dir`/`cwd`/`host`/`port`/`env`/`list`/`shell_args`, each a row in [inputs.lua](lua/easydap/inputs.lua) that also says how the input is described, seeded and completed. Omit it and the string form is read by `type` alone — verbatim for a string, `tonumber` for a number/integer, true/1/yes or false/0/no for a boolean. A `table` input always needs one |
+| `format`   | which authored forms reach that type: one of `file`/`dir`/`cwd`/`host`/`port`/`env`/`list`/`shell_args`, each a row in [inputs.lua](lua/ezdap/inputs.lua) that also says how the input is described, seeded and completed. Omit it and the string form is read by `type` alone — verbatim for a string, `tonumber` for a number/integer, true/1/yes or false/0/no for a boolean. A `table` input always needs one |
 | `required` | when `true`, the user must supply the value; leaving it unset is a resolve error. Any other unset input simply arrives at `build` as nil — which `build` may answer by omitting the field, or some other way: an attach `build` asks the user to pick a process for an unset `pid`, so no adapter marks that input `required` |
 | `description` | a few words on what the input means, e.g. `"process id to attach to"` |
 
@@ -136,10 +136,10 @@ they are one value space reached from a CLI or from a typed file.
 
 This is why `format` is more than a parser. `shell_args` is the clearest case: you
 *write* a command line (a string), and `build` *receives* an argument list (a table).
-The [inputs.lua](lua/easydap/inputs.lua) row states both, along with how the input
+The [inputs.lua](lua/ezdap/inputs.lua) row states both, along with how the input
 gets described to a schema-driven editor, seeded into a scaffolded document, and
 completed on a command line. Adding a format means adding one row — every consumer,
-in easydap and easytasks alike, reads it from there.
+in ezdap and easytasks alike, reads it from there.
 
 ### `build` and `template` are separate paths
 
@@ -152,7 +152,7 @@ new_run_file  template ─→ Lua source ─→ (you edit it) ─→ task
 
 Keeping them apart is the point of the format — each answers one question honestly
 instead of one table half-answering both. A run file's `parameters` is sent to the
-adapter verbatim (`easydap.task`), so it never passes through `build`, and `build`
+adapter verbatim (`ezdap.task`), so it never passes through `build`, and `build`
 never produces anything the scaffolder reads.
 
 - **`build(params, connect, inputs)`** assembles everything a run needs, in
@@ -204,7 +204,7 @@ doesn't seed), never `quick_run` correctness. And the template is unvalidated te
 a typo in it surfaces only when someone scaffolds that profile, so scaffold
 one after editing (`:Debug new_run_file <adapter> <profile> /tmp/x.lua`).
 
-Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are easydap's
+Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are ezdap's
 own user-facing vocabulary — the `name=value` tokens typed at `quick_run` — not
 the adapter's. The `params` keys they fill keep whatever casing the adapter's
 wire protocol uses, so pairings like `params.stopOnEntry = inputs.stop_on_entry`
@@ -214,7 +214,7 @@ Which names a profile takes is up to it — there is no portable role
 vocabulary across adapters — but by convention a `launch` profile takes one
 `command` input (`type = "shell_args"`) carrying the whole command line, and
 `build` splits it into that adapter's own program/args fields. See each file under
-[adapters/](lua/easydap/adapters/) for worked examples of every shape, including
+[adapters/](lua/ezdap/adapters/) for worked examples of every shape, including
 nested `connect` groups (`debugpy`'s `remote` profile), custom-launch
 command strings (`codelldb`'s `core`), a `connect`-only profile
 (`remote`), and one input feeding both body and connection
@@ -234,7 +234,7 @@ command strings (`codelldb`'s `core`), a `connect`-only profile
 ## Testing & health
 
 ```vim
-:checkhealth easydap
+:checkhealth ezdap
 ```
 
 verifies the Neovim version, whether `setup()` has run, the resolved project

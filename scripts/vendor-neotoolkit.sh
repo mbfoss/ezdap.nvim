@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="https://github.com/mbfoss/neotoolkit.nvim"
-DEST="lua/easydap/tk"
+DEST="lua/ezdap/tk"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -22,6 +22,6 @@ rm -f "$DEST"/*.lua
 cp "$TMP/neotoolkit/lua/neotoolkit/"*.lua "$DEST/"
 
 echo "Rewriting require paths and type annotations..."
-sed -i '' 's/neotoolkit\./easydap.tk./g' "$DEST"/*.lua
+sed -i '' 's/neotoolkit\./ezdap.tk./g' "$DEST"/*.lua
 
-echo "Done. $DEST is fully vendored; lua/easydap/util/ (easydap's own files) is untouched."
+echo "Done. $DEST is fully vendored; lua/ezdap/util/ (ezdap's own files) is untouched."

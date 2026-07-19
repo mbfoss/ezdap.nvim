@@ -1,4 +1,4 @@
-# easydap.nvim
+# ezdap.nvim
 
 A batteries-included **Debug Adapter Protocol (DAP) client for Neovim**.
 
@@ -6,7 +6,7 @@ It manages adapter processes and connections, tracks sessions and
 breakpoints, and renders a clean, tree-based debug UI. Point it at a debug
 adapter, set a breakpoint, and start stepping.
 
-> **Status:** easydap is under active development. The core is usable day to day,
+> **Status:** ezdap is under active development. The core is usable day to day,
 > but expect rough edges and occasional breaking changes.
 
 ---
@@ -53,18 +53,18 @@ adapter, set a breakpoint, and start stepping.
 - **Parallel sessions** — run several debuggees at once and switch between them.
 - **Project-scoped persistence** — breakpoints and watch expressions are saved
   per project and restored automatically.
-- **`:checkhealth easydap`** — verifies your Neovim version and adapter tooling.
+- **`:checkhealth ezdap`** — verifies your Neovim version and adapter tooling.
 
 ## Requirements
 
 - **Neovim >= 0.10**
 - A debug adapter for your language (see [Built-in adapters](#built-in-adapters)).
   Many are trivially installed via [mason.nvim](https://github.com/williamboman/mason.nvim) —
-  easydap auto-resolves several of them from Mason's install path.
+  ezdap auto-resolves several of them from Mason's install path.
 
 ## Installation
 
-easydap has no plugin dependencies. Install it with your plugin manager of choice
+ezdap has no plugin dependencies. Install it with your plugin manager of choice
 and call `setup()`.
 
 <details open>
@@ -72,15 +72,15 @@ and call `setup()`.
 
 ```lua
 -- Neovim 0.12+
-vim.pack.add({ "https://github.com/mbfoss/easydap.nvim" })
-require("easydap").setup()
+vim.pack.add({ "https://github.com/mbfoss/ezdap.nvim" })
+require("ezdap").setup()
 ```
 
-Or clone into a package directory and `require("easydap").setup()` from your config:
+Or clone into a package directory and `require("ezdap").setup()` from your config:
 
 ```sh
-git clone https://github.com/mbfoss/easydap.nvim \
-  ~/.local/share/nvim/site/pack/plugins/start/easydap.nvim
+git clone https://github.com/mbfoss/ezdap.nvim \
+  ~/.local/share/nvim/site/pack/plugins/start/ezdap.nvim
 ```
 </details>
 
@@ -89,8 +89,8 @@ git clone https://github.com/mbfoss/easydap.nvim \
 
 ```lua
 {
-  "mbfoss/easydap.nvim",
-  opts = {},           -- passed to require("easydap").setup()
+  "mbfoss/ezdap.nvim",
+  opts = {},           -- passed to require("ezdap").setup()
 }
 ```
 </details>
@@ -101,7 +101,7 @@ persistence, and initialises the UI.
 ## Quick start
 
 ```lua
-require("easydap").setup()
+require("ezdap").setup()
 ```
 
 Then start debugging. The fastest path is `:Debug quick_run`, which launches
@@ -133,7 +133,7 @@ stack, variables and breakpoints. See [The debug UI](#the-debug-ui) and
 
 ## Built-in adapters
 
-Adapters live in `require("easydap.adapters")` as a plain `name → definition`
+Adapters live in `require("ezdap.adapters")` as a plain `name → definition`
 table. You can override any of them or add your own — see
 [Adding your own adapter](#adding-your-own-adapter).
 
@@ -152,12 +152,12 @@ table. You can override any of them or add your own — see
 | `remote`             | any                  | attach            | connects to a DAP server on `host:port`                      |
 | `java-debug-server`  | Java                 | attach            | external debug server (e.g. via `nvim-jdtls`)                |
 
-Run `:checkhealth easydap` to see which adapters have their tooling available on
+Run `:checkhealth ezdap` to see which adapters have their tooling available on
 your machine.
 
 ## Starting a debug session
 
-easydap gives you several ways to launch or attach, from one-liners to
+ezdap gives you several ways to launch or attach, from one-liners to
 version-controlled run files.
 
 ### `:Debug quick_run` — one-shot launch/attach
@@ -198,7 +198,7 @@ left unset is an error and an attach with no `pid` pops a process picker:
 -- debug.lua
 return {
   name       = "debug app",    -- run/panel label (defaults to "debug")
-  adapter    = "codelldb",     -- an entry in require("easydap.adapters")
+  adapter    = "codelldb",     -- an entry in require("ezdap.adapters")
   profile    = "launch_program", -- one of the adapter's named profiles
   parameters = {               -- answers to the profile's declared inputs
     command = "./build/app --verbose",
@@ -255,15 +255,15 @@ path as `:Debug quick_run`. (Prefer the raw shape above instead? Just drop the
 Everything above is available programmatically:
 
 ```lua
-local easydap = require("easydap")
+local ezdap = require("ezdap")
 
 -- Run a task table directly
-easydap.run({ adapter = "delve", request = "launch", parameters = { mode = "test" } })
+ezdap.run({ adapter = "delve", request = "launch", parameters = { mode = "test" } })
 
 -- The quick_run / run_file / new_run_file / rerun entry points, too
-easydap.quick_run({ "debugpy", "launch", "command=./main.py" })
-easydap.run_file("debug.lua")
-easydap.rerun()
+ezdap.quick_run({ "debugpy", "launch", "command=./main.py" })
+ezdap.run_file("debug.lua")
+ezdap.rerun()
 ```
 
 ## Breakpoints
@@ -321,7 +321,7 @@ Inside the panel:
 
 ### Inline variable values
 
-While stopped, easydap renders variable values inline in your source. Choose the
+While stopped, ezdap renders variable values inline in your source. Choose the
 placement with the `inline_vars` option (`inline`, `eol`, `eol_right_align`,
 `right_align`, or `off`). See [Configuration](#configuration).
 
@@ -389,11 +389,11 @@ Switch what's active with pickers:
 Pass options to `setup()`. Defaults shown:
 
 ```lua
-require("easydap").setup({
+require("ezdap").setup({
   -- Project detection: the nearest ancestor holding one of these marks the root.
   root_markers        = { ".git" },
   -- Per-project state file, written at the project root.
-  data_filename       = ".easydap.json",
+  data_filename       = ".ezdap.json",
 
   -- Max characters shown for a value in the debug panel before truncation.
   debug_value_max_len = 30,
@@ -485,24 +485,24 @@ Everything is under the `:Debug` command, with completion for every subcommand.
 Breakpoints and watch expressions are saved **per project** and restored
 automatically. The project root is the nearest ancestor of your cwd containing a
 `root_markers` entry (default `.git`); state is written to a single JSON file at
-that root (`.easydap.json` by default), using project-relative paths so it stays
+that root (`.ezdap.json` by default), using project-relative paths so it stays
 portable.
 
 State is saved when you leave a project (cwd change) and on exit, and reloaded
-when you enter a project. Outside any project, easydap warns once that state
+when you enter a project. Outside any project, ezdap warns once that state
 won't be persisted. Check where you are with:
 
 ```vim
 :Debug project
 ```
 
-> Consider adding `.easydap.json` to your project's `.gitignore` (or commit it to
+> Consider adding `.ezdap.json` to your project's `.gitignore` (or commit it to
 > share breakpoints with your team — your call).
 
 ## Health check
 
 ```vim
-:checkhealth easydap
+:checkhealth ezdap
 ```
 
 Reports your Neovim version, whether `setup()` has run, the resolved project
@@ -510,7 +510,7 @@ state, and which built-in adapters have their tooling installed.
 
 ## Recommended keymaps
 
-easydap ships no global keymaps — wire up whatever suits you. A function-key
+ezdap ships no global keymaps — wire up whatever suits you. A function-key
 layout to get started:
 
 ```lua
@@ -541,11 +541,11 @@ map("x", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: i
 
 ## Adding your own adapter
 
-`require("easydap.adapters")` is a plain table — add or override entries directly.
+`require("ezdap.adapters")` is a plain table — add or override entries directly.
 A minimal process-based adapter needs a `command` and a default `request`:
 
 ```lua
-local adapters = require("easydap.adapters")
+local adapters = require("ezdap.adapters")
 
 adapters.myadapter = {
   command = "my-debug-adapter",   -- string or string[]; launched over stdio
@@ -596,7 +596,7 @@ simply arrives at `build` as
 nil, and since Lua drops nil-valued keys, `params.cwd = inputs.cwd` omits `cwd`
 from the body on its own — assign unconditionally and optional fields take care
 of themselves. `build`'s `connect` argument is for adapters that connect over a
-task-level TCP endpoint (see [`remote.lua`](lua/easydap/adapters/remote.lua));
+task-level TCP endpoint (see [`remote.lua`](lua/ezdap/adapters/remote.lua));
 leave it untouched otherwise.
 
 Omitting the field is only the default answer to an unset input — `build` decides,
@@ -611,9 +611,9 @@ the `profile` and answers its inputs under `parameters`, and `:Debug run_file`
 resolves it through `build` — the same path `quick_run` takes.
 
 See each built-in adapter under
-[`lua/easydap/adapters/`](lua/easydap/adapters/) for fully worked examples
-(e.g. [`codelldb.lua`](lua/easydap/adapters/codelldb.lua),
-[`debugpy.lua`](lua/easydap/adapters/debugpy.lua)), and
+[`lua/ezdap/adapters/`](lua/ezdap/adapters/) for fully worked examples
+(e.g. [`codelldb.lua`](lua/ezdap/adapters/codelldb.lua),
+[`debugpy.lua`](lua/ezdap/adapters/debugpy.lua)), and
 [DEVELOPMENT.md](DEVELOPMENT.md) for the profile format.
 
 ## Contributing
