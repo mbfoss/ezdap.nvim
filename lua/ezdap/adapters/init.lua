@@ -140,7 +140,6 @@ local M = {
     delve                 = require("ezdap.adapters.delve"),
     ["js-debug"]          = require("ezdap.adapters.js-debug"),
     ["bash-debug-adapter"] = require("ezdap.adapters.bash-debug-adapter"),
-    ["php-debug-adapter"] = require("ezdap.adapters.php-debug-adapter"),
     ["local-lua-debugger"] = require("ezdap.adapters.local-lua-debugger"),
 }
 
