@@ -105,7 +105,7 @@ local function _fmt_session(data, chunks)
     local info = data.session_info
     if not info then return end
     local paused        = info.is_paused
-    local terminated    = info.state == "terminated"
+    local terminated    = info.state == "terminated" or info.state == "exited"
     local icon          = terminated and "●" or (paused and "■" or "▶")
     local hl            = terminated and "NonText" or (paused and "DiagnosticWarn" or "DiagnosticOk")
     chunks[#chunks + 1] = { icon, hl }
@@ -239,7 +239,6 @@ end
 ---@field private _expanded         table<string,boolean>
 ---@field private _greyout_timer    fun()?
 ---@field private _session_timer    fun()?
----@field private _removal_timers   table<number,fun()>
 ---@field private _dbp_gen          integer?
 local DebugView = {}
 DebugView.__index = DebugView
@@ -247,12 +246,11 @@ DebugView.__index = DebugView
 ---@return ezdap.DebugView
 function DebugView.new()
     local self = setmetatable({
-        _active_id      = nil,
-        _active_sess    = nil,
-        _query_ctx      = 0,
-        _subs           = {},
-        _expanded       = {},
-        _removal_timers = {},
+        _active_id   = nil,
+        _active_sess = nil,
+        _query_ctx   = 0,
+        _subs        = {},
+        _expanded    = {},
     }, DebugView)
     self:init()
     return self
@@ -348,7 +346,7 @@ end
 ---@private
 function DebugView:_setup_subs()
     self._subs[#self._subs + 1] = manager.on_session_added:subscribe(function(id, _, info)
-        self._removal_timers[id] = _cancel_timer(self._removal_timers[id])
+        self:_reclaim_session_rows(id, info.name)
         self:_upsert_session_row(id, info)
     end)
 
@@ -367,11 +365,6 @@ function DebugView:_setup_subs()
         if self._active_id == id then
             self:_set_active(nil, nil)
         end
-        self._removal_timers[id] = _cancel_timer(self._removal_timers[id])
-        self._removal_timers[id] = _start_timer(3000, function()
-            self._removal_timers[id] = nil
-            self._tree:remove_item(item_id)
-        end)
     end)
 
     self._subs[#self._subs + 1] = manager.on_session_updated:subscribe(function(id, info)
@@ -443,10 +436,6 @@ function DebugView:teardown()
     self._subs = {}
     self._greyout_timer = _cancel_timer(self._greyout_timer)
     self._session_timer = _cancel_timer(self._session_timer)
-    for id, t in pairs(self._removal_timers) do
-        _cancel_timer(t)
-        self._removal_timers[id] = nil
-    end
 end
 
 ---@private
@@ -600,6 +589,28 @@ function DebugView:_show_hover(data)
 end
 
 -- Session rows
+
+---Drop the rows of terminated sessions that a newly started session's name
+---reclaims, wiping their buffers with them — a re-run of the same target takes
+---over its predecessor's row rather than stacking a second one beside it.
+---@param id number  the new session, left alone
+---@param name string
+function DebugView:_reclaim_session_rows(id, name)
+    for _, item_id in ipairs(self._tree:get_children_ids(_roots.sessions)) do
+        local item = self._tree:get_item(item_id)
+        local data = item and item.data
+        local info = data and data.session_info
+        if data and info and data.session_id ~= id and data.name == name
+            and (info.state == "terminated" or info.state == "exited") then
+            for _, buf in ipairs(manager.session_buffers(data.session_id)) do
+                if vim.api.nvim_buf_is_valid(buf.bufnr) then
+                    vim.api.nvim_buf_delete(buf.bufnr, { force = true })
+                end
+            end
+            self._tree:remove_item(item_id)
+        end
+    end
+end
 
 ---@param id number
 ---@param info ezdap.client.SessionInfo

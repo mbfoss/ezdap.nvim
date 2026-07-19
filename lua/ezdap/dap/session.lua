@@ -919,7 +919,7 @@ function Session:_run_in_terminal(args, respond)
     local handle
     local ok, err = pcall(function()
         handle = term.spawn(cmd, {
-            bufname = ui_util.unique_buf_name("ezdap://run/" .. name),
+            bufname = ui_util.unique_buf_name("ezdap://" .. name .. "_run"),
             cwd     = args.cwd,
             env     = args.env,
             on_exit = function() if handle then self:_emit("terminal_exit", handle.bufnr) end end,
