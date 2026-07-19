@@ -21,7 +21,7 @@ return {
             inputs = {
                 command       = { type = "table", format = "shell_args", required = true, description = "command line to debug" },
                 cwd           = { type = "string", format = "cwd", description = "working directory" },
-                env           = { type = "table", format = "env", description = "environment variables" },
+                env           = { type = "table", format = "map", description = "environment variables" },
                 stop_on_entry = { type = "boolean", description = "break at program entry" },
                 stop_at_main  = { type = "boolean", description = "break at the start of main" },
             },

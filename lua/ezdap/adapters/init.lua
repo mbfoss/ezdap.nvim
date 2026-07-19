@@ -45,7 +45,7 @@
 ---| "cwd"         # → string: a path, expanded and made absolute
 ---| "host"        # → string: taken verbatim
 ---| "port"        # → integer: range-checked (0-65535)
----| "env"         # → table: "A=1,B=2" → { A = "1", B = "2" }
+---| "map"         # → table: "A=1,B=2" → { A = "1", B = "2" }
 ---| "list"        # → table: "a,b" → { "a", "b" }
 ---| "shell_args"  # → table: a shell-quoted command line → a list of arguments
 

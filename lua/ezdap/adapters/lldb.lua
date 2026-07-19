@@ -6,12 +6,16 @@
 -- Beyond the fields exposed as inputs below, lldb-dap accepts many optional
 -- keys — add them to a run file directly:
 --   * common (launch & attach): preRunCommands, stopCommands, exitCommands,
---     terminateCommands, sourcePath, sourceMap, debuggerRoot,
---     commandEscapePrefix, customFrameFormat, customThreadFormat,
---     displayExtendedBacktrace, enableAutoVariableSummaries,
---     enableSyntheticChildDebugging.
---   * launch: runInTerminal, stdio, launchCommands.
+--     terminateCommands, debuggerRoot, commandEscapePrefix, customFrameFormat,
+--     customThreadFormat, displayExtendedBacktrace,
+--     enableAutoVariableSummaries, enableSyntheticChildDebugging.
+--   * launch: stdio, launchCommands.
 --   * attach: attachCommands.
+--
+-- `runInTerminal` is the launch default here (a debuggee that reads stdin works
+-- out of the box); set it false for a debuggee whose output belongs in the
+-- debug console. Newer lldb-dap spells the same choice as `console`, which
+-- wins when both are set.
 -- An attach must specify exactly one target: pid, program, coreFile,
 -- attachCommands, or gdb-remote-port.
 --
@@ -30,12 +34,15 @@ return {
             description = "debug an executable",
             request = "launch",
             inputs = {
-                command       = { type = "table", format = "shell_args", required = true, description = "command line to debug" },
-                cwd           = { type = "string", format = "cwd", description = "working directory" },
-                env           = { type = "table", format = "env", description = "environment variables" },
-                stop_on_entry = { type = "boolean", description = "break at program entry" },
-                console       = { type = "string", description = "where to run: internalConsole|integratedTerminal|externalTerminal" },
-                init_commands = { type = "table", format = "list", description = "LLDB commands run at debugger startup" },
+                command         = { type = "table", format = "shell_args", required = true, description = "command line to debug" },
+                cwd             = { type = "string", format = "cwd", description = "working directory" },
+                env             = { type = "table", format = "map", description = "environment variables" },
+                stop_on_entry   = { type = "boolean", description = "break at program entry" },
+                console         = { type = "string", description = "where to run: internalConsole|integratedTerminal|externalTerminal" },
+                run_in_terminal = { type = "boolean", description = "run the debuggee in a terminal (default true)" },
+                source_path     = { type = "string", format = "dir", description = "source root to remap ./ to" },
+                source_map      = { type = "table", format = "map", description = "source path remappings, from=to" },
+                init_commands   = { type = "table", format = "list", description = "LLDB commands run at debugger startup" },
             },
             build = function(params, _, inputs)
                 params.name    = "lldb"
@@ -46,6 +53,10 @@ return {
                 params.env     = inputs.env
                 params.stopOnEntry  = inputs.stop_on_entry
                 params.console      = inputs.console
+                -- Unset means the default, so only an explicit false turns it off.
+                params.runInTerminal = inputs.run_in_terminal ~= false
+                params.sourcePath   = inputs.source_path
+                params.sourceMap    = inputs.source_map
                 params.initCommands = inputs.init_commands
             end,
         },
@@ -54,6 +65,8 @@ return {
             request = "attach",
             inputs = {
                 pid           = { type = "integer", description = "process id to attach to" },
+                source_path   = { type = "string", format = "dir", description = "source root to remap ./ to" },
+                source_map    = { type = "table", format = "map", description = "source path remappings, from=to" },
                 init_commands = { type = "table", format = "list", description = "LLDB commands run at debugger startup" },
             },
             build = function(params, _, inputs)
@@ -62,6 +75,8 @@ return {
                 params.name = "lldb"
                 params.type = "lldb-dap"
                 params.pid  = pid
+                params.sourcePath   = inputs.source_path
+                params.sourceMap    = inputs.source_map
                 params.initCommands = inputs.init_commands
             end,
         },
@@ -71,6 +86,8 @@ return {
             inputs = {
                 program       = { type = "string", format = "file", required = true, description = "executable to attach to" },
                 wait_for      = { type = "boolean", description = "wait for the process to launch" },
+                source_path   = { type = "string", format = "dir", description = "source root to remap ./ to" },
+                source_map    = { type = "table", format = "map", description = "source path remappings, from=to" },
                 init_commands = { type = "table", format = "list", description = "LLDB commands run at debugger startup" },
             },
             build = function(params, _, inputs)
@@ -78,6 +95,8 @@ return {
                 params.type    = "lldb-dap"
                 params.program = inputs.program
                 params.waitFor = inputs.wait_for
+                params.sourcePath   = inputs.source_path
+                params.sourceMap    = inputs.source_map
                 params.initCommands = inputs.init_commands
             end,
         },
@@ -85,28 +104,36 @@ return {
             description = "post-mortem debug from a core file",
             request = "attach",
             inputs = {
-                corefile = { type = "string", format = "file", required = true, description = "core file to load" },
-                program  = { type = "string", format = "file", description = "executable that produced the core" },
+                corefile    = { type = "string", format = "file", required = true, description = "core file to load" },
+                program     = { type = "string", format = "file", description = "executable that produced the core" },
+                source_path = { type = "string", format = "dir", description = "source root to remap ./ to" },
+                source_map  = { type = "table", format = "map", description = "source path remappings, from=to" },
             },
             build = function(params, _, inputs)
                 params.name     = "lldb"
                 params.type     = "lldb-dap"
                 params.program  = inputs.program
                 params.coreFile = inputs.corefile
+                params.sourcePath = inputs.source_path
+                params.sourceMap  = inputs.source_map
             end,
         },
         gdb_remote = {
             description = "attach over a gdb-remote (gdbserver) connection",
             request = "attach",
             inputs = {
-                port = { type = "integer", format = "port", required = true, description = "gdbserver port" },
-                host = { type = "string", format = "host", description = "gdbserver host" },
+                port        = { type = "integer", format = "port", required = true, description = "gdbserver port" },
+                host        = { type = "string", format = "host", description = "gdbserver host" },
+                source_path = { type = "string", format = "dir", description = "source root to remap ./ to" },
+                source_map  = { type = "table", format = "map", description = "source path remappings, from=to" },
             },
             build = function(params, _, inputs)
                 params.name = "lldb"
                 params.type = "lldb-dap"
                 params["gdb-remote-host"] = inputs.host
                 params["gdb-remote-port"] = inputs.port
+                params.sourcePath = inputs.source_path
+                params.sourceMap  = inputs.source_map
             end,
         },
     },

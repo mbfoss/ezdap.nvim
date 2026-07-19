@@ -70,7 +70,7 @@ local function _by_type(input_type, raw)
         return nil, ("expected a boolean (true/false), got %q"):format(raw)
     elseif input_type == "table" then
         -- Nothing about `table` says how a string becomes one — only a format does.
-        return nil, "a table input needs a format (env/list/shell_args)"
+        return nil, "a table input needs a format (map/list/shell_args)"
     end
     return raw
 end
@@ -108,14 +108,16 @@ local function _list(raw)
     return vim.split(raw, ",", { plain = true, trimempty = true })
 end
 
+---Comma-separated `key=value` pairs — environment variables, source-path
+---remappings, anything written as a flat string→string mapping.
 ---@param raw string
 ---@return table<string, string>? value, string? err
-local function _env(raw)
+local function _map(raw)
     local out = {}
     for _, pair in ipairs(vim.split(raw, ",", { plain = true, trimempty = true })) do
         local eq = pair:find("=", 1, true)
         if not eq then
-            return nil, ("expected VAR=VAL pairs, got %q"):format(pair)
+            return nil, ("expected KEY=VALUE pairs, got %q"):format(pair)
         end
         out[pair:sub(1, eq - 1)] = pair:sub(eq + 1)
     end
@@ -131,7 +133,7 @@ M.formats = {
     cwd        = { type = "string",  schema = { type = "string" }, parse = _abspath, seed = "", complete = "dir" },
     host       = { type = "string",  schema = { type = "string" }, seed = "" },
     port       = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
-    env        = { type = "table",   schema = { type = "object", additionalProperties = { type = "string" } }, parse = _env,  seed = {} },
+    map        = { type = "table",   schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map,  seed = {} },
     list       = { type = "table",   schema = { type = "array", items = { type = "string" } },    parse = _list, seed = {} },
     shell_args = { type = "table",   schema = { type = "string" }, parse = str_util.split_shell_args, seed = "" },
 }

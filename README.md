@@ -26,7 +26,7 @@ adapter, set a breakpoint, and start stepping.
 - [Command reference](#command-reference)
 - [Persistence](#persistence)
 - [Health check](#health-check)
-- [Recommended keymaps](#recommended-keymaps)
+- [Keymaps example](#keymaps-example)
 - [Adding a custom adapter](#adding-a-custom-adapter)
 - [Contributing](#contributing)
 
@@ -129,7 +129,7 @@ Set a breakpoint on the current line and step through the program:
 
 The debug panel opens automatically when a session starts, showing the call
 stack, variables and breakpoints. See [The debug UI](#the-debug-ui) and
-[Recommended keymaps](#recommended-keymaps) to make this comfortable.
+[Keymaps example](#keymaps-example) to make this comfortable.
 
 ## Built-in adapters
 
@@ -508,7 +508,7 @@ won't be persisted. Check where you are with:
 Reports the Neovim version, whether `setup()` has run, the resolved project
 state, and which built-in adapters have their tooling installed.
 
-## Recommended keymaps
+## Keymaps example
 
 ezdap ships no global keymaps — wire up whatever suits you. A function-key
 layout to get started:
