@@ -27,7 +27,7 @@ adapter, set a breakpoint, and start stepping.
 - [Persistence](#persistence)
 - [Health check](#health-check)
 - [Recommended keymaps](#recommended-keymaps)
-- [Adding your own adapter](#adding-your-own-adapter)
+- [Adding a custom adapter](#adding-a-custom-adapter)
 - [Contributing](#contributing)
 
 ---
@@ -42,7 +42,7 @@ adapter, set a breakpoint, and start stepping.
   **data breakpoints / watchpoints**.
 - **Tree-based debug panel** — sessions, threads, call stacks, scopes,
   variables, watch expressions and breakpoints in one navigable view.
-- **Inline variable values** — see values right in your source while stopped,
+- **Inline variable values** — see values right in the source while stopped,
   in several placement styles.
 - **Integrated run panel** — REPL, program output, adapter terminal and an
   optional raw-DAP-message log, paged in a single split.
@@ -53,19 +53,19 @@ adapter, set a breakpoint, and start stepping.
 - **Parallel sessions** — run several debuggees at once and switch between them.
 - **Project-scoped persistence** — breakpoints and watch expressions are saved
   per project and restored automatically.
-- **`:checkhealth ezdap`** — verifies your Neovim version and adapter tooling.
+- **`:checkhealth ezdap`** — verifies the Neovim version and adapter tooling.
 
 ## Requirements
 
 - **Neovim >= 0.10**
-- A debug adapter for your language (see [Built-in adapters](#built-in-adapters)).
+- A debug adapter for the target language (see [Built-in adapters](#built-in-adapters)).
   Many are trivially installed via [mason.nvim](https://github.com/williamboman/mason.nvim) —
   ezdap auto-resolves several of them from Mason's install path.
 
 ## Installation
 
-ezdap has no plugin dependencies. Install it with your plugin manager of choice
-and call `setup()`.
+ezdap has no plugin dependencies. Install it with any plugin manager and call
+`setup()`.
 
 <details open>
 <summary><b>Native packages / <code>vim.pack</code></b></summary>
@@ -76,7 +76,7 @@ vim.pack.add({ "https://github.com/mbfoss/ezdap.nvim" })
 require("ezdap").setup()
 ```
 
-Or clone into a package directory and `require("ezdap").setup()` from your config:
+Or clone into a package directory and `require("ezdap").setup()` from the config:
 
 ```sh
 git clone https://github.com/mbfoss/ezdap.nvim \
@@ -119,7 +119,7 @@ with a few `input=value` arguments:
 :Debug quick_run debugpy attach pid=41234
 ```
 
-Set a breakpoint on the current line and step through your program:
+Set a breakpoint on the current line and step through the program:
 
 ```vim
 :Debug breakpoint          " toggle a breakpoint at the cursor
@@ -134,8 +134,8 @@ stack, variables and breakpoints. See [The debug UI](#the-debug-ui) and
 ## Built-in adapters
 
 Adapters live in `require("ezdap.adapters")` as a plain `name → definition`
-table. You can override any of them or add your own — see
-[Adding your own adapter](#adding-your-own-adapter).
+table. Any entry can be overridden, and new ones added — see
+[Adding a custom adapter](#adding-a-custom-adapter).
 
 | Adapter              | Language(s)          | Requests          | Tooling                                                       |
 | -------------------- | -------------------- | ----------------- | ------------------------------------------------------------- |
@@ -153,7 +153,7 @@ table. You can override any of them or add your own — see
 | `java-debug-server`  | Java                 | attach            | external debug server (e.g. via `nvim-jdtls`)                |
 
 Run `:checkhealth ezdap` to see which adapters have their tooling available on
-your machine.
+the current machine.
 
 ## Starting a debug session
 
@@ -175,7 +175,7 @@ Inputs are specific to each adapter/profile — e.g. every `launch_program`
 profile takes `command` (a full shell command line, split into the
 adapter's own program/args fields) plus `cwd` and `env`; an `attach_process`
 profile takes `pid`, and a `remote` one takes `host`/`port`. Each input
-declares a **type** that decides how your value is read: `file`/`dir`/`cwd`
+declares a **type** that decides how the value is read: `file`/`dir`/`cwd`
 (path expansion), `env` (`A=1,B=2`), `shell_args` (shell-quoted splitting) and
 `integer`/`port`/`boolean`. An input left out is simply omitted from the
 request, unless the profile marks it required.
@@ -186,8 +186,8 @@ completion for inputs whose type is path-like.
 
 ### Run files — versionable debug configs
 
-A run file is a Lua file that returns a single task table. Keep it in your
-project and run it whenever you need it. Two shapes are accepted, told apart by
+A run file is a Lua file that returns a single task table. Keep it in the
+project and run it on demand. Two shapes are accepted, told apart by
 whether a `profile` or a `configuration` field is present.
 
 **Profile-based** — names a `profile` and answers its declared inputs under
@@ -301,7 +301,7 @@ logpoint, disabled, exception). The full list of subcommands is in the
 
 ### Debug panel (`:Debug view`)
 
-The main panel is a tree of your **sessions → threads → stack frames → scopes →
+The main panel is a tree of **sessions → threads → stack frames → scopes →
 variables**, plus **watch expressions** and **breakpoints**. It opens
 automatically when a session starts; open or focus it any time with `:Debug view`.
 
@@ -321,7 +321,7 @@ Inside the panel:
 
 ### Inline variable values
 
-While stopped, ezdap renders variable values inline in your source. Choose the
+While stopped, ezdap renders variable values inline in the source. Choose the
 placement with the `inline_vars` option (`inline`, `eol`, `eol_right_align`,
 `right_align`, or `off`). See [Configuration](#configuration).
 
@@ -331,7 +331,7 @@ Each run gets a bottom split hosting its buffers, paged via a winbar:
 
 - **Messages** — adapter/run progress
 - **REPL** — evaluate DAP expressions interactively
-- **Output** — your program's output
+- **Output** — the debuggee's output
 - **Terminal** — when the adapter launches the debuggee in a terminal
 - **DAP Messages** — raw protocol log (enable with `raw_messages = true` on the task)
 
@@ -483,7 +483,7 @@ Everything is under the `:Debug` command, with completion for every subcommand.
 ## Persistence
 
 Breakpoints and watch expressions are saved **per project** and restored
-automatically. The project root is the nearest ancestor of your cwd containing a
+automatically. The project root is the nearest ancestor of the cwd containing a
 `root_markers` entry (default `.git`); state is written to a single JSON file at
 that root (`.ezdap.json` by default), using project-relative paths so it stays
 portable.
@@ -496,8 +496,8 @@ won't be persisted. Check where you are with:
 :Debug project
 ```
 
-> Consider adding `.ezdap.json` to your project's `.gitignore` (or commit it to
-> share breakpoints with your team — your call).
+> Consider adding `.ezdap.json` to the project's `.gitignore`, or commit it to
+> share breakpoints across a team.
 
 ## Health check
 
@@ -505,7 +505,7 @@ won't be persisted. Check where you are with:
 :checkhealth ezdap
 ```
 
-Reports your Neovim version, whether `setup()` has run, the resolved project
+Reports the Neovim version, whether `setup()` has run, the resolved project
 state, and which built-in adapters have their tooling installed.
 
 ## Recommended keymaps
@@ -539,7 +539,7 @@ map("n", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: i
 map("x", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: inspect selection" })
 ```
 
-## Adding your own adapter
+## Adding a custom adapter
 
 `require("ezdap.adapters")` is a plain table — add or override entries directly.
 A minimal process-based adapter needs a `command` and a default `request`:
