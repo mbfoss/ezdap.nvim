@@ -53,15 +53,9 @@ local function _debugpy_setup(config, ctx, callback)
     vim.defer_fn(function() done(nil, { handle = handle }) end, 500)
 end
 
--- Attach to a remote Python process running debugpy via `connect.*`.
--- task.host / task.port point to the REMOTE process; the local debugpy adapter
--- is spawned by S.debugpy_setup and connects to it via the `connect` args.
--- The `connect` group targets the REMOTE process and goes in the body's
--- `connect`, not the task-level connection (the local adapter port is chosen
--- by S.debugpy_setup). `justMyCode`/`showReturnValue` keep ezdap's existing
--- behaviour (debug all code, show return values); debugpy applies its own
--- documented defaults for everything else, per its wiki
--- (https://github.com/microsoft/debugpy/wiki/Debug-configuration-settings).
+-- Attach to a remote Python process: the `connect` group targets the REMOTE
+-- process and goes in the body's `connect`, not the task-level connection (the
+-- local adapter's port is chosen by S.debugpy_setup, which also spawns it).
 ---@type ezdap.AdapterDef
 return {
     command  = "python3",

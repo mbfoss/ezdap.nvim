@@ -59,13 +59,9 @@ local _DEFAULT_HEIGHT = 12
 -- bar. Only one run panel is shown at a time, so a single target suffices.
 local _click_target ---@type ezdap.ui.Panel?
 
--- `vim.wo[win].opt = val` sets both the window-local value AND nvim's hidden
--- global default (the value new windows inherit), even for options with no
--- real global scope (winfixbuf, number, signcolumn, ...) — so every panel open
--- would silently leak its window settings into every future plain window, and
--- a later `setlocal opt<` reset in a split sibling would restore the polluted
--- value instead of nvim's real default. Force `scope = "local"` to confine
--- these changes to `win`.
+-- `vim.wo[win].opt = val` sets both the window-local value AND nvim's hidden global
+-- default, even for options with no real global scope — so every panel open would
+-- leak its settings into future windows. Force `scope = "local"` to confine them.
 ---@param win integer
 ---@param opt string
 ---@param val any
@@ -99,7 +95,7 @@ function Panel:init()
     return self
 end
 
--- ── Window ────────────────────────────────────────────────────────────────
+-- Window
 
 ---@return boolean
 function Panel:is_open()
@@ -110,11 +106,9 @@ end
 ---open. The first display entry (or an empty scratch) is shown.
 function Panel:open()
     if self:is_open() then return end
-    -- fixedwin owns the split's creation, height pinning, resize/ratio tracking
-    -- and re-pinning across layout changes, and returns focus to the current
-    -- window (enter defaults to false). Its on_delete records the final height
-    -- so a manual resize survives a hide/show, and tears the panel down whether
-    -- it was closed via close() or directly by the user (:q).
+    -- fixedwin owns the split's creation, height pinning, resize tracking and
+    -- re-pinning across layout changes, and leaves focus alone. Its on_delete records
+    -- the final height and tears the panel down, whether closed via close() or :q.
     local ratio = self._height / math.max(1, vim.o.lines)
     local augroup
     self._win, augroup = fixedwin.create_fixed_win("height", ratio, function(r)
@@ -130,16 +124,9 @@ function Panel:open()
     self:_set_buf(first or vim.api.nvim_create_buf(false, true))
     _click_target = self
 
-    -- Splitting the panel window copies its winbar (and other window-local
-    -- options) onto the new sibling verbatim — click regions included — but the
-    -- sibling is never re-rendered (_render_winbar only targets self._win), so
-    -- its numbering goes stale as soon as the panel state changes and clicking
-    -- it jumps to the wrong tab. Detect the inherited winbar text (the sibling
-    -- lacks our marker, since window-local variables are not copied on split)
-    -- and strip every panel-special option back off so it reverts to a plain
-    -- window. Only relevant while the panel is open, so it's (re)registered
-    -- here and torn down in close() rather than living for the instance's
-    -- whole lifetime.
+    -- Splitting the panel copies its winbar onto the sibling verbatim, click regions
+    -- included, but the sibling is never re-rendered, so its numbering goes stale.
+    -- Detect the inherited winbar (no marker) and strip the panel options back off.
     assert(augroup)
     vim.api.nvim_create_autocmd("WinNew", {
         group = augroup,
@@ -177,7 +164,7 @@ function Panel:toggle()
     if self:is_open() then self:close() else self:open() end
 end
 
--- ── Buffer display ────────────────────────────────────────────────────────
+-- Buffer display
 
 ---Display `bufnr` in the panel window and refresh the winbar. Pins terminal and
 ---autoscroll buffers to their last line. The window is `winfixbuf` so stray edits
@@ -226,7 +213,7 @@ function Panel:_attach(bufnr)
     })
 end
 
--- ── Groups & ordering ──────────────────────────────────────────────────────
+-- Groups & ordering
 
 ---Register a run group (or refresh its label). No-op for the shared group.
 ---@param id     string
@@ -306,12 +293,11 @@ function Panel:_render_winbar()
     _setlocal(self._win, "winbar", table.concat(parts) .. "%#Winbar#")
 end
 
--- ── Public API ─────────────────────────────────────────────────────────────
+-- Public API
 
----Register a buffer with the panel and surface it when warranted. Opens the
----panel on the first buffer. A buffer added with a strictly higher priority than
----the current page is switched to; otherwise it only joins the winbar — so a
----parallel run starting in the background never steals the active view.
+---Register a buffer with the panel and surface it when warranted; opens the panel on
+---the first buffer. A buffer added with a strictly higher priority than the current
+---page is switched to, so a background run never steals the active view.
 ---@param bufnr integer
 ---@param opts? ezdap.ui.PanelAdd
 function Panel:add(bufnr, opts)

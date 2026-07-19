@@ -63,7 +63,7 @@ local _antiflicker_delay = 200
 ---@field score number?
 ---@field data any
 
--- ── Helpers ────────────────────────────────────────────────────────────────
+-- Helpers
 
 ---@param v number
 ---@param min number
@@ -258,7 +258,7 @@ local function _center_for_previewer(msg, width, height)
     return lines
 end
 
--- ── Picker ─────────────────────────────────────────────────────────────────
+-- Picker
 
 ---@type ezdap.select.Picker?
 local _active_picker = nil
@@ -789,7 +789,7 @@ function Picker:setup_input()
     vim.keymap.set("n", "<CR>", function() self:confirm() end, l)
 end
 
--- ── Public API ─────────────────────────────────────────────────────────────
+-- Public API
 
 ---Open a floating fuzzy picker. `callback` receives the selected item's `data`
 ---(or the bare string for string items), or `nil` when cancelled.

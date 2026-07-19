@@ -175,10 +175,9 @@ function M.new(conn, config)
     conn.on_request = function(cmd, args, respond) self:_handle_adapter_request(cmd, args, respond) end
     conn.on_close   = function() self:_on_close() end
 
-    -- Keep the adapter in sync with the global breakpoint registry: any change to
-    -- the desired set pushes the affected breakpoints to this session's adapter.
-    -- The initial sync is handled by the _on_initialized handshake instead, so
-    -- changes before initialization are ignored (see _on_breakpoints_changed).
+    -- Keep the adapter in sync with the global breakpoint registry. The initial
+    -- sync is handled by the _on_initialized handshake instead, so changes before
+    -- initialization are ignored (see _on_breakpoints_changed).
     self._bp_unsub  = breakpoints.on_change:subscribe(function(kind, path)
         self:_on_breakpoints_changed(kind, path)
     end)
@@ -186,7 +185,7 @@ function M.new(conn, config)
     return self
 end
 
--- ── Listener helpers ───────────────────────────────────────────────────────
+-- Listener helpers
 
 ---@alias ezdap.dap.SessionEvent
 ---| "state_changed"
@@ -232,7 +231,7 @@ function Session:_emit(event, ...)
     end
 end
 
--- ── State helpers ──────────────────────────────────────────────────────────
+-- State helpers
 
 ---@param state  string
 ---@param reason string?
@@ -248,7 +247,7 @@ function Session:capable(name)
     return self.capabilities[name] == true
 end
 
--- ── Thread helpers ─────────────────────────────────────────────────────────
+-- Thread helpers
 
 ---@param id integer?
 ---@return ezdap.dap.Thread?
@@ -316,12 +315,11 @@ function Session:current_stack_frame()
     return thread.stack_frames[1]
 end
 
--- ── Outgoing requests ──────────────────────────────────────────────────────
+-- Outgoing requests
 
----Low-level request, forwarded to the connection.
----Dropped (cb called with error) when the session is terminating or terminated
----so in-flight init chains (setBreakpoints, configurationDone, …) drain fast.
----"terminate" and "disconnect" are always forwarded so stop()/disconnect() work.
+---Low-level request, forwarded to the connection. Dropped (cb called with error)
+---when the session is terminating or terminated so in-flight init chains drain
+---fast; "terminate"/"disconnect" are always forwarded so stop()/disconnect() work.
 ---@param command string
 ---@param args    table?
 ---@param cb      fun(body: table?, err: string?)?
@@ -380,8 +378,7 @@ function Session:_protocol_args()
     return self.config.request_args or {}
 end
 
--- Breakpoint sync chain ──────────
-
+-- Breakpoint sync chain
 ---@return ezdap.dap.proto.SetExceptionBreakpointsArguments
 function Session:_exception_bp_params()
     local filters = {}
@@ -497,8 +494,7 @@ function Session:_configuration_done(cb)
     end
 end
 
--- Full "initialized" sequence ──────
-
+-- Full "initialized" sequence
 ---@return nil
 function Session:_on_initialized()
     self._initialized = true
@@ -520,8 +516,7 @@ function Session:_on_initialized()
     end)
 end
 
--- Thread / stack refresh ───────────────────────────────────────────────────
-
+-- Thread / stack refresh
 ---@param cb fun()?
 function Session:_update_threads(cb)
     self:request("threads", {}, function(body, err)
@@ -615,7 +610,7 @@ function Session:_update(invalidate, cb)
     end)
 end
 
--- ── Incoming events ────────────────────────────────────────────────────────
+-- Incoming events
 
 ---@param event string
 ---@param body  table
@@ -892,7 +887,7 @@ function Session:_on_close()
     if cb then cb() end
 end
 
--- ── Adapter-initiated requests ─────────────────────────────────────────────
+-- Adapter-initiated requests
 
 ---@param command string
 ---@param args    table
@@ -938,7 +933,7 @@ function Session:_run_in_terminal(args, respond)
     respond({ processId = handle.pid })
 end
 
--- ── Lifecycle ──────────────────────────────────────────────────────────────
+-- Lifecycle
 
 ---Start the DAP handshake (send initialize).
 ---@return nil
@@ -952,11 +947,9 @@ function Session:_shutdown()
     self.conn:close()
 end
 
----Gracefully terminate the debug session.
----`cb` is always called exactly once, even if the adapter closes the
----connection before responding (via the _on_close path).
----A 3-second timeout forces _shutdown() for adapters that accept disconnect
----but never reply
+---Gracefully terminate the debug session. `cb` is always called exactly once,
+---even if the adapter closes the connection before responding (the _on_close
+---path). A 3-second timeout forces _shutdown() for adapters that never reply.
 ---@param cb fun()?
 function Session:stop(cb)
     if self.state == "terminated" or self._stopping then
@@ -1020,7 +1013,7 @@ function Session:disconnect(cb)
     end)
 end
 
--- ── Control flow ───────────────────────────────────────────────────────────
+-- Control flow
 
 ---Shared body for the stepping requests (next/stepIn/stepOut/stepBack). Fills in
 ---`threadId` (current thread) and `granularity` ("line") defaults, and strips
@@ -1124,10 +1117,9 @@ function Session:goto_targets(arguments, cb)
     end)
 end
 
----Set the next statement to execute (jump-to-cursor). The code between the
----current location and the target is skipped, not executed. The adapter sends
----a stopped event once the jump completes. `targetId` comes from goto_targets;
----`threadId` defaults to the current thread.
+---Set the next statement to execute (jump-to-cursor); code between the current
+---location and the target is skipped. The adapter sends a stopped event once the
+---jump completes. `targetId` comes from goto_targets; `threadId` from the current thread.
 ---@param arguments ezdap.dap.proto.GotoArguments
 function Session:set_next_statement(arguments)
     local args = vim.deepcopy(arguments or {})
@@ -1313,7 +1305,7 @@ function Session:toggle_instruction_breakpoint(ref, cb)
     self:_sync_instruction_breakpoints(cb)
 end
 
--- ── Data breakpoints (watchpoints) ─────────────────────────────────────────
+-- Data breakpoints (watchpoints)
 
 ---Data breakpoints currently set on this session, in display order.
 ---Session-scoped: dataIds are only valid within a live session, so these are
@@ -1323,10 +1315,9 @@ function Session:data_breakpoints()
     return self._data_bps
 end
 
----Resolve the dataId and supported access types for a data breakpoint on a
----variable or expression. Must be called while stopped: when no usable
----`variablesReference` is given it scopes to the current frame (filling in
----`frameId`), so `arguments.name` is treated as an expression.
+---Resolve the dataId and supported access types for a data breakpoint. Must be
+---called while stopped: with no usable `variablesReference` it scopes to the
+---current frame (filling `frameId`), so `arguments.name` is read as an expression.
 ---@param arguments ezdap.dap.proto.DataBreakpointInfoArguments
 ---@param cb fun(body: ezdap.dap.proto.DataBreakpointInfoResponseBody?, err: string?)
 function Session:data_breakpoint_info(arguments, cb)
@@ -1449,7 +1440,7 @@ function Session:_sync_data_breakpoints(cb)
     end)
 end
 
--- ── Data fetching ──────────────────────────────────────────────────────────
+-- Data fetching
 
 ---Evaluate an expression. When `arguments.frameId` is omitted it defaults to the
 ---current frame (if any thread is stopped); a "clipboard" context falls back to
@@ -1572,14 +1563,9 @@ function Session:_invalidate_variable_cache()
     end
 end
 
----Set a variable's value.
----
----Per the DAP spec, when an adapter implements both `setVariable` and
----`setExpression` a client uses `setExpression` *if and only if* the variable
----has an `evaluateName` property (that name is a full l-value expression, which
----handles nested/complex targets a container-scoped `setVariable` cannot).
----Otherwise it falls back to `setVariable`, which requires the parent
----`variablesReference`.
+---Set a variable's value. Per the DAP spec, `setExpression` is used if and only if
+---the variable has an `evaluateName` (a full l-value expression, which reaches
+---nested targets a container-scoped `setVariable` cannot); otherwise `setVariable`.
 ---@param reference integer|nil  parent variablesReference (for the setVariable path)
 ---@param variable  ezdap.dap.Variable
 ---@param value     string
@@ -1675,9 +1661,8 @@ function Session:completions(arguments, cb)
 end
 
 ---React to a change in the global breakpoint registry by pushing it to the
----adapter. on_change is already coalesced and deferred by the registry, so this
----dispatches directly. Ignored until the session is initialized — the handshake
----does the initial push, and the adapter is not ready for setBreakpoints before.
+---adapter; on_change is already coalesced by the registry, so this dispatches
+---directly. Ignored until initialized — the handshake does the initial push.
 ---@param kind ezdap.dap.BreakpointChangeKind
 ---@param path string?   affected source file for "source" changes (nil = all)
 function Session:_on_breakpoints_changed(kind, path)

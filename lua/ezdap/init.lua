@@ -15,11 +15,9 @@ local _debug_view
 ---@type ezdap.DisassemblyView?
 local _disassembly_view
 local _initialized = false
--- Whether `setup()` has run. The public API (session runners, views, project
--- state) relies on the autocmds, UI wiring and restored breakpoints that setup
--- installs; calling in before then would silently do the wrong thing (no
--- persistence, no auto-shown view, empty breakpoint set), so those entry points
--- fail loudly instead.
+-- Whether `setup()` has run. The public API relies on the autocmds, UI wiring and
+-- restored breakpoints setup installs; calling in before then would silently do
+-- the wrong thing, so those entry points fail loudly instead.
 local _setup_done = false
 
 ---Guard a public API entry point: raise a clear error — pointed at the caller —
@@ -73,10 +71,9 @@ end
 -- warns afresh.
 local _warned_rootless = false
 
----Warn — once per rootless stretch — that the breakpoint/expression set just
----changed but won't be persisted, because the cwd is not inside a project. No-op
----inside a project, or while nothing is set (so it never fires on an empty
----startup/restore).
+---Warn — once per rootless stretch — that the breakpoint/expression set changed
+---but won't be persisted, because the cwd is not inside a project. No-op inside a
+---project, or while nothing is set (so it never fires on an empty startup).
 local function _warn_if_unpersisted()
     if _warned_rootless then return end
     if require("ezdap.store").root() then return end
@@ -276,10 +273,9 @@ local function _register_user_commands()
         end
     end
 
-    ---Completion for `:Debug quick_run …` tokens: the adapter (1st bare
-    ---positional), then the profile name (2nd bare positional), then input
-    ---names (as `name=`) not yet supplied, or a value once `=` has been typed
-    ---(file paths for a path-like input).
+    ---Completion for `:Debug quick_run …` tokens: the adapter (1st bare positional),
+    ---then the profile name (2nd), then input names not yet supplied (as `name=`),
+    ---or a value once `=` has been typed (file paths for a path-like input).
     ---@param schema table
     ---@param used string[]     already-typed tokens preceding the one being completed
     ---@param arg_lead string   the token being completed
@@ -381,13 +377,9 @@ local function _init()
         desc     = "ezdap: persist breakpoints and expressions",
     })
 
-    -- Gracefully stop active sessions on exit. An adapter (e.g. lldb-dap) that
-    -- is killed without a completed `disconnect` orphans its launched debuggee —
-    -- the process keeps running. Neovim SIGKILLs the adapter jobs as it exits, so
-    -- we must finish the DAP disconnect handshake first. vim.wait pumps the event
-    -- loop (letting the async disconnect responses land) while the timeout caps a
-    -- hung adapter so quitting is never blocked; the per-session 3s force-close
-    -- backstops within that window.
+    -- Gracefully stop active sessions on exit: an adapter killed without a completed
+    -- `disconnect` orphans its debuggee, and nvim SIGKILLs adapter jobs as it exits.
+    -- vim.wait pumps the loop for the responses; the timeout caps a hung adapter.
     vim.api.nvim_create_autocmd("VimLeavePre", {
         callback = function()
             local client = require("ezdap.dap.client")
@@ -465,25 +457,18 @@ function M.run_file(path)
     return runner.run_file(path)
 end
 
----Scaffold a run_file for one of an adapter's profiles — a profile-based file
----(`adapter`/`profile`/`parameters`) whose `parameters` answer the profile's
----declared inputs, seeded and commented — and open it for editing. `:Debug run_file`
----resolves it through `build`, the same path `quick_run` takes. `assignments` is
----positional: the adapter, an optional profile name (defaults to the adapter's
----sole profile), and an optional destination path. E.g.
----`new_run_file({ "codelldb", "launch" })` writes `<root>/codelldb_launch.lua`.
+---Scaffold a run_file for one of an adapter's profiles — `adapter`/`profile`/
+---`parameters`, seeded and commented — and open it for editing. `assignments` is
+---positional: adapter, optional profile (defaults to the sole one), optional path.
 ---@param assignments string[]  positional adapter, profile, path, e.g. { "codelldb", "launch", "./foo.lua" }
 function M.new_run_file(assignments)
     _require_setup("new_run_file")
     return require("ezdap.scaffold").new_run_file(assignments)
 end
 
----Launch or attach under an adapter using one of its declared `profiles`,
----assembling the request body from `input=value` assignments — the command-surface
----entry point behind `:Debug quick_run`. `assignments` leads with the adapter and
----profile name as bare positional tokens. E.g.
----`quick_run({ "codelldb", "launch", "command=./a.out --verbose" })` or
----`quick_run({ "debugpy", "attach", "pid=41234" })`.
+---Launch or attach under an adapter using one of its declared `profiles`, assembling
+---the request body from `input=value` assignments — the entry point behind `:Debug
+---quick_run`. `assignments` leads with the adapter and profile as bare positionals.
 ---@param assignments string[]  adapter, profile name, then "input=value" tokens
 function M.quick_run(assignments)
     _require_setup("quick_run")

@@ -45,11 +45,9 @@ function M.open(expr)
         return
     end
 
-    -- Capture the inspected symbol's screen position *now*, before the async
-    -- evaluate; the cursor (and even the current window/mode) may have moved by
-    -- the time the response arrives. `screenpos` (no nvim_ equivalent) is 1-based
-    -- and returns {row=0} when the cell is off-screen. `nvim_win_get_cursor`
-    -- gives a 1-based line and 0-based column, so shift the column to 1-based.
+    -- Capture the inspected symbol's screen position *now*, before the async evaluate;
+    -- the cursor may have moved by the time the response arrives. `screenpos` is
+    -- 1-based ({row=0} off-screen); nvim_win_get_cursor's column needs shifting to 1.
     local cursor = vim.api.nvim_win_get_cursor(0)
     local anchor = vim.fn.screenpos(0, cursor[1], cursor[2] + 1)
 

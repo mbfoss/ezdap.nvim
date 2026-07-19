@@ -35,18 +35,11 @@
 
 local M = {}
 
--- ── The registry ───────────────────────────────────────────────────────────
+-- The registry
 
----One format, in all the ways it is read.
----
----`parse` may be omitted when the string form is just the `type` read back (as
----`host` is): the raw string is then read by `type` alone. `seed` is a starting
----value for a scaffolded document — it is deep-copied on the way out, so a row may
----hold a mutable default.
----
----`item_type` is what one element of a collection format becomes — the entries of
----a `list`, the values of a `map` (whose keys are always strings). Every
----`table`-typed row declares one; a scalar row has no elements and declares none.
+---One format, in all the ways it is read. `parse` may be omitted when the string
+---form is just the `type` read back. `seed` is a starting value for a scaffolded
+---document; `item_type` is what one element of a collection format becomes.
 ---@class ezdap.FormatDef
 ---@field type       ezdap.InputType   what `build` receives
 ---@field item_type? ezdap.InputType   what one element becomes, for a collection
@@ -147,7 +140,7 @@ M.formats = {
     list       = { type = "table",   item_type = "string", schema = { type = "array", items = { type = "string" } },    parse = _list, seed = {} },
 }
 
--- ── Projections ────────────────────────────────────────────────────────────
+-- Projections
 
 ---The row for an input's declared format, or nil when it declares none (or one
 ---this version doesn't know, which is a declaration bug — `type` still answers).

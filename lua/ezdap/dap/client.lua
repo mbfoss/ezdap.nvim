@@ -7,14 +7,11 @@ local session_mod = require("ezdap.dap.session")
 local Signal      = require("ezdap.tk.Signal")
 local str_util    = require("ezdap.tk.strutil")
 
--- ── Config type ─────────────────────────────────────────────────────────────
+-- Config type
 
----A resolved, per-run DAP config — the thing the dap layer (client → session →
----connection) actually consumes to spawn/connect and drive the protocol. The
----task runner builds one from an `ezdap.AdapterDef` plus a task: it flattens
----the adapter's launch/attach fields and adds the run's `request`/`request_args`
----(and host/port). `setup`/`teardown` are the adapter def's concern and are
----resolved before this exists, so they are not part of it.
+---A resolved, per-run DAP config — what the dap layer actually consumes to
+---spawn/connect and drive the protocol. The task runner builds one from an
+---`ezdap.AdapterDef` plus a task; `setup`/`teardown` are resolved before this.
 ---@class ezdap.dap.Config
 ---@field name                   string
 ---@field adapter?               string  adapter name (for adapterID / display)
@@ -28,7 +25,7 @@ local str_util    = require("ezdap.tk.strutil")
 ---@field request_args?          table   raw DAP launch/attach body sent with the request
 ---@field defer_launch_attach?   boolean
 
--- ── Config evaluation ──────────────────────────────────────────────────────
+-- Config evaluation
 
 local function _eval_val(v)
     if type(v) == "function" then
@@ -69,7 +66,7 @@ local M                 = {}
 ---@field on_progress? fun(message: string)
 ---@field on_fail?     fun()
 
--- ── Signals ────────────────────────────────────────────────────────────────
+-- Signals
 
 ---Fires when a session is registered: (id, sess, info)
 M.on_session_added      = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, sess:ezdap.dap.Session, info:ezdap.client.SessionInfo)>
@@ -88,7 +85,7 @@ M.on_variable_changed   = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, s
 ---Fires when a breakpoint's adapter-verified status changes: (id, bp, status)
 M.on_breakpoint_updated = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, bp:table, status:ezdap.dap.BpStatus)>
 
--- ── Session registry ───────────────────────────────────────────────────────
+-- Session registry
 
 ---@type table<number, ezdap.dap.Session>
 local _sessions         = {}
@@ -123,7 +120,7 @@ function M.sessions()
     return _sessions
 end
 
--- ── Config preparation ─────────────────────────────────────────────────────
+-- Config preparation
 
 ---@param config ezdap.dap.Config
 ---@return ezdap.dap.Config?
@@ -133,7 +130,7 @@ local function _prepare_config(config)
     return config
 end
 
--- ── Session registration ───────────────────────────────────────────────────
+-- Session registration
 
 ---@param sess     ezdap.dap.Session
 ---@param callbacks     ezdap.client.Callbacks
@@ -215,7 +212,7 @@ local function _register_session(sess, callbacks, progress)
     if on_session then on_session(id, sess) end
 end
 
--- ── Session startup ────────────────────────────────────────────────────────
+-- Session startup
 
 ---@param config ezdap.dap.Config
 ---@param callbacks? ezdap.client.Callbacks
@@ -264,9 +261,8 @@ function M._start_stdio(config, callbacks, progress)
         or str_util.split_shell_args(config.command --[[@as string]])
 
     -- Pre-flight: the most common first-run failure is a missing adapter binary.
-    -- Catch it here with a friendly message instead of letting connection.stdio
-    -- throw a raw Lua error (and leaving the run uncleaned because on_fail never
-    -- fires).
+    -- Catch it here with a friendly message instead of a raw Lua error from
+    -- connection.stdio (which also leaves the run uncleaned — on_fail never fires).
     if vim.fn.executable(cmd[1]) == 0 then
         local msg = ("adapter executable not found: %s"
             .. "or override its `command` in require('ezdap.adapters')"):format(cmd[1])
@@ -325,7 +321,7 @@ function M._start_tcp(config, callbacks, progress)
     vim.defer_fn(try_connect, 100)
 end
 
--- ── Session control ────────────────────────────────────────────────────────
+-- Session control
 
 ---@param id number
 ---@param cb fun()?
@@ -355,7 +351,7 @@ function M.quit(cb)
     end
 end
 
--- ── Stepping ──────────────────────────────────────────────────────────────
+-- Stepping
 
 ---@param id number
 function M.continue(id)
@@ -465,7 +461,7 @@ function M.select_frame(id, frame_id)
     local s = _sessions[id]; if s then s:select_frame(frame_id) end
 end
 
--- ── Evaluate ──────────────────────────────────────────────────────────────
+-- Evaluate
 
 ---@param id     number
 ---@param text   string

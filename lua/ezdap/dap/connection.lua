@@ -108,10 +108,9 @@ function Connection:request(command, args, cb)
     self._write(transport.encode(msg))
 end
 
----Tear down the underlying transport.
----Idempotent: safe to call from both the explicit stop path and the transport's
----remote-close path. Pending callbacks are drained with an error so they never
----hang, and on_close is always scheduled exactly once.
+---Tear down the underlying transport. Idempotent: safe from both the explicit
+---stop path and the transport's remote-close path. Pending callbacks drain with
+---an error so they never hang; on_close is always scheduled exactly once.
 function Connection:close()
     if self._closed then return end
     self._closed = true
@@ -124,7 +123,7 @@ function Connection:close()
     vim.schedule(function() self.on_close() end)
 end
 
--- ── Internal constructor ───────────────────────────────────────────────────
+-- Internal constructor
 
 ---@param opts ezdap.dap.ConnOpts?
 ---@return ezdap.dap.Connection
@@ -142,7 +141,7 @@ local function _new_conn(opts)
     }, Connection)
 end
 
--- ── stdio (pipe) connection ────────────────────────────────────────────────
+-- stdio (pipe) connection
 
 ---Start the adapter as a subprocess and communicate via stdin/stdout.
 ---@param cmd  string[]       executable + arguments
@@ -199,7 +198,7 @@ function M.stdio(cmd, opts)
     return conn
 end
 
--- ── TCP connection ─────────────────────────────────────────────────────────
+-- TCP connection
 
 ---Attempt a single TCP connection; calls cb(conn, err) asynchronously.
 ---@param host string

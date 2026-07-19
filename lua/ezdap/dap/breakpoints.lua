@@ -57,13 +57,8 @@ local Signal = require("ezdap.tk.Signal")
 local M = {}
 
 ---Fires when the desired breakpoint set changes and adapters must re-sync.
----`path` is the affected source file for "source" changes (nil = all sources;
----not applicable to function/exception/restore kinds).
----
----Emits are routed through `_emit_change`, which coalesces and defers them to the
----next tick — a batch of mutations in one cycle (clearing a file, restoring a
----project) notifies each subscriber once per affected file/kind, not once per
----breakpoint.
+---`path` is the affected source file for "source" changes (nil = all sources).
+---`_emit_change` coalesces emits to the next tick: one notify per file/kind.
 M.on_change = Signal.new() ---@type ezdap.tk.Signal<fun(kind: ezdap.dap.BreakpointChangeKind, path: string?)>
 
 ---Pending coalesced changes for the next tick, or nil when none are queued.
@@ -132,7 +127,7 @@ local function _matches(bp, source, line, column)
     return bp.source == source and bp.line == line and bp.column == column
 end
 
--- ── Source breakpoints ─────────────────────────────────────────────────────
+-- Source breakpoints
 
 ---@param source string
 ---@param line   integer
@@ -252,7 +247,7 @@ function M.all()
     return vim.list_extend({}, _source_bps)
 end
 
--- ── Function breakpoints ───────────────────────────────────────────────────
+-- Function breakpoints
 
 ---@param name string
 ---@param opts { disabled?: boolean }?
@@ -290,7 +285,7 @@ function M.function_breakpoints()
     return vim.list_extend({}, _function_bps)
 end
 
--- ── Exception breakpoints ──────────────────────────────────────────────────
+-- Exception breakpoints
 
 ---@param filter_defs ezdap.dap.ExceptionFilterDef[]
 function M.set_exception_filters(filter_defs)
@@ -336,7 +331,7 @@ function M.set_exception_enabled(filter, enabled)
     return false
 end
 
--- ── Exception name breakpoints ─────────────────────────────────────────────
+-- Exception name breakpoints
 
 ---@param name       string
 ---@param break_mode ezdap.dap.ExceptionBreakMode?  defaults to "always"
@@ -404,7 +399,7 @@ function M.set_exception_name_enabled(name, enabled)
     return false
 end
 
--- ── Lookup ─────────────────────────────────────────────────────────────────
+-- Lookup
 
 ---@param id integer  internal stable id (bp.internal_id)
 ---@return ezdap.dap.SourceBreakpoint|ezdap.dap.FunctionBreakpoint|nil
@@ -417,10 +412,9 @@ end
 ---@field lnum integer   1-based line
 ---@field col  integer   0-based extmark column
 
----Update stored positions for a set of source breakpoints in one pass.
----`positions` maps internal_id → {lnum, col} (0-based col from extmarks).
----col is converted to 1-based and applied only for column breakpoints.
----Emits on_change at most once if anything moved.
+---Update stored positions for a set of source breakpoints in one pass, emitting
+---on_change at most once. `positions` maps internal_id → {lnum, col} (0-based col
+---from extmarks); col becomes 1-based and applies only to column breakpoints.
 ---@param positions table<integer, ezdap.dap.BreakpointPosition>
 function M.relocate_batch(positions)
     local changed = false
@@ -456,7 +450,7 @@ function M.disable_all()
     if changed then _emit_change("source") end
 end
 
--- ── Persistence ────────────────────────────────────────────────────────────
+-- Persistence
 
 ---Build the serialized breakpoint set: fresh records with `internal_id` stripped.
 ---Source paths are absolute, exactly as the engine holds them; rewriting them for

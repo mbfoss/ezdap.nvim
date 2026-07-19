@@ -13,7 +13,7 @@
 ---  local adapters = require("ezdap.adapters")
 ---  adapters.myAdapter = { command = "...", request = "launch" }
 
--- ── Type annotations ──────────────────────────────────────────────────────
+-- Type annotations
 
 ---Context passed to `config.setup()` so the adapter can report progress and
 ---register terminal buffers with the task runner.
@@ -126,7 +126,7 @@
 ---@field setup?                 fun(config: ezdap.dap.Config, ctx: ezdap.AdapterSetupCtx, callback: fun(err?: string, state?: any))
 ---@field teardown?              fun(config: ezdap.dap.Config, ctx: any)
 
--- ── Built-in adapters ──────────────────────────────────────────────────────
+-- Built-in adapters
 -- One file per adapter; keys with hyphens are loaded from the matching filename.
 
 ---@type table<string, ezdap.AdapterDef>

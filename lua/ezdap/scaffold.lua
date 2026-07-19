@@ -19,10 +19,9 @@ local function _warn(msg) vim.notify("[ezdap] " .. msg, vim.log.levels.WARN) end
 ---@param msg string
 local function _err(msg) vim.notify("[ezdap] " .. msg, vim.log.levels.ERROR) end
 
----Render a seed value as Lua source. Seeds are simple — strings, numbers,
----booleans, and (usually empty) tables — so this handles just those, emitting a
----one-line literal in each case. Array-like and map-like tables are both rendered
----inline; empty tables become `{}`.
+---Render a seed value as Lua source. Seeds are simple — strings, numbers, booleans
+---and (usually empty) tables — so this handles just those, emitting a one-line
+---literal; array-like and map-like tables are both rendered inline.
 ---@param v any
 ---@return string
 local function _lua_literal(v)
@@ -47,12 +46,9 @@ local function _lua_literal(v)
     return "nil"
 end
 
----Build the `parameters = { … }` lines for a profile: one `name = <seed>,` entry
----per declared input, sorted by name, each trailed by a `-- description` comment.
----Required inputs are written active; every other input is commented out, so the
----scaffolded file supplies only what a run needs and the reader uncomments the rest.
----Returns nil when the profile declares no inputs, so the caller can emit
----`parameters = {}` instead of an empty sandwich.
+---Build the `parameters = { … }` lines for a profile: one `name = <seed>,` entry per
+---declared input, sorted, each trailed by a `-- description`. Required inputs are
+---written active, the rest commented out. Returns nil when no inputs are declared.
 ---@param adapter string
 ---@param profile_name string
 ---@return string[]?  the interior lines, already indented to sit inside `parameters`
@@ -83,15 +79,9 @@ local function _input_lines(adapter, profile_name)
     return lines
 end
 
----Scaffold a run_file for an `adapter` + one of its `profiles`: write a Lua
----file that names the adapter + profile and seeds its inputs under `parameters`,
----then open it for editing. Run it afterwards with `:Debug run_file`, which resolves
----the `parameters` through the profile's `build` — the same path `quick_run` takes.
----`assignments` is positional: the adapter (required), the profile name
----(defaults to the adapter's sole profile), then the destination path
----(defaulting to `<project root or cwd>/<adapter>_<profile>.lua`). Fails if the
----destination already exists, rather than overwriting or picking a different name.
----Reports a clear error for every failure mode instead of throwing.
+---Scaffold a run_file for an `adapter` + one of its `profiles` and open it for
+---editing; run it with `:Debug run_file`. `assignments` is positional: adapter, then
+---optional profile (defaults to the sole one) and path. Fails if the path exists.
 ---@param assignments string[]  positional adapter, profile, path, e.g. { "codelldb", "launch", "./foo.lua" }
 ---@return string? path  the file that was created
 function M.new_run_file(assignments)

@@ -3,7 +3,7 @@
 
 ---https://microsoft.github.io/debug-adapter-protocol/specification
 
--- ── Primitive aliases ──────────────────────────────────────────────────────
+-- Primitive aliases
 
 assert(false, "should not require() a meta file")
 
@@ -27,7 +27,7 @@ assert(false, "should not require() a meta file")
 ---@alias ezdap.dap.proto.LoadedSourceEventReason "new"|"changed"|"removed"
 ---@alias ezdap.dap.proto.BreakpointModeApplicability "source"|"exception"|"data"|"instruction"
 
--- ── Base data types ────────────────────────────────────────────────────────
+-- Base data types
 
 ---@class ezdap.dap.proto.Checksum
 ---@field algorithm ezdap.dap.proto.ChecksumAlgorithm
@@ -247,7 +247,7 @@ assert(false, "should not require() a meta file")
 ---@field endColumn?        integer
 ---@field presentationHint? ezdap.dap.proto.DisassembledInstructionPresentationHint
 
--- ── Capabilities ───────────────────────────────────────────────────────────
+-- Capabilities
 
 ---@class ezdap.dap.proto.Capabilities
 ---@field supportsConfigurationDoneRequest?      boolean
@@ -295,7 +295,7 @@ assert(false, "should not require() a meta file")
 ---@field supportsStartDebuggingRequest?         boolean
 ---@field supportsArgsCanBeInterpretedByShell?   boolean
 
--- ── Event bodies ───────────────────────────────────────────────────────────
+-- Event bodies
 
 ---@class ezdap.dap.proto.StoppedEventBody
 ---@field reason             string
@@ -379,7 +379,7 @@ assert(false, "should not require() a meta file")
 ---@field offset          integer
 ---@field count           integer
 
--- ── Request arguments ──────────────────────────────────────────────────────
+-- Request arguments
 
 ---@class ezdap.dap.proto.InitializeRequestArguments
 ---@field clientID?                            string
@@ -584,7 +584,7 @@ assert(false, "should not require() a meta file")
 ---@field requestId?  integer
 ---@field progressId? string
 
--- ── Response bodies ────────────────────────────────────────────────────────
+-- Response bodies
 
 ---@class ezdap.dap.proto.BreakpointLocationsResponseBody
 ---@field breakpoints ezdap.dap.proto.BreakpointLocation[]
@@ -696,7 +696,7 @@ assert(false, "should not require() a meta file")
 ---@class ezdap.dap.proto.DisassembleResponseBody
 ---@field instructions ezdap.dap.proto.DisassembledInstruction[]
 
--- ── Adapter-initiated request args / response bodies ──────────────────────
+-- Adapter-initiated request args / response bodies
 
 ---@class ezdap.dap.proto.RunInTerminalRequestArguments
 ---@field kind?   "integrated"|"external"

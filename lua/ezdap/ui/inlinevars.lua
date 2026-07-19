@@ -212,9 +212,8 @@ local function _place_from_tree(root, ctx)
 	---@cast mode "eol"|"eol_right_align"|"right_align"
 
 	-- detached modes: one annotation per line, with the mode used directly as the
-	-- virt_text_pos. Multiple eol/right-aligned marks on the same line would stack
-	-- or overlap, so group the variables chosen for each line into a single
-	-- extmark, ordered by column.
+	-- virt_text_pos. Multiple eol/right-aligned marks on one line would stack or
+	-- overlap, so group each line's variables into one extmark, ordered by column.
 	---@type table<number, {col:number, name:string, value:string}[]>
 	local by_line = {}
 	for name, best in pairs(best_by_name) do
@@ -286,10 +285,9 @@ local function _render_variables(frame, variables)
 	if trees then place(trees) end
 end
 
--- Inline annotations should reflect what is in lexical scope at the current
--- frame, so restrict to the locals/arguments scopes and skip globals,
--- statics, registers, etc. Prefer the adapter's presentationHint and fall
--- back to the scope name when it is omitted.
+-- Inline annotations should reflect what is in lexical scope at the current frame,
+-- so restrict to the locals/arguments scopes and skip globals, statics, registers.
+-- Prefer the adapter's presentationHint, falling back to the scope name.
 ---@param scope ezdap.dap.proto.Scope
 ---@return boolean
 local function _is_local_scope(scope)

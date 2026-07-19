@@ -4,17 +4,9 @@ local str_util = require("ezdap.tk.strutil")
 
 local M = {}
 
----Split a `command` input into the `program`/`args` pair a launch body wants.
----
----A command line is one string that stands for two different fields, so reading it
----is the launching profile's job, not an input format's: `ezdap.inputs` describes
----values that are *written* two ways, not values that become something else. Every
----launch `build` wants the same split, so it lives here rather than in each.
----
----The first word is expanded (`~`, `$VAR`) as the program; the rest are its
----arguments, verbatim. A list is accepted as-is, so a typed run file may write the
----arguments out instead of quoting them into one line. An unset command yields an
----empty program, which the adapter reports far better than a nil index would.
+---Split a `command` input into the `program`/`args` pair a launch body wants. The
+---first word is expanded (`~`, `$VAR`) as the program, the rest are its arguments
+---verbatim; a list is accepted as-is. An unset command yields an empty program.
 ---@param command string|string[]|nil  a command line, or an argument list
 ---@return string program, string[] args
 function M.split_command(command)
@@ -23,10 +15,8 @@ function M.split_command(command)
 end
 
 ---The process id to attach to: the one already given, or one picked interactively.
----What an attach profile's `build` calls for its `pid` input, which is why
----no adapter marks that input `required` — there is nothing the user must type.
----
----Yields (see `select_process`) only when `pid` is nil.
+---What an attach profile's `build` calls for its `pid` input, which is why no adapter
+---marks it `required`. Yields (see `select_process`) only when `pid` is nil.
 ---@param pid integer?  the pid supplied as an input, if any
 ---@param prompt? string  select prompt
 ---@return integer? pid, string? err
@@ -38,10 +28,8 @@ function M.resolve_pid(pid, prompt)
     return M.select_process(prompt or "Select process to attach to")
 end
 
----Pick a running process interactively, via `vim.ui.select`.
----
----This yields: it must be called from inside a coroutine, and it resumes that
----coroutine with the choice once the user picks (or cancels).
+---Pick a running process interactively, via `vim.ui.select`. This yields: it must be
+---called from inside a coroutine, and resumes it with the choice once the user picks.
 ---@param prompt? string  select prompt (default "Select process")
 ---@return integer? pid, string? err
 function M.select_process(prompt)
@@ -71,9 +59,8 @@ function M.select_process(prompt)
     if #choices == 0 then return nil, "No processes found" end
 
     -- Hands the answer back to the yielded caller. Everything that caller still has
-    -- left to do runs inside this resume, so a failure in it surfaces here or not at
-    -- all — `coroutine.resume` reports an error by returning false instead of raising,
-    -- and there is no one above us to catch it.
+    -- to do runs inside this resume, so a failure in it surfaces here or not at all —
+    -- `coroutine.resume` returns false instead of raising, and no one is above us.
     local function answer(pid)
         local ok, err = coroutine.resume(co, pid)
         if not ok then

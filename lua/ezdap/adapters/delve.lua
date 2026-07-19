@@ -1,14 +1,9 @@
 local ui = require("ezdap.util.ui_util")
 local shared = require("ezdap.shared")
 
--- Go — `dlv dap` is a TCP DAP server, NOT a stdio adapter: it prints
--- "DAP server listening at: <host>:<port>" and expects the client to connect over
--- TCP (writing DAP messages to its stdin is ignored). `_setup` spawns it, parses
--- that line, and points the connection at the reported host/port. `program`
--- defaults to the current directory (debug the package at cwd). Field set follows
--- vscode-go's launch.json attributes for dlv-dap mode
--- (https://github.com/golang/vscode-go/blob/master/docs/debugging.md); the delve
--- source-remapping settings below are shared by launch and attach.
+-- Go — `dlv dap` is a TCP DAP server, not a stdio adapter: it prints
+-- "DAP server listening at: <host>:<port>" and expects a TCP connection, so
+-- `_setup` spawns it, parses that line and points the connection there.
 
 ---Start `dlv dap`, wait for its "DAP server listening at: host:port" line, and
 ---point the connection at that endpoint (delve speaks DAP over TCP, not stdio).
@@ -66,11 +61,9 @@ return {
     setup    = _setup,
     teardown = function(_, ctx) if ctx and ctx.handle then ctx.handle.stop() end end,
     profiles       = {
-        -- Launch mode defaults to "debug" (LaunchConfig, service/dap/config.go);
-        -- `dlvCwd`/per-mode fields (buildFlags, corefilePath, …) aren't set by
-        -- this configuration — add them to the run file directly if needed.
-        -- One `command` input carries the whole command line; `build` splits it into
-        -- `program` (the first word) and `args` (the rest).
+        -- Launch mode defaults to "debug"; per-mode fields (dlvCwd, buildFlags,
+        -- corefilePath, …) aren't set here — add them to the run file directly.
+        -- `build` splits the one `command` input into `program` and `args`.
         launch_program = {
             description = "debug a Go package/binary",
             request = "launch",

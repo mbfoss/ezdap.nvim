@@ -14,7 +14,7 @@ local _RED    = "\27[31m"
 local _PROMPT = _BOLD .. _GREEN .. "» " .. _RESET
 local _PROMPT_W = 2   -- visual width of "» "
 
--- ── Grid formatter ────────────────────────────────────────────────────────
+-- Grid formatter
 
 local function _format_grid(items, width)
     width = width or 80
@@ -35,7 +35,7 @@ local function _format_grid(items, width)
     return table.concat(rows, "\r\n")
 end
 
--- ── Class ─────────────────────────────────────────────────────────────────
+-- Class
 
 ---@class ezdap.ReplBuffer
 ---@field private _bufnr    integer
@@ -83,7 +83,7 @@ function ReplBuffer.new(opts)
     return self
 end
 
--- ── Initialisation ────────────────────────────────────────────────────────
+-- Initialisation
 
 function ReplBuffer:_init(name)
     local buf = vim.api.nvim_create_buf(true, true)
@@ -107,7 +107,7 @@ function ReplBuffer:bufnr()
     return self._bufnr
 end
 
--- ── Helpers ───────────────────────────────────────────────────────────────
+-- Helpers
 
 ---Width of the window displaying this buffer, fallback 80.
 function ReplBuffer:_width()
@@ -128,7 +128,7 @@ function ReplBuffer:_reset_compl()
     c.grid  = false
 end
 
--- ── Rendering ─────────────────────────────────────────────────────────────
+-- Rendering
 
 function ReplBuffer:_redraw()
     local col = _PROMPT_W + self._cursor
@@ -157,7 +157,7 @@ function ReplBuffer:write(text)
     self:_redraw()
 end
 
--- ── Evaluation ────────────────────────────────────────────────────────────
+-- Evaluation
 
 function ReplBuffer:_submit(expr)
     self._evaluate(expr, function(result, err)
@@ -177,7 +177,7 @@ function ReplBuffer:_submit(expr)
     end)
 end
 
--- ── Completion ────────────────────────────────────────────────────────────
+-- Completion
 
 function ReplBuffer:_cycle_next()
     local c = self._compl
@@ -246,7 +246,7 @@ function ReplBuffer:_handle_tab()
     end)
 end
 
--- ── Input state machine ───────────────────────────────────────────────────
+-- Input state machine
 
 function ReplBuffer:_handle(data)
     -- Tab: completion (handled before cycle reset)

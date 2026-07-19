@@ -10,7 +10,7 @@ local inputwin          = require("ezdap.tk.inputwin")
 
 local M                 = {}
 
--- ── Re-exported client signals ─────────────────────────────────────────────
+-- Re-exported client signals
 -- Consumers import only manager; client is an implementation detail.
 
 M.on_session_added      = client
@@ -38,7 +38,7 @@ function M.sessions() return client.sessions() end
 ---@param callbacks? ezdap.client.Callbacks
 function M.start(config, callbacks) return client.start(config, callbacks) end
 
--- ── Active session ─────────────────────────────────────────────────────────
+-- Active session
 
 ---Fires when the active (stepping) session changes: (id?, sess?)
 M.on_active_changed    = Signal.new() ---@type ezdap.tk.Signal<fun(id:number?, sess:ezdap.dap.Session?)>
@@ -104,7 +104,7 @@ function M.select_session(id)
     if client.get_session(id) then _set_active(id) end
 end
 
--- ── Stepping (delegate to client with active id) ───────────────────────────
+-- Stepping (delegate to client with active id)
 
 ---Granularity used for subsequent steps. Derived from the focused buffer:
 ---instruction while the disassembly pane is current, line everywhere else.
@@ -198,7 +198,7 @@ function M.evaluate(expr, context, cb)
     client.evaluate(_active_id, expr, context, cb)
 end
 
--- ── Helpers ───────────────────────────────────────────────────────────────
+-- Helpers
 
 ---@return string?
 ---@return integer
@@ -220,12 +220,9 @@ end
 -- breakpoints.on_change (see session.lua), so the commands below only mutate the
 -- registry — no explicit per-command sync is needed.
 
----Cursor-follow records, keyed by breakpoint internal_id. Armed when the user
----adds a source breakpoint while a session is live; consumed one-shot by the
----on_breakpoint_updated handler below once the adapter reports where it bound the
----breakpoint. Each record pins the exact context the breakpoint was added in
----(window, file, line) so a late-arriving update only moves the cursor while the
----user is still parked there — it never yanks them once they have moved on.
+---Cursor-follow records, keyed by breakpoint internal_id. Armed when the user adds
+---a source breakpoint while a session is live; consumed one-shot once the adapter
+---reports where it bound it, and only while the user is still parked there.
 ---@class ezdap.manager.PendingFollow
 ---@field win  integer  window the breakpoint was added from
 ---@field file string   source file that window must still show
@@ -238,15 +235,13 @@ local _pending_follow = {}
 -- the wrong session's resolved line.
 M.on_active_changed:subscribe(function() _pending_follow = {} end)
 
--- ── Breakpoints ───────────────────────────────────────────────────────────
+-- Breakpoints
 
 M.breakpoint = {}
 
----Find an existing source breakpoint in `file` whose currently displayed line
----(the adapter-resolved line if the session moved it, else the stored line) is
----`row`. Returns its stored line, which is the registry key to operate on.
----A breakpoint the adapter relocated elsewhere has no sign at its stored line
----anymore, so it does not match there — toggling acts on what is actually shown.
+---Find an existing source breakpoint in `file` whose displayed line (adapter-resolved
+---if the session moved it, else stored) is `row`, returning its stored line — the
+---registry key. A relocated breakpoint has no sign there, so toggling acts on what shows.
 ---@param file string
 ---@param row  integer
 ---@return integer?
@@ -640,7 +635,7 @@ function M.breakpoint.list()
     end)
 end
 
--- ── Data breakpoints (watchpoints) ─────────────────────────────────────────
+-- Data breakpoints (watchpoints)
 
 ---Resolve `name` against the active session and either add a data breakpoint
 ---(prompting for an access type when several are offered) or, if one already
@@ -731,7 +726,7 @@ function M.breakpoint.data_list()
     end)
 end
 
--- ── Debug controls ────────────────────────────────────────────────────────
+-- Debug controls
 
 M.debug = {}
 
@@ -873,14 +868,9 @@ function M.debug.exception_info()
     end)
 end
 
----Return the active visual selection as one string (multi-line selections join
----with newlines), or nil when there is none. Handles both ways inspect reaches
----visual text:
----  * still in visual mode — e.g. an `x`-mode `<Cmd>Debug inspect<CR>` mapping,
----    where the selection lives in the `v`/`.` positions; visual mode is left
----    afterwards so the hover float isn't anchored to a stale region.
----  * `from_range` true — `:'<,'>Debug inspect` has already returned to normal
----    mode, so the selection is read from the `'<`/`'>` marks.
+---Return the active visual selection as one string (lines joined with newlines), or
+---nil when there is none. Reads the `v`/`.` positions while still in visual mode
+---(leaving it afterwards), or the `'<`/`'>` marks when `from_range` is true.
 ---@param from_range? boolean
 ---@return string?
 local function _visual_selection(from_range)
@@ -1029,7 +1019,7 @@ function M.debug.frame()
     end)
 end
 
--- ── Debug view ─────────────────────────────────────────────────────────────
+-- Debug view
 
 M.view = {}
 

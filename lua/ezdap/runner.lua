@@ -43,12 +43,9 @@ local function _is_task(v)
     return type(v) == "table" and type(v.adapter) == "string"
 end
 
--- ── Run panel ──────────────────────────────────────────────────────────────
--- A single bottom split (ezdap.ui.Panel) hosts every buffer a run registers —
--- the report, REPL, output, terminal and DAP-message buffers — and pages between
--- them via a winbar. Adapter/run progress goes to the report page rather than
--- vim.notify, which is spammy during setup. Pre-flight errors (bad path, etc.)
--- stay on vim.notify — they happen before any run, hence before any panel.
+-- Run panel: a single bottom split (ezdap.ui.Panel) hosts every buffer a run
+-- registers and pages between them via a winbar. Run progress goes to the report
+-- page; pre-flight errors stay on vim.notify, happening before any panel exists.
 
 local _report_buf ---@type integer?
 local _panel ---@type ezdap.ui.Panel?
@@ -79,9 +76,8 @@ local function _report_bufnr()
 end
 
 ---Show the shared report page in the run panel. Group-less, so it renders before
----any run group. Priority -1 keeps it visible during setup (REPL/adapter-log
----pages do not outrank it) while real program output (Output 0, Terminal 10)
----surfaces over it once it arrives.
+---any run group. Priority -1 keeps it visible during setup while real program
+---output (Output 0, Terminal 10) surfaces over it once it arrives.
 local function _report_open()
     _get_panel():add(_report_bufnr(), { label = "Messages", priority = -1, autoscroll = true })
 end
@@ -154,9 +150,8 @@ function M.panel_clean()
 end
 
 ---Run a debug task. Tasks may run in parallel: each run gets its own panel group
----and is tracked alongside the others (it does not cancel them). Re-running a
----task replaces its own previous finished run. Returns nil when `task` is not a
----valid task table.
+---and does not cancel the others. Re-running a task replaces its own previous
+---finished run. Returns nil when `task` is not a valid task table.
 ---@param task ezdap.Task
 ---@return ezdap.runner.Run?
 function M.run(task)
@@ -208,10 +203,9 @@ function M.run(task)
     return run
 end
 
----Re-launch the most recently run task from scratch. Unlike `:Debug restart`
----(a DAP restart request on the live session), this works after the session has
----ended and for adapters without restart support, and re-reads nothing from disk.
----Warns when no task has been run yet.
+---Re-launch the most recently run task from scratch. Unlike `:Debug restart` (a DAP
+---request on the live session) this works after the session has ended and for
+---adapters without restart support. Warns when no task has been run yet.
 ---@return ezdap.runner.Run?
 function M.rerun()
     if not _last_task then
@@ -244,24 +238,9 @@ local function _run_from_dir(dir)
     end)
 end
 
----Run a task from a path. A directory opens a picker of the Lua files in it (see
----`_run_from_dir`); a Lua file is loaded and the single value it returns (or that
----its returned function produces) is run. Two run-file shapes are accepted, told
----apart by whether a `profile` or a `configuration` field is present:
----
----  * profile-based (what `new_run_file` scaffolds): `adapter` + `profile` +
----    `parameters`. It is resolved through the profile's `build`, exactly as
----    `quick_run` does — so `parameters` are the answers to the profile's declared
----    inputs, not a raw request body. `build` may open a picker (an attach resolving
----    an unset `pid`), so the run starts from the resolve callback.
----  * raw: `adapter` + `configuration`, an nvim-dap-like table of raw DAP
----    parameters that includes `request` (`"launch"`/`"attach"`). `request` is
----    lifted out and the rest of the table is forwarded to the adapter verbatim as
----    the DAP body. This is the raw escape hatch — no profile, no inputs.
----
----Reports a clear error for every failure mode instead of throwing: missing/empty
----path, path not found, non-`.lua` file, load or runtime error, or a file that does
----not return a task.
+---Run a task from a path: a directory opens a picker of its Lua files, a Lua file is
+---loaded and the value it returns is run — either profile-based (`adapter`/`profile`/
+---`parameters`, resolved via `build`) or raw (`adapter`/`configuration`, sent verbatim).
 ---@param path string
 function M.run_file(path)
     if type(path) ~= "string" or path == "" then
@@ -305,10 +284,9 @@ function M.run_file(path)
         return
     end
 
-    -- A profile-based run file (what `new_run_file` scaffolds) names a profile and
-    -- answers its inputs under `parameters`; resolve it through the profile's
-    -- `build`, exactly as `quick_run` does. It may open a picker, so the run starts
-    -- from the callback.
+    -- A profile-based run file names a profile and answers its inputs under
+    -- `parameters`; resolve it through the profile's `build`, as `quick_run` does.
+    -- It may open a picker, so the run starts from the callback.
     if type(spec.profile) == "string" then
         local name = vim.fn.fnamemodify(resolved, ":t")
         require("ezdap.schema").resolve_task({
@@ -350,20 +328,9 @@ function M.run_file(path)
         " must set either `profile` (a named profile) or `configuration` (a raw DAP table)")
 end
 
----Launch or attach under an adapter using one of its declared `profiles`.
----`assignments[1]`/`[2]` are strictly the adapter and profile name (`{ "codelldb", "launch", … }`);
----every argument from `[3]` on is an `input=value` assignment — each value written
----in its input's string form — resolved into a runnable task by
----`schema.resolve_task` (see `schema.profile_input_names` for the set a
----profile accepts). An input left unset is simply omitted from the assembled
----body, unless its `inputs` entry marks it `required = true` — only then is leaving
----it unset an error. A profile's `build` sets the task's connection endpoint
----for adapters that connect over a task-level TCP endpoint (e.g.
----`remote`/`java-debug-server`).
----
----Returns nil when the profile's `build` stops to ask the user something (an
----attach picking a process for an unset `pid`): there is no run yet to hand back —
----it starts once they answer.
+---Launch or attach under an adapter's named profile. `assignments[1]`/`[2]` are the
+---adapter and profile; each later `input=value` is resolved by `schema.resolve_task`.
+---Returns nil when `build` stops to ask the user something — the run starts on answer.
 ---@param assignments string[]  adapter, profile name, then "input=value" tokens, e.g. { "codelldb", "launch", "command=./a.out" }
 ---@return ezdap.runner.Run?
 function M.quick_run(assignments)
@@ -399,10 +366,9 @@ function M.quick_run(assignments)
         values[tok:sub(1, eq - 1)] = tok:sub(eq + 1)
     end
 
-    -- A profile whose `build` asks the user something (an attach resolving an
-    -- unset `pid`) resolves only once they answer, so the run is started from the
-    -- callback. Every other profile resolves synchronously, and `run` is
-    -- assigned before we return it.
+    -- A profile whose `build` asks the user something (an attach resolving an unset
+    -- `pid`) resolves only once they answer, so the run starts from the callback.
+    -- Every other profile resolves synchronously, assigning `run` before we return.
     local run
     schema.resolve_task({
         adapter = adapter,

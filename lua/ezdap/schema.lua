@@ -12,7 +12,7 @@ local inputs_registry = require("ezdap.inputs")
 
 local M = {}
 
--- ── Introspection ──────────────────────────────────────────────────────────
+-- Introspection
 
 ---An adapter's declared `profiles`, or an empty table.
 ---@param adapter string
@@ -40,10 +40,9 @@ function M.profile_names(adapter)
     return out
 end
 
----The inputs a profile declares (`name -> ezdap.Input`), or an empty table.
----Hand an entry to `ezdap.inputs` to learn how to read, describe, seed or complete
----it; callers that need several inputs should read the table once rather than
----looking entries up name-by-name.
+---The inputs a profile declares (`name -> ezdap.Input`), or an empty table. Hand an
+---entry to `ezdap.inputs` to learn how to read, describe, seed or complete it; read
+---the table once rather than looking entries up name-by-name.
 ---@param adapter string
 ---@param profile_name string
 ---@return table<string, ezdap.Input>
@@ -108,14 +107,11 @@ function M.requests(adapter)
     return out
 end
 
--- ── Resolving ──────────────────────────────────────────────────────────────
+-- Resolving
 
----Read every declared input from `values`. A string is that input's string form and
----is parsed by its `type`/`format`; any other Lua value is already the typed form
----and is taken verbatim (see `ezdap.inputs` on the two forms). Unset inputs are
----simply absent from the result (recorded in `missing` when `required`), which is
----what lets `build` omit their fields by assigning nil — or source them some other
----way, as an attach profile does for an unset `pid`.
+---Read every declared input from `values`. A string is that input's string form and is
+---parsed by its `type`/`format`; any other Lua value is the typed form, taken verbatim.
+---Unset inputs are absent from the result (recorded in `missing` when `required`).
 ---@param profile ezdap.Profile
 ---@param values table<string, any>  input name → a value in either authoring form
 ---@return table<string, any> inputs, string[] missing, string[] errs
@@ -150,11 +146,9 @@ end
 ---@field name?         string              run/panel group name for the resolved task
 ---@field values?       table<string, any>  input name → a value in either authoring form
 
----Resolve one of an adapter's named profiles, plus values for its inputs,
----into a runnable `ezdap.Task` — everything `run`/`start_task` needs, with the
----request kind and any task-level connection already in place. This is the single
----seam between a profile and a front end: a caller supplies values and gets
----back a task, and never has to rejoin the two itself.
+---Resolve one of an adapter's named profiles, plus values for its inputs, into a
+---runnable `ezdap.Task` — request kind and any task-level connection already in
+---place. This is the single seam between a profile and a front end.
 ---@param spec ezdap.ResolveSpec
 ---@param done fun(task: ezdap.Task?, err: string?)
 ---@return fun() cancel

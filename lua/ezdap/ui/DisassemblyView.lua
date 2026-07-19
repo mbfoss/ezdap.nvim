@@ -15,12 +15,12 @@ local throttle  = require("ezdap.tk.throttle")
 
 local _au_group_gen
 
--- ── Tunables ───────────────────────────────────────────────────────────────
+-- Tunables
 
 local _COUNT    = 80 -- fallback instruction count when the window doesn't exist yet
 local _ADDR_W   = 18 -- width of the address column
 
--- ── Highlight groups ───────────────────────────────────────────────────────
+-- Highlight groups
 
 local _PC_HL    = "EzdapDisasmPC"
 local _BLOCK_HL = "EzdapDisasmBlock"
@@ -31,7 +31,7 @@ vim.api.nvim_set_hl(0, _BLOCK_HL, { link = "CursorLine", default = true })
 vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
 
 
--- ── Helpers ────────────────────────────────────────────────────────────────
+-- Helpers
 
 ---Compare two adapter addresses, tolerating differing hex widths/zero-padding.
 ---@param a string?
@@ -51,14 +51,9 @@ local function _norm(path)
     return vim.fn.fnamemodify(path, ":p")
 end
 
----Drop sentinel rows the adapter pads a `disassemble` reply with when the
----requested range overruns disassemblable memory. Two conventions are stripped:
----the spec-sanctioned `presentationHint == "invalid"`, and the ad-hoc junk some
----adapters emit instead — address "-1" (or any negative value), an empty/absent
----address, or an empty instruction string. These poison paging — the edge
----address handed to the next fetch is garbage, and the splice counts lines that
----carry no real instruction — so they must be stripped before the list is
----indexed into `_instrs`/`_rows`.
+---Drop sentinel rows the adapter pads a `disassemble` reply with when the range
+---overruns disassemblable memory: the spec-sanctioned `presentationHint == "invalid"`,
+---plus ad-hoc junk (negative/empty address, empty instruction) that poisons paging.
 ---@param instrs ezdap.dap.proto.DisassembledInstruction[]
 ---@return ezdap.dap.proto.DisassembledInstruction[]
 local function _valid_instrs(instrs)
@@ -86,7 +81,7 @@ local function _row_of(rows, addr)
     end
 end
 
--- ── Class ──────────────────────────────────────────────────────────────────
+-- Class
 
 ---@class ezdap.DisassemblyView.SrcRange
 ---@field first integer  first asm row (1-based) mapped to a source line
@@ -155,10 +150,9 @@ function DisassemblyView:_ensure_autocmds()
     _au_group_gen = _au_group_gen and (_au_group_gen + 1) or 1
     self._aug = vim.api.nvim_create_augroup(("ezdap_disasm_sync_%d"):format(_au_group_gen), { clear = true })
 
-    -- source -> asm: a global CursorMoved that fires while the cursor is in any
-    -- window other than the asm pane itself. _sync_from_source then decides,
-    -- from _by_src, whether that window actually shows mapped source — so the
-    -- bound source window is discovered dynamically rather than pinned at open.
+    -- source -> asm: a global CursorMoved that fires while the cursor is in any window
+    -- other than the asm pane. _sync_from_source then decides from _by_src whether that
+    -- window shows mapped source, so the bound window is discovered dynamically.
     vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
         group = self._aug,
         callback = function()
@@ -179,7 +173,7 @@ function DisassemblyView:_teardown_autocmds()
     end
 end
 
--- ── Session binding ────────────────────────────────────────────────────────
+-- Session binding
 
 ---@private
 ---@param sess ezdap.dap.Session?
@@ -209,7 +203,7 @@ function DisassemblyView:_bind_session(sess)
     end)
 end
 
--- ── Window / buffer plumbing ───────────────────────────────────────────────
+-- Window / buffer plumbing
 
 ---@private
 ---@return integer
@@ -295,7 +289,7 @@ function DisassemblyView:_set_lines(lines)
     vim.bo[buf].modifiable = false
 end
 
--- ── Loading & rendering ────────────────────────────────────────────────────
+-- Loading & rendering
 
 ---Fetch and render disassembly for the active frame.
 ---@private
@@ -343,10 +337,9 @@ function DisassemblyView:_load(focus)
         end)
 end
 
----Move the PC marker to `ref` when it already lives in the loaded window,
----recentering the cursor on it exactly as a fresh render would. Returns false
----(no state touched) when the address is not currently loaded, signalling the
----caller to fall back to a full disassemble.
+---Move the PC marker to `ref` when it already lives in the loaded window, recentering
+---the cursor on it exactly as a fresh render would. Returns false (no state touched)
+---when the address is not loaded, so the caller falls back to a full disassemble.
 ---@private
 ---@param ref string
 ---@return boolean handled
@@ -432,7 +425,7 @@ function DisassemblyView:_render(instrs, pc_ref, recenter)
     end
 end
 
--- ── PC marker ──────────────────────────────────────────────────────────────
+-- PC marker
 
 ---@private
 ---@param pc_row integer?
@@ -461,7 +454,7 @@ function DisassemblyView:_clear_block()
     end
 end
 
--- ── Instruction breakpoints ────────────────────────────────────────────────
+-- Instruction breakpoints
 
 ---Re-draw breakpoint signs from the active session's instruction-breakpoint set.
 ---@private
@@ -501,12 +494,11 @@ function DisassemblyView:_toggle_bp_at_cursor()
     sess:toggle_instruction_breakpoint(ins.address)
 end
 
--- ── Instruction details (hover) ────────────────────────────────────────────
+-- Instruction details (hover)
 
 ---Show the adapter-reported metadata for the instruction under the cursor in an
----LSP-style floating preview: address, raw bytes, owning symbol, source mapping
----and breakpoint state. A second press focuses the float (LSP `K` convention);
----moving the cursor dismisses it.
+---LSP-style floating preview: address, raw bytes, symbol, source mapping and
+---breakpoint state. A second press focuses the float; moving the cursor dismisses it.
 ---@private
 function DisassemblyView:_hover()
     if not self:_is_open() then return end
@@ -546,12 +538,11 @@ function DisassemblyView:_hover()
     })
 end
 
--- ── Source navigation ──────────────────────────────────────────────────────
+-- Source navigation
 
----Open the source line the instruction under the cursor maps to, reusing a
----window already showing that file (or the nearest regular window otherwise)
----and focusing it. No-op with a warning when the instruction carries no source
----mapping.
+---Open the source line the instruction under the cursor maps to, reusing a window
+---already showing that file (or the nearest regular window) and focusing it. No-op
+---with a warning when the instruction carries no source mapping.
 ---@private
 function DisassemblyView:_open_source_at_cursor()
     if not self:_is_open() then return end
@@ -568,17 +559,11 @@ function DisassemblyView:_open_source_at_cursor()
     ui_util.smart_open_file(path, line, col, false)
 end
 
--- ── Paging ─────────────────────────────────────────────────────────────────
+-- Paging
 
----Fetch more instructions when the cursor reaches an edge of the loaded window.
----Driven purely by cursor position (CursorMoved): landing on the first line
----pages up, landing on the last line pages down. Reaching an edge via a jump
----(G/gg/search) pages just the same — the splice keeps the cursor on its own
----instruction, so the view never lurches.
----
----No infinite retry: a page that comes back empty marks the edge `_exhausted`,
----and with the cursor then pinned there (a no-op j/k fires no CursorMoved)
----nothing re-requests until the cursor steps off the edge and back.
+---Fetch more instructions when the cursor reaches an edge of the loaded window: the
+---first line pages up, the last pages down, jumps included. No infinite retry — an
+---empty page marks the edge `_exhausted` until the cursor steps off it and back.
 ---@private
 function DisassemblyView:_maybe_page()
     if not self:_is_open() then return end
@@ -588,11 +573,9 @@ function DisassemblyView:_maybe_page()
     local row   = vim.api.nvim_win_get_cursor(self._win)[1]
     local total = vim.api.nvim_buf_line_count(self._bufnr)
 
-    -- Re-arm an edge once the cursor steps off it. `_exhausted` means "no more
-    -- instructions *from this position*", not "never again": a transient empty
-    -- reply (e.g. an adapter that clamped a negative instructionOffset) must not
-    -- kill paging for good. While the cursor sits pinned on a real boundary the
-    -- flag survives, so no request is re-sent.
+    -- Re-arm an edge once the cursor steps off it. `_exhausted` means "no more from
+    -- this position", not "never again": a transient empty reply must not kill paging
+    -- for good. While the cursor sits pinned on a real boundary the flag survives.
     if row > 1 then self._exhausted.up = false end
     if row < total then self._exhausted.down = false end
 
@@ -638,13 +621,9 @@ function DisassemblyView:_page(dir)
                 if gen ~= self._gen then return end
                 self._paging = false
                 if not self:_is_open() then return end
-                -- Past the edge of disassemblable memory the adapter either returns
-                -- nothing, fails the whole request (e.g. crossing below a program's
-                -- text start: "Failed to disassemble memory at 0x..."), or pads the
-                -- reply with sentinel rows that _valid_instrs strips. Once nothing
-                -- real is left there is no more to fetch this way, so mark the edge
-                -- exhausted and stop probing it. _maybe_page re-arms it once the
-                -- cursor steps off.
+                -- Past the edge of disassemblable memory the adapter returns nothing,
+                -- fails the request, or pads with sentinels that _valid_instrs strips.
+                -- Mark the edge exhausted and stop probing; _maybe_page re-arms it.
                 if err or not new then
                     self._exhausted[dir] = true
                     return
@@ -659,11 +638,9 @@ function DisassemblyView:_page(dir)
         end)
 end
 
----Splice a freshly fetched page into the buffer with two localised edits: grow
----one end, trim the other, leaving the anchor instruction's line (and everything
----between it and each edit) byte-identical. Edit ranges are derived from line
----counts and `self._rows` — never from a stored copy of the buffer text. The
----cursor is never set explicitly; Neovim shifts it along with its instruction.
+---Splice a freshly fetched page into the buffer with two localised edits: grow one
+---end, trim the other, leaving the anchor instruction's line byte-identical. Ranges
+---come from line counts and `self._rows`; the cursor is never set explicitly.
 ---@private
 ---@param dir "up"|"down"
 ---@param new ezdap.DisassemblyView.Row[]
@@ -768,7 +745,7 @@ function DisassemblyView:_apply_page(dir, new, page, anchor_addr)
     end)
 end
 
--- ── Sync ───────────────────────────────────────────────────────────────────
+-- Sync
 
 ---Move/highlight the asm pane to match the cursor in the active source window.
 ---The source window is taken to be whatever (non-asm) window currently holds the
@@ -815,7 +792,7 @@ function DisassemblyView:_sync_to_source()
     vim.schedule(function() self._syncing = false end)
 end
 
--- ── Keymaps ────────────────────────────────────────────────────────────────
+-- Keymaps
 
 ---@private
 ---@param bufnr integer
@@ -828,7 +805,7 @@ function DisassemblyView:_setup_keymaps(bufnr)
     map("K", function() self:_hover() end, "Instruction reference")
 end
 
--- ── Public API ─────────────────────────────────────────────────────────────
+-- Public API
 
 ---Open the disassembly pane for the active frame (or focus + refresh if open).
 function DisassemblyView:open()

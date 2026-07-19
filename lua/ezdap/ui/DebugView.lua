@@ -56,13 +56,9 @@ local _DEFAULT_WIDTH_RATIO = 0.2
 
 ---@alias ezdap.DebugView.Chunk { [1]: string, [2]: string? }
 
--- `vim.wo[win].opt = val` sets both the window-local value AND nvim's hidden
--- global default (the value new windows inherit), even for options with no
--- real global scope (winfixbuf, number, signcolumn, ...) — so opening the view
--- would silently leak its window settings into every future plain window, and
--- a later `setlocal opt<` reset in a split sibling would restore the polluted
--- value instead of nvim's real default. Force `scope = "local"` to confine
--- these changes to `win`.
+-- `vim.wo[win].opt = val` sets both the window-local value AND nvim's hidden global
+-- default, even for options with no real global scope — leaking this window's
+-- settings into every future window. Force `scope = "local"` to confine them.
 ---@param win integer
 ---@param opt string
 ---@param val any
@@ -93,7 +89,7 @@ local _roots = {
     breakpoints = "bps",
 }
 
--- ── Formatters ────────────────────────────────────────────────────────────
+-- Formatters
 
 ---@param data ezdap.DebugView.ItemData
 ---@param chunks ezdap.DebugView.Chunk[]
@@ -220,7 +216,7 @@ local function _node_formatter(data, width)
     return chunks, {}
 end
 
--- ── DebugView class ───────────────────────────────────────────────────────
+-- DebugView class
 
 ---@class ezdap.DebugView
 ---@field private _tree             ezdap.ui.TreeBuffer
@@ -258,7 +254,7 @@ function DebugView:init()
     return self
 end
 
--- ── Tree init ─────────────────────────────────────────────────────────────
+-- Tree init
 
 ---@private
 function DebugView:_init_tree()
@@ -330,7 +326,7 @@ function DebugView:_get_win_width()
     return winid > 0 and vim.api.nvim_win_get_width(winid) or config.debug_value_max_len
 end
 
--- ── Signal subscriptions ──────────────────────────────────────────────────
+-- Signal subscriptions
 
 ---@private
 function DebugView:_setup_subs()
@@ -582,7 +578,7 @@ function DebugView:_show_hover(data)
     end
 end
 
--- ── Session rows ──────────────────────────────────────────────────────────
+-- Session rows
 
 ---@param id number
 ---@param info ezdap.client.SessionInfo
@@ -667,7 +663,7 @@ function DebugView:_set_active(id, sess)
     self:_load_breakpoints()
 end
 
--- ── Data loading ──────────────────────────────────────────────────────────
+-- Data loading
 
 ---@private
 ---@param ctx number
@@ -1049,7 +1045,7 @@ function DebugView:_load_breakpoints()
     self._tree:set_children(_roots.breakpoints, items)
 end
 
--- ── Public: window management ─────────────────────────────────────────────
+-- Public: window management
 
 ---Create (or return existing) buffer for embedding in a window.
 ---@param on_deleted fun()  called when the buffer is wiped
@@ -1117,7 +1113,7 @@ function DebugView:show()
     self:_open(false)
 end
 
--- ── Keymaps ────────────────────────────────────────────────────────────────
+-- Keymaps
 
 ---Toggle a data breakpoint (watchpoint) on a variable tree node, resolving its
 ---dataId against the active session and prompting for an access type when the
@@ -1307,9 +1303,8 @@ function DebugView:_setup_keymaps(bufnr)
             local parent = self._tree:get_parent_item(cur.id)
             local parent_ref = parent and parent.data and parent.data.variablesReference
             -- A top-level watch has no parent variablesReference, so setVariable
-            -- can't reach it; without setExpression (e.g. codelldb) there is no
-            -- way to assign it. Bail out now rather than prompting for a value we
-            -- can't apply.
+            -- can't reach it; without setExpression there is no way to assign it.
+            -- Bail out now rather than prompting for a value we can't apply.
             if type(parent_ref) ~= "number" and not self._active_sess:capable("supportsSetExpression") then
                 vim.notify("[dap] adapter can't set a watch expression's value (no setExpression support)",
                     vim.log.levels.WARN)

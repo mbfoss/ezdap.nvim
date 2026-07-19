@@ -63,7 +63,7 @@ function M.all()
     return vim.list_extend({}, _expressions)
 end
 
--- ── Persistence ────────────────────────────────────────────────────────────
+-- Persistence
 
 ---@return string[]
 function M.get_data()

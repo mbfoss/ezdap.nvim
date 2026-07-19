@@ -150,6 +150,13 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 
 Add Lua annotations (`---@param`, `---@return`, `---@class`, etc.) whenever possible.
 
+Comment blocks are capped at 3 lines of prose. Annotation lines (`---@param`,
+`---|` alias members, …) don't count toward the cap, and a module's file-top doc
+block is exempt.
+
+Don't use box-drawing section headers
+(`-- ── Title ─────────`); a plain `-- Title` comment is enough.
+
 Class-based modules are named in PascalCase; functional modules are named in snake_case.
 
 Module-scope `local` variables are prefixed with `_`, except:

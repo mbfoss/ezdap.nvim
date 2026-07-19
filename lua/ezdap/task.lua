@@ -3,10 +3,8 @@ local _config      = require "ezdap.config"
 local ui_util      = require "ezdap.util.ui_util"
 
 ---A debug task — native DAP, sent as-is. `parameters` is the adapter's raw
----launch/attach body, sent verbatim. This is the resolved shape `run`/`start_task`
----consume; a profile-based run file (what `:Debug new_run_file` scaffolds) and
----`:Debug quick_run` both produce it via `ezdap.schema`'s `resolve_task`. Mirrors
----what easytasks sends as `debug.Params`; `name` defaults to "debug".
+---launch/attach body. This is the resolved shape `run`/`start_task` consume, which
+---run files and `:Debug quick_run` both produce via `ezdap.schema`'s `resolve_task`.
 ---@class ezdap.Task
 ---@field name?         string                     run/panel group name (defaults to "debug")
 ---@field adapter       string                     name of an entry in `ezdap.adapters`
@@ -52,10 +50,9 @@ M.start            = function(task, callbacks)
     local manager  = require("ezdap.manager")
     local adapters = require("ezdap.adapters")
 
-    -- The task is native DAP: `parameters` is the adapter's raw launch/attach
-    -- body, sent verbatim. The task layer never inspects or translates it —
-    -- scaffolding `parameters` from an adapter schema is new_run_file's job, via
-    -- `ezdap.schema`. A task with no `parameters` sends an empty body.
+    -- The task is native DAP: `parameters` is the adapter's raw launch/attach body,
+    -- sent verbatim and never inspected or translated here. Scaffolding it from an
+    -- adapter schema is new_run_file's job. No `parameters` sends an empty body.
     local base     = adapters[task.adapter]
     if not base then
         report("unknown DAP adapter: " .. tostring(task.adapter))

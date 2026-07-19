@@ -5,10 +5,9 @@ local M = setmetatable({}, { __index = base })
 ---@type table<string, fun(): vim.api.keyset.highlight>?
 local _themed_hl_data
 
----Pull content down into any blank space at the bottom of a window so the
----viewport stays full instead of showing a handful of lines over a field of
----`~`. Scrolls the view only (never the cursor) and only when there are earlier
----lines to pull down; a buffer genuinely shorter than the window is left alone.
+---Pull content down into any blank space at the bottom of a window so the viewport
+---stays full instead of showing a few lines over a field of `~`. Scrolls the view
+---only (never the cursor), and only when there are earlier lines to pull down.
 ---@param winid integer
 function M.fill_viewport(winid)
     if not vim.api.nvim_win_is_valid(winid) then return end
