@@ -37,8 +37,8 @@ local function spawn(cmd, opts, on_exit)
     end
 
     -- vim.uv.spawn's `env` REPLACES the child environment wholesale and must be an
-    -- array of "NAME=VALUE" strings. So the moment we inject anything, we seed from
-    -- the full parent environment first, or the child loses PATH.
+    -- array of "NAME=VALUE" strings, not a dict. So injecting anything means seeding
+    -- from the full parent environment first, or the child loses PATH.
     local env = nil
     if (opts.env and next(opts.env)) or (opts.cwd and vim.fn.has("win32") == 0) then
         local merged = vim.fn.environ() ---@type table<string, string>
@@ -110,9 +110,10 @@ local function spawn(cmd, opts, on_exit)
                 handle:kill("sigterm")
             end
         end,
-        --- Push a chunk to the child's stdin; call with `nil` to signal EOF (the write
-        --- side is shut down and closed). No-op unless `opts.stdin` enabled a stdin
-        --- pipe. Streams: write may be called repeatedly before the final `write(nil)`.
+        --- Push a chunk to the child's stdin. Call with `nil` to signal EOF
+        --- (the write side is shut down and closed). No-op unless `opts.stdin`
+        --- enabled a stdin pipe. Streams: write may be called repeatedly before
+        --- the final `write(nil)`.
         ---@param data    string?  chunk to push, or nil to signal end-of-input
         ---@param on_done fun()?   called once this write/shutdown completes
         write = function(data, on_done)
