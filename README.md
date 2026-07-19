@@ -388,8 +388,7 @@ Each run gets a bottom split hosting its buffers, paged via a winbar:
 ### Inspect, disassembly & REPL
 
 ```vim
-:Debug inspect          " hover the value of the word under the cursor
-:'<,'>Debug inspect     " inspect the visual selection
+:Debug inspect          " hover the value of the word under the cursor (or selected expression in visual mode)
 :Debug disassemble      " open the disassembly view for the current frame
 :Debug exception_info   " details of the exception at the current stop
 ```
@@ -575,9 +574,7 @@ map("n", "<leader>dq", "<Cmd>Debug stop<CR>",                 { desc = "Debug: s
 
 -- Count-prefixed panel jump: `2<leader>dj` jumps to run panel tab 2.
 -- With no count, `count1` defaults to 1, so a bare `<leader>dj` jumps to tab 1.
-map("n", "<leader>dj", function()
-  vim.cmd("Debug panel jump " .. vim.v.count1)
-end, { desc = "Debug: jump to run panel tab [count]" })
+map("n", "<leader>dj", function() vim.cmd("Debug panel jump " .. vim.v.count1) end, { desc = "Debug: jump to run panel tab [count]" })
 
 map("n", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: inspect" })
 map("x", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: inspect selection" })
@@ -585,80 +582,7 @@ map("x", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: i
 
 ## Adding a custom adapter
 
-`require("ezdap.adapters")` is a plain table — add or override entries directly.
-A minimal process-based adapter needs a `command` and a default `request`:
 
-```lua
-local adapters = require("ezdap.adapters")
-
-adapters.myadapter = {
-  command = "my-debug-adapter",   -- string or string[]; launched over stdio
-  request = "launch",
-}
-```
-
-For a connection-based adapter, give a `host`/`port` instead of a `command`. An
-optional `setup`/`teardown` pair lets you spawn a server, pick a free port, or
-provision tooling before the session connects (this is how the `debugpy` and
-`js-debug` adapters work).
-
-To make an adapter work with `:Debug quick_run` and `:Debug new_run_file`, give
-it one or more named `profiles`. Each declares an `inputs` table and a
-`build` function that turns those inputs into the adapter's native request body:
-
-```lua
-adapters.myadapter = {
-  command = "my-debug-adapter",
-  profiles = {
-    launch = {
-      description = "debug an executable",
-      request = "launch",
-      inputs = {
-        command = { type = "string", required = true, description = "command line to debug" },
-        cwd     = { type = "string", format = "cwd", description = "working directory" },
-      },
-      build = function(params, connect, inputs)
-        -- shared.split_command reads a command line (or a list) into the pair
-        params.program, params.args = require("ezdap.shared").split_command(inputs.command)
-        params.cwd = inputs.cwd
-      end,
-    },
-  },
-}
-```
-
-Both `:Debug quick_run` and a `:Debug new_run_file` run file resolve through the
-same `build`, so `inputs` is the one place a profile is described — there is
-no separate scaffold template to keep in sync.
-
-An input's `type` is the Lua type `build` receives (`string`, `boolean`,
-`integer`, `number`, `table`), and its `format` decides how the `quick_run` string
-is read into that type (`file`, `dir`, `cwd`, `host`, `port`, `map`, `list`) — omit
-the format and the string is read by `type` alone. `required` makes leaving it unset
-an error — it says the user has to write the value out. Any other unset input
-simply arrives at `build` as
-nil, and since Lua drops nil-valued keys, `params.cwd = inputs.cwd` omits `cwd`
-from the body on its own — assign unconditionally and optional fields take care
-of themselves. `build`'s `connect` argument is for adapters that connect over a
-task-level TCP endpoint (see [`remote.lua`](lua/ezdap/adapters/remote.lua));
-leave it untouched otherwise.
-
-Omitting the field is only the default answer to an unset input — `build` decides,
-and it can answer differently. Every attach profile resolves an unset `pid`
-by asking, so `:Debug quick_run codelldb attach` with no `pid=` pops a process
-picker instead of failing; returning a string from `build` aborts the run with
-that error, which is how a cancelled picker is reported.
-
-`:Debug new_run_file` scaffolds a run file straight from `inputs`: required inputs
-active, the rest commented out with their descriptions. The resulting file names
-the `profile` and answers its inputs under `parameters`, and `:Debug run_file`
-resolves it through `build` — the same path `quick_run` takes.
-
-See each built-in adapter under
-[`lua/ezdap/adapters/`](lua/ezdap/adapters/) for fully worked examples
-(e.g. [`codelldb.lua`](lua/ezdap/adapters/codelldb.lua),
-[`debugpy.lua`](lua/ezdap/adapters/debugpy.lua)), and
-[DEVELOPMENT.md](DEVELOPMENT.md) for the profile format.
 
 ## Contributing
 
