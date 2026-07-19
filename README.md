@@ -36,7 +36,7 @@ adapter, set a breakpoint, and start stepping.
 
 - **No `nvim-dap` dependency** — a self-contained DAP client.
 - **Batteries-included adapters** — Python, C/C++/Rust, Go, .NET, Node/JS/TS,
-  Java, PHP, Bash and Lua work out of the box (see [below](#built-in-adapters)).
+  Java, Bash and Lua work out of the box (see [below](#built-in-adapters)).
 - **Full breakpoint palette** — line, conditional, hit-count, **logpoints**,
   **column**, **function**, **exception** (filters and named types) and
   **data breakpoints / watchpoints**.
@@ -147,7 +147,6 @@ table. Any entry can be overridden, and new ones added — see
 | `netcoredbg`         | .NET / C#            | launch / attach   | `netcoredbg` on `PATH`                                        |
 | `js-debug`           | JavaScript / TS / Node | launch / attach | `js-debug-adapter` (auto-resolved from Mason), `node`        |
 | `bash-debug-adapter` | Bash                 | launch            | `bash-debug-adapter` on `PATH`                                |
-| `php-debug-adapter`  | PHP (Xdebug)         | launch (listens)  | `php-debug-adapter` on `PATH`                                 |
 | `local-lua-debugger` | Lua                  | launch            | `local-lua-debugger-vscode` (auto-resolved from Mason), `node` |
 | `remote`             | any                  | attach            | connects to a DAP server on `host:port`                      |
 | `java-debug-server`  | Java                 | attach            | external debug server (e.g. via `nvim-jdtls`)                |
