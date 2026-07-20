@@ -293,7 +293,6 @@ function M.run_file(path)
                 _err("run: " .. name .. ": " .. tostring(err))
                 return
             end
-            task.raw_messages = spec.raw_messages
             M.run(task)
         end)
         return
@@ -307,13 +306,12 @@ function M.run_file(path)
         local request = body.request
         body.request = nil
         M.run({
-            name         = spec.name,
-            adapter      = spec.adapter,
-            request      = request,
-            parameters   = body,
-            host         = spec.host,
-            port         = spec.port,
-            raw_messages = spec.raw_messages,
+            name       = spec.name,
+            adapter    = spec.adapter,
+            request    = request,
+            parameters = body,
+            host       = spec.host,
+            port       = spec.port,
         })
         return
     end

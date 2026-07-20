@@ -49,9 +49,8 @@ Re-exports client signals so consumers depend only on `manager`.
   plus optional named `profiles`. Users add/override keys directly. The DAP
   core never reads `profiles` — only `ezdap.schema` does.
 - [task.lua](lua/ezdap/task.lua) — the task runner backend. Consumes a native
-  task (`name`/`adapter`/`request`/`parameters` + optional
-  `host`/`port`/`raw_messages`) and sends `parameters` as the DAP request body
-  verbatim.
+  task (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`) and
+  sends `parameters` as the DAP request body verbatim.
 - [runner.lua](lua/ezdap/runner.lua) — the standalone run frontend: run files,
   `quick_run`, `rerun`, and the run panel.
 - [inputs.lua](lua/ezdap/inputs.lua) — the input-format registry: one row per

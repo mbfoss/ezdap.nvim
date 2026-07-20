@@ -383,13 +383,9 @@ placement with the `inline_vars` option (`inline`, `eol`, `eol_right_align`,
 A run's buffers are listed under its session row in the debug view; `<CR>` on one
 opens it in a regular window:
 
-- **REPL** — evaluate DAP expressions interactively
+- **REPL** — Debugger interactive console
 - **Output** — the debuggee's output
 - **Terminal** — when the adapter launches the debuggee in a terminal
-- **DAP Messages** — raw protocol log (enable with `raw_messages = true` on the task)
-
-Run progress is appended to a scratch buffer named `ezdap://reports`, reachable
-with `:b ezdap://reports`.
 
 ```vim
 :Debug clean            " drop finished runs and wipe their buffers
@@ -463,6 +459,10 @@ require("ezdap").setup({
 
   -- Inline value placement: "inline" | "eol" | "eol_right_align" | "right_align" | "off"
   inline_vars         = "eol",
+
+  -- Log every DAP message to a "DAP Messages" buffer. For debugging ezdap or an
+  -- adapter; leave off otherwise.
+  raw_messages        = false,
 
   -- Gutter sign glyphs.
   signs = {

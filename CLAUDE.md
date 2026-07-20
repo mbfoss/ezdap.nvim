@@ -51,8 +51,8 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   never reads the profiles — only `ezdap.schema` does.
 - [task.lua](lua/ezdap/task.lua) — task runner (`ezdap.TaskTypeDef`); the
   `run` backend for external task runners. Consumes a native task
-  (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`/
-  `raw_messages`) and sends `parameters` as the DAP request body verbatim.
+  (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`) and sends
+  `parameters` as the DAP request body verbatim.
 - [inputs.lua](lua/ezdap/inputs.lua) — the input-format registry: one row per
   `ezdap.InputFormat`, each stating every way that format is read — `type` (what
   `build` receives), `item_type` (what one element of a collection becomes),

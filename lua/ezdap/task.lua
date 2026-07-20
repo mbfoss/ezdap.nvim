@@ -12,7 +12,6 @@ local ui_util      = require "ezdap.util.ui_util"
 ---@field parameters?   table                      native DAP launch/attach body (the adapter's own keys), sent verbatim
 ---@field host?         string                     attach/TCP connection target
 ---@field port?         integer                    attach/TCP connection target (required for the `remote` adapter)
----@field raw_messages? boolean                    capture raw DAP protocol messages in a dedicated buffer
 
 ---Presentation options for a buffer registered with the run host.
 ---@class ezdap.AddBufOpts
@@ -30,7 +29,7 @@ local M            = {}
 
 local _run_counter = 0
 
----@param task ezdap.Task  native DAP task (name + adapter + request + parameters, plus optional host/port/raw_messages)
+---@param task ezdap.Task  native DAP task (name + adapter + request + parameters, plus optional host/port)
 ---@param callbacks ezdap.TaskCallback
 ---@return fun() -- cancel function
 M.start            = function(task, callbacks)
@@ -163,7 +162,7 @@ M.start            = function(task, callbacks)
                 end)
 
                 local unsub
-                if task.raw_messages then
+                if _config.raw_messages then
                     local out ---@type ezdap.OutputBuffer?
                     out = OutputBuffer.new({
                         name        = ui_util.unique_buf_name("ezdap://" .. run_key .. "_dap-messages"),

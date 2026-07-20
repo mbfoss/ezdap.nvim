@@ -31,6 +31,7 @@
 ---@field output_win_auto_open boolean   open the bottom output window as soon as a run registers its first buffer
 ---@field output_win_height_ratio number  height of the bottom output window, as a fraction of the editor's lines
 ---@field inline_vars          ezdap.InlineVarsMode  placement of inline variable values
+---@field raw_messages         boolean   capture raw DAP protocol messages in a dedicated buffer; a debugging aid, off by default
 ---@field signs ezdap.Signs
 
 ---@type ezdap.Config
@@ -44,6 +45,7 @@ local M = {
 	output_win_auto_open = true,
 	output_win_height_ratio = 0.25,
 	inline_vars         = "eol",
+	raw_messages        = false,
 	signs = {
 		debug_frame              = "▶",
 		active_breakpoint        = "●",
