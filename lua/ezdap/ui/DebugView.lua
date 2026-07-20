@@ -39,6 +39,7 @@ local _DEFAULT_WIDTH_RATIO = 0.2
 ---@field session_info ezdap.client.SessionInfo?
 ---@field is_current boolean?
 ---@field bufnr    integer?
+---@field is_terminal boolean?
 ---@field frame_id   integer?
 ---@field bp_kind       ("source"|"function"|"exception_filter"|"exception_type"|"data")?
 ---@field bp_id         integer?
@@ -120,7 +121,7 @@ end
 ---@param chunks ezdap.DebugView.Chunk[]
 ---@param width integer  available DebugView window width
 local function _fmt_buffer(data, chunks, width)
-    chunks[#chunks + 1] = { "▤ ", "NonText" }
+    chunks[#chunks + 1] = { data.is_terminal and " " or " ", "NonText" }
     chunks[#chunks + 1] = { str_util.crop_for_ui(data.name, width - 6, true), nil }
 end
 
@@ -671,6 +672,7 @@ function DebugView:_sync_session_buffers(id)
                 name       = buf.label,
                 session_id = id,
                 bufnr      = buf.bufnr,
+                is_terminal = vim.bo[buf.bufnr].buftype == "terminal",
             },
         }
     end
