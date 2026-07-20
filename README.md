@@ -353,7 +353,7 @@ Inside the panel:
 
 | Key   | Action                                                                       |
 | ----- | ---------------------------------------------------------------------------- |
-| `<CR>`| Expand/collapse, select a session, open a session buffer, switch to a frame, or jump to a breakpoint's source |
+| `<CR>`| Expand/collapse, select a session, switch to a frame, or jump to a breakpoint's source |
 | `K`   | Show the full value / frame details / exception info / breakpoint details    |
 | `i`   | Add a watch expression, a function breakpoint, or a data breakpoint (on a variable) |
 | `d`   | Remove the watch expression or breakpoint under the cursor                   |

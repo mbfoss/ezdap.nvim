@@ -188,7 +188,7 @@ local function _register_user_commands()
         "stop", "terminate", "terminate_all",
         "session", "thread", "terminate_thread", "frame",
         "inspect", "disassemble",
-        "project", "clean",
+        "project", "clean", "report",
     }
 
     ---@type ezdap.tk.usercmd.run_fn
@@ -252,6 +252,8 @@ local function _register_user_commands()
             M.project_info()
         elseif sub == "clean" then
             require("ezdap.runner").clean()
+        elseif sub == "report" then
+            require("ezdap.runner").report_open()
         elseif sub == "breakpoint" then
             _bp_run({ unpack(args, 2) })
         else

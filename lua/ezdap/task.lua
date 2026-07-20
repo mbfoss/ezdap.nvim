@@ -1,7 +1,6 @@
-local OutputBuffer    = require "ezdap.ui.OutputBuffer"
-local _config         = require "ezdap.config"
-local ui_util         = require "ezdap.util.ui_util"
-local session_buffers = require "ezdap.session_buffers"
+local OutputBuffer = require "ezdap.ui.OutputBuffer"
+local _config      = require "ezdap.config"
+local ui_util      = require "ezdap.util.ui_util"
 
 ---A debug task — native DAP, sent as-is. `parameters` is the adapter's raw
 ---launch/attach body. This is the resolved shape `run`/`start_task` consume, which
@@ -26,75 +25,20 @@ local session_buffers = require "ezdap.session_buffers"
 ---@field report     fun(message: string)
 ---@field on_done    fun(ok: boolean)
 
----@class ezdap.BufEntry
----@field bufnr    integer
----@field label    string
----@field priority integer  higher = shown preferentially when added (default 0)
-
 ---@class ezdap.TaskTypeDef
 local M            = {}
 
 local _run_counter = 0
 
-local _augroup     = vim.api.nvim_create_augroup("ezdap.task", { clear = true })
-
 ---@param task ezdap.Task  native DAP task (name + adapter + request + parameters, plus optional host/port/raw_messages)
 ---@param callbacks ezdap.TaskCallback
 ---@return fun() -- cancel function
 M.start            = function(task, callbacks)
-    local host_add_bufnr = callbacks.add_bufnr or function() end
-    local report         = callbacks.report or function() end
-    local on_done        = callbacks.on_done or function() end
+    local add_bufnr = callbacks.add_bufnr or function() end
+    local report    = callbacks.report or function() end
+    local on_done   = callbacks.on_done or function() end
 
-    local sessions       = {} ---@type table<integer, ezdap.dap.Session>
-
-    -- Every buffer this run spawns, registered against each session the run
-    -- produces (buffers usually exist before the first session does) so the debug
-    -- view can list a session's buffers.
-    local buf_entries    = {} ---@type ezdap.SessionBuffer[]
-
-    ---Re-register the run's buffers against every session it has produced.
-    local function publish()
-        for id in pairs(sessions) do
-            session_buffers.set(id, buf_entries)
-        end
-    end
-
-    ---Drop a buffer that no longer exists. A run's buffer is as often deleted by the
-    ---user as wiped by us, and either way the debug view's rows must follow — buffer
-    ---numbers are reused, so a stale entry eventually names an unrelated buffer.
-    ---@param bufnr integer
-    local function drop_bufnr(bufnr)
-        for i, e in ipairs(buf_entries) do
-            if e.bufnr == bufnr then
-                table.remove(buf_entries, i)
-                publish()
-                return
-            end
-        end
-    end
-
-    ---@param bufnr integer
-    ---@param opts? ezdap.AddBufOpts
-    local function add_bufnr(bufnr, opts)
-        opts                          = opts or {}
-        buf_entries[#buf_entries + 1] = {
-            bufnr    = bufnr,
-            label    = opts.label or vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":t"),
-            priority = opts.priority or 0,
-        }
-        if vim.api.nvim_buf_is_valid(bufnr) then
-            vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
-                group    = _augroup,
-                buffer   = bufnr,
-                once     = true,
-                callback = function() drop_bufnr(bufnr) end,
-            })
-        end
-        publish()
-        host_add_bufnr(bufnr, opts)
-    end
-
+    local sessions  = {} ---@type table<integer, ezdap.dap.Session>
 
     _run_counter   = _run_counter + 1
     local run_key  = (task.name or "debug") .. "#" .. _run_counter
@@ -206,7 +150,6 @@ M.start            = function(task, callbacks)
         manager.start(config, {
             on_session = function(id, sess)
                 sessions[id] = sess
-                session_buffers.set(id, buf_entries)
                 if _cancel_early then
                     sess:stop()
                     return

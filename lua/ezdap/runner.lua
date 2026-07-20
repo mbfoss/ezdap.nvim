@@ -5,9 +5,7 @@
 ---supplies its own callbacks via its backend; this module is the standalone
 ---equivalent (progress, run lifecycle).
 ---
----A run's buffers are reached through the debug view, which lists them under
----their session row (see `ezdap.session_buffers`); this module only tracks them
----so a finished run's buffers can be wiped.
+---A run's buffers are tracked here only so a finished run's buffers can be wiped.
 ---
 ---One task per file: a run file returns a single task (or a function
 ---returning one):
@@ -47,8 +45,8 @@ local function _is_task(v)
 end
 
 -- Run progress is appended to a scratch report buffer, reachable by name
--- (`:b ezdap://reports`); nothing opens it. Pre-flight errors stay on vim.notify,
--- happening before the run exists.
+-- (`:b ezdap://reports`) or via `:Debug report`. Pre-flight errors stay on
+-- vim.notify, happening before the run exists.
 
 local _report_buf ---@type integer?
 
@@ -94,8 +92,7 @@ local function _report(msg)
     vim.bo[buf].modifiable = false
 end
 
----Wipe the buffers a run spawned. The debug view drops them from its session rows
----once they are gone.
+---Wipe the buffers a run spawned.
 ---@param run ezdap.runner.Run
 local function _remove_run(run)
     for _, b in ipairs(run.bufnrs) do
@@ -119,6 +116,19 @@ local function _clear_finished(name)
         end
     end
     _runs = kept
+end
+
+---Open the shared run report buffer in a split and park the cursor on its last
+---line, so a run's progress messages are visible. Bound to `:Debug report`.
+function M.report_open()
+    local buf = _report_bufnr()
+    local win = vim.fn.bufwinid(buf)
+    if win ~= -1 then
+        vim.api.nvim_set_current_win(win)
+    else
+        vim.cmd("sbuffer " .. buf)
+    end
+    vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(buf), 0 })
 end
 
 ---Drop every finished run and wipe their buffers, leaving live runs untouched.
@@ -169,8 +179,7 @@ function M.run(task)
     _report("▶ " .. task.name)
 
     local cancel = require("ezdap.task").start(task, {
-        -- Tracked only so `clean` can wipe them; `ezdap.task` is what registers
-        -- them against the run's sessions for the debug view to list.
+        -- Tracked only so `clean` can wipe them.
         add_bufnr = function(bufnr, _)
             run.bufnrs[#run.bufnrs + 1] = bufnr
         end,

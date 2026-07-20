@@ -18,7 +18,6 @@ local _DEFAULT_WIDTH_RATIO = 0.2
 ---@alias ezdap.DebugView.ItemKind
 ---| "root"
 ---| "session"
----| "buffer"
 ---| "stackframe"
 ---| "scope"
 ---| "variable"
@@ -38,8 +37,6 @@ local _DEFAULT_WIDTH_RATIO = 0.2
 ---@field session_id number?
 ---@field session_info ezdap.client.SessionInfo?
 ---@field is_current boolean?
----@field bufnr    integer?
----@field is_terminal boolean?
 ---@field frame_id   integer?
 ---@field bp_kind       ("source"|"function"|"exception_filter"|"exception_type"|"data")?
 ---@field bp_id         integer?
@@ -115,14 +112,6 @@ local function _fmt_session(data, chunks)
     if info.state and info.state ~= "running" then
         chunks[#chunks + 1] = { " [" .. info.state .. "]", "Tag" }
     end
-end
-
----@param data ezdap.DebugView.ItemData
----@param chunks ezdap.DebugView.Chunk[]
----@param width integer  available DebugView window width
-local function _fmt_buffer(data, chunks, width)
-    chunks[#chunks + 1] = { data.is_terminal and " " or " ", "NonText" }
-    chunks[#chunks + 1] = { str_util.crop_for_ui(data.name, width - 6, true), nil }
 end
 
 ---@param data ezdap.DebugView.ItemData
@@ -209,7 +198,6 @@ end
 local _formatters = {
     root       = _fmt_root,
     session    = _fmt_session,
-    buffer     = _fmt_buffer,
     stackframe = _fmt_stackframe,
     scope      = _fmt_scope,
     variable   = _fmt_variable,
@@ -320,12 +308,6 @@ function DebugView:_init_tree()
             if not data then return end
             if data.kind == "session" and data.session_id then
                 manager.select_session(data.session_id)
-            elseif data.kind == "buffer" and data.bufnr then
-                if vim.api.nvim_buf_is_valid(data.bufnr) then
-                    ui.smart_open_buffer(data.bufnr)
-                elseif data.session_id then
-                    self:_sync_session_buffers(data.session_id)
-                end
             elseif data.kind == "stackframe" and data.frame_id then
                 manager.select_frame(data.frame_id)
             elseif data.kind == "breakpoint" and data.bp_kind == "source" and data.bp_source and data.bp_line then
@@ -349,10 +331,6 @@ function DebugView:_setup_subs()
     self._subs[#self._subs + 1] = manager.on_session_added:subscribe(function(id, _, info)
         self:_reclaim_session_rows(id, info.name)
         self:_upsert_session_row(id, info)
-    end)
-
-    self._subs[#self._subs + 1] = manager.on_session_buffers_changed:subscribe(function(id)
-        self:_sync_session_buffers(id)
     end)
 
     self._subs[#self._subs + 1] = manager.on_session_removed:subscribe(function(id)
@@ -592,8 +570,8 @@ end
 -- Session rows
 
 ---Drop the rows of terminated sessions that a newly started session's name
----reclaims, wiping their buffers with them — a re-run of the same target takes
----over its predecessor's row rather than stacking a second one beside it.
+---reclaims — a re-run of the same target takes over its predecessor's row
+---rather than stacking a second one beside it.
 ---@param id number  the new session, left alone
 ---@param name string
 function DebugView:_reclaim_session_rows(id, name)
@@ -603,11 +581,6 @@ function DebugView:_reclaim_session_rows(id, name)
         local info = data and data.session_info
         if data and info and data.session_id ~= id and data.name == name
             and (info.state == "terminated" or info.state == "exited") then
-            for _, buf in ipairs(manager.session_buffers(data.session_id)) do
-                if vim.api.nvim_buf_is_valid(buf.bufnr) then
-                    vim.api.nvim_buf_delete(buf.bufnr, { force = true })
-                end
-            end
             self._tree:remove_item(item_id)
         end
     end
@@ -636,48 +609,6 @@ function DebugView:_upsert_session_row(id, info)
             data       = data,
         })
     end
-    self:_sync_session_buffers(id)
-end
-
----Rebuild a session's buffer children from the buffers its run attached to it.
----A session with none stays a leaf row. Session rows are upserted on every state
----change, so an unchanged buffer set is left alone rather than re-rendered.
----@param id number
-function DebugView:_sync_session_buffers(id)
-    local item_id = _roots.sessions .. "/" .. id
-    if not self._tree:have_item(item_id) then return end
-
-    local bufs     = manager.session_buffers(id)
-    local existing = self._tree:get_children_ids(item_id)
-    local same     = #existing == #bufs
-    if same then
-        for i, buf in ipairs(bufs) do
-            if existing[i] ~= item_id .. "/buf/" .. buf.bufnr then
-                same = false; break
-            end
-        end
-    end
-    if same then return end
-
-    local children = {}
-    for _, buf in ipairs(bufs) do
-        local child_id = item_id .. "/buf/" .. buf.bufnr
-        children[#children + 1] = {
-            id         = child_id,
-            expandable = false,
-            expanded   = false,
-            data       = {
-                kind       = "buffer",
-                path       = child_id,
-                name       = buf.label,
-                session_id = id,
-                bufnr      = buf.bufnr,
-                is_terminal = vim.bo[buf.bufnr].buftype == "terminal",
-            },
-        }
-    end
-    self._tree:set_children(item_id, children)
-    self._tree:set_item_expandable(item_id, #children > 0)
 end
 
 ---@param id number?
@@ -1409,7 +1340,7 @@ function DebugView:_setup_keymaps(bufnr)
 
     map("g?", "Show keymaps", function()
         floatwin.open(table.concat({
-            "<CR>  Select session / open session buffer / switch frame / jump to breakpoint source",
+            "<CR>  Select session / switch frame / jump to breakpoint source",
             "K     Show full value / frame details / exception info / breakpoint details",
             "i     Add: watch expression (expressions) / function breakpoint (breakpoints) / data breakpoint (variable)",
             "d     Remove watch expression or breakpoint",

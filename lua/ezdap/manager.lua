@@ -7,7 +7,6 @@ local select            = require("ezdap.util.select")
 local client            = require("ezdap.dap.client")
 local Signal            = require("ezdap.tk.Signal")
 local inputwin          = require("ezdap.tk.inputwin")
-local session_buffers   = require("ezdap.session_buffers")
 
 local M                 = {}
 
@@ -28,16 +27,9 @@ M.on_variable_changed   = client
 M.on_breakpoint_updated = client
     .on_breakpoint_updated ---@type ezdap.tk.Signal<fun(id:number, bp:table, status:ezdap.dap.BpStatus)>
 
-M.on_session_buffers_changed = session_buffers.on_changed ---@type ezdap.tk.Signal<fun(id:number)>
-
 ---@param id number
 ---@return ezdap.dap.Session?
 function M.get_session(id) return client.get_session(id) end
-
----The buffers the run that produced this session attached to it.
----@param id number
----@return ezdap.SessionBuffer[]
-function M.session_buffers(id) return session_buffers.get(id) end
 
 ---@return table<number, ezdap.dap.Session>
 function M.sessions() return client.sessions() end
