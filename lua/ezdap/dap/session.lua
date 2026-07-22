@@ -1542,9 +1542,12 @@ function Session:select_thread(thread_id)
     end)
 end
 
----Switch the active stack frame and refresh its scopes.
+---Switch the active stack frame and refresh its scopes. Frames only exist while
+---the owning thread is stopped, so this is a no-op when the thread is running.
 ---@param frame_id integer
 function Session:select_frame(frame_id)
+    local thread = self:current_thread()
+    if not thread or thread.status ~= "stopped" then return end
     self._stack_id = frame_id
     local frame = self:current_stack_frame()
     self:_fetch_scopes(frame, function()

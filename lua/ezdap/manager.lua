@@ -984,6 +984,9 @@ function M.debug.frame()
     if not thread then
         vim.notify("[dap] no selected thread", vim.log.levels.WARN); return
     end
+    if thread.status ~= "stopped" then
+        vim.notify("[dap] cannot select frame while running", vim.log.levels.WARN); return
+    end
     local frames = thread.stack_frames or {}
     if #frames == 0 then
         vim.notify("[dap] no stack frames available", vim.log.levels.WARN); return
@@ -1019,7 +1022,13 @@ function M.debug.frame()
         items          = items,
         initial        = initial,
     }, function(data)
-        if data then M.select_frame(data.frame.id) end
+        if not data then return end
+        -- The thread may have resumed while the picker was open.
+        local t = sess:current_thread()
+        if not t or t.status ~= "stopped" then
+            vim.notify("[dap] cannot select frame while running", vim.log.levels.WARN); return
+        end
+        M.select_frame(data.frame.id)
     end)
 end
 
