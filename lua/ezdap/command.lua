@@ -586,7 +586,7 @@ function M.debug.restart() manager.restart() end
 
 function M.debug.stop() manager.stop() end
 
-function M.debug.terminate_all() manager.terminate_all() end
+function M.debug.stop_all() manager.stop_all() end
 
 ---Step into a specific call on the current line. Prompts when the line has
 ---multiple call targets; falls back to a plain step-in when unsupported or

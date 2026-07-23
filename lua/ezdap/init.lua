@@ -185,7 +185,7 @@ local function _register_user_commands()
         "step_into_targets", "reverse_continue",
         "jump_to_cursor", "restart_frame", "exception_info",
         "pause", "restart",
-        "stop", "terminate", "terminate_all",
+        "stop", "stop_all",
         "session", "thread", "terminate_thread", "frame",
         "inspect", "disassemble",
         "project", "clean", "report",
@@ -232,10 +232,10 @@ local function _register_user_commands()
             cmd.debug.pause()
         elseif sub == "restart" then
             cmd.debug.restart()
-        elseif sub == "stop" or sub == "terminate" then
+        elseif sub == "stop" then
             cmd.debug.stop()
-        elseif sub == "terminate_all" then
-            cmd.debug.terminate_all()
+        elseif sub == "stop_all" then
+            cmd.debug.stop_all()
         elseif sub == "inspect" then
             -- A `'<,'>` range (e.g. `:'<,'>Debug inspect` from visual mode) sets
             -- opts.range > 0; inspect then reads the `'<`/`'>` marks.

@@ -422,8 +422,8 @@ instruction-level while it is focused.
 :Debug restart_frame    " restart the selected stack frame
 :Debug pause
 :Debug restart          " DAP restart request on the live session
-:Debug stop             " (alias: :Debug terminate)
-:Debug terminate_all
+:Debug stop             " stop the active session
+:Debug stop_all         " stop every session
 ```
 
 Stepping granularity follows the focused window: line-wise everywhere, and
@@ -509,7 +509,7 @@ Everything is under the `:Debug` command, with completion for every subcommand.
 | `restart_frame`       | Restart the selected stack frame                  |
 | `exception_info`      | Show details of the current exception             |
 | `pause` / `restart`   | Pause / DAP-restart the session                   |
-| `stop` (`terminate`) / `terminate_all` | Stop the active / every session  |
+| `stop` / `stop_all`   | Stop the active / every session                   |
 | `session` / `thread` / `terminate_thread` / `frame` | Selection pickers   |
 | `inspect`             | Hover a value (word under cursor or selection)    |
 | `disassemble`         | Open the disassembly view                         |

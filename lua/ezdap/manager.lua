@@ -155,9 +155,9 @@ function M.restart() if _active_id then client.restart(_active_id) end end
 ---@param cb fun()?
 function M.stop(cb) if _active_id then client.stop(_active_id, cb) end end
 
----Terminate every session (adapters and debuggees).
+---Stop every session (adapters and debuggees).
 ---@param cb fun()?
-function M.terminate_all(cb) client.quit(cb) end
+function M.stop_all(cb) client.quit(cb) end
 
 ---@param cb fun()?
 function M.disconnect(cb) if _active_id then client.disconnect(_active_id, cb) end end
