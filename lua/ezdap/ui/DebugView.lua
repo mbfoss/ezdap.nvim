@@ -10,6 +10,7 @@ local timer       = require("ezdap.tk.timer")
 local floatwin    = require("ezdap.tk.floatwin")
 local fixedwin    = require("ezdap.tk.fixedwin")
 local ui          = require("ezdap.tk.ui")
+local ui_util     = require("ezdap.util.ui_util")
 
 -- Fraction of the editor width the view occupies on first open; thereafter the
 -- last-used ratio (tracked by fixedwin across resizes) is reused.
@@ -1079,7 +1080,8 @@ end
 ---@return integer bufnr
 function DebugView:get_bufnr(on_deleted)
     local bufnr, created = self._tree:create_buffer(on_deleted)
-    if created then
+    if created and bufnr > 0 then
+        vim.api.nvim_buf_set_name(bufnr, ui_util.unique_buf_name("ezdap://Debug View"))
         self:_setup_keymaps(bufnr)
         -- apply initial state for any already-running sessions
         for id, sess in pairs(manager.sessions()) do
