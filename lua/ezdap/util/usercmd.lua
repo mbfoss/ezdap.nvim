@@ -72,13 +72,13 @@ function M.split_args(str)
     return args
 end
 
----@alias ezdap.tk.usercmd.subcommand fun(cmd:string,rest:string[],arg_lead:string):string[]
+---@alias ezdap.util.usercmd.subcommand fun(cmd:string,rest:string[],arg_lead:string):string[]
 
----@alias ezdap.tk.usercmd.run_fn
+---@alias ezdap.util.usercmd.run_fn
 ---| fun(cmd:string,args:string[],opts:vim.api.keyset.create_user_command.command_args)
 
 
----@param subcommand ezdap.tk.usercmd.subcommand
+---@param subcommand ezdap.util.usercmd.subcommand
 local function _complete(subcommand, arg_lead, cmd_line)
     local function filter(strs)
         local out = {}
@@ -107,22 +107,22 @@ local function _complete(subcommand, arg_lead, cmd_line)
 end
 
 ---@param cmd string
----@param run_fn ezdap.tk.usercmd.run_fn
+---@param run_fn ezdap.util.usercmd.run_fn
 ---@param opts vim.api.keyset.create_user_command.command_args
 local function _dispatch(cmd, run_fn, opts)
     local args = M.split_args(opts.args)
     local ok, err = pcall(run_fn, cmd, args, opts)
     if not ok then
         vim.notify(
-            "[ezdap.tk.nvim] " .. cmd .. " command error\n" .. tostring(err),
+            "[ezdap.util.nvim] " .. cmd .. " command error\n" .. tostring(err),
             vim.log.levels.ERROR
         )
     end
 end
 
 ---@param cmd string
----@param run_fn ezdap.tk.usercmd.run_fn
----@param opts {desc:string?,subcommand:ezdap.tk.usercmd.subcommand?,count:boolean,range:boolean}?
+---@param run_fn ezdap.util.usercmd.run_fn
+---@param opts {desc:string?,subcommand:ezdap.util.usercmd.subcommand?,count:boolean,range:boolean}?
 function M.register_user_cmd(cmd, run_fn, opts)
     opts = opts or {}
     vim.api.nvim_create_user_command(cmd, function(cmd_opts)

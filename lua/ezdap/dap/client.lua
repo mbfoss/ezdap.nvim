@@ -4,8 +4,8 @@
 
 local connection  = require("ezdap.dap.connection")
 local session_mod = require("ezdap.dap.session")
-local Signal      = require("ezdap.tk.Signal")
-local str_util    = require("ezdap.tk.strutil")
+local Signal      = require("ezdap.util.Signal")
+local str_util    = require("ezdap.util.strutil")
 
 -- Config type
 
@@ -69,21 +69,21 @@ local M                 = {}
 -- Signals
 
 ---Fires when a session is registered: (id, sess, info)
-M.on_session_added      = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, sess:ezdap.dap.Session, info:ezdap.client.SessionInfo)>
+M.on_session_added      = Signal.new() ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session, info:ezdap.client.SessionInfo)>
 ---Fires when a session terminates: (id)
-M.on_session_removed    = Signal.new() ---@type ezdap.tk.Signal<fun(id:number)>
+M.on_session_removed    = Signal.new() ---@type ezdap.util.Signal<fun(id:number)>
 ---Fires when a session's state changes: (id, info)
-M.on_session_updated    = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, info:ezdap.client.SessionInfo)>
+M.on_session_updated    = Signal.new() ---@type ezdap.util.Signal<fun(id:number, info:ezdap.client.SessionInfo)>
 ---Fires once per stop, after threads and stack frames have been fetched: (id, info)
-M.on_session_stopped    = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, info:ezdap.client.SessionInfo)>
+M.on_session_stopped    = Signal.new() ---@type ezdap.util.Signal<fun(id:number, info:ezdap.client.SessionInfo)>
 ---Fires for every raw DAP message: (id, direction, msg)
-M.on_raw_message        = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, direction:"in"|"out", msg:table)>
+M.on_raw_message        = Signal.new() ---@type ezdap.util.Signal<fun(id:number, direction:"in"|"out", msg:table)>
 ---Fires when thread or frame selection changes in any session: (id, sess)
-M.on_selection_changed  = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, sess:ezdap.dap.Session)>
+M.on_selection_changed  = Signal.new() ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
 ---Fires after a variable value is successfully changed by the user: (id, sess)
-M.on_variable_changed   = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, sess:ezdap.dap.Session)>
+M.on_variable_changed   = Signal.new() ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
 ---Fires when a breakpoint's adapter-verified status changes: (id, bp, status)
-M.on_breakpoint_updated = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, bp:table, status:ezdap.dap.BpStatus)>
+M.on_breakpoint_updated = Signal.new() ---@type ezdap.util.Signal<fun(id:number, bp:table, status:ezdap.dap.BpStatus)>
 
 -- Session registry
 

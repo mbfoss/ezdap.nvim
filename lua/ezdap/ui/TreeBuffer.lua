@@ -1,6 +1,6 @@
-local Tree = require("ezdap.tk.Tree")
-local ui_util = require("ezdap.util.ui_util")
-local Signal = require("ezdap.tk.Signal")
+local Tree = require("ezdap.util.Tree")
+local ui_util = require("ezdap.util.ui")
+local Signal = require("ezdap.util.Signal")
 
 ---@class ezdap.ui.TreeBuffer.Item
 ---@field id any
@@ -41,10 +41,10 @@ local _ns_id = vim.api.nvim_create_namespace('nvtoolkitTreeBuffer')
 ---@field private _indent_string string
 ---@field private _expand_padding string
 ---@field private _indent_cache table<integer, string>
----@field private _on_selection ezdap.tk.Signal<fun(id:any,data:any)>
----@field private _on_toggle ezdap.tk.Signal<fun(id:any,data:any,expanded:boolean)>
+---@field private _on_selection ezdap.util.Signal<fun(id:any,data:any)>
+---@field private _on_toggle ezdap.util.Signal<fun(id:any,data:any,expanded:boolean)>
 ---@field private _bufnr integer
----@field private _tree ezdap.tk.Tree
+---@field private _tree ezdap.util.Tree
 ---@field private _flat_ids any[]
 ---@field private _id_to_idx table<any, integer>
 ---@field private _collapsible boolean
@@ -69,8 +69,8 @@ function TreeBuffer.new(opts)
         _indent_string  = indent_str,
         _expand_padding = string.rep(" ", vim.fn.strdisplaywidth(expand_char)) .. " ",
         _indent_cache   = indent_cache,
-        _on_selection   = Signal.new(), ---@type ezdap.tk.Signal<fun(id:any,data:any)>
-        _on_toggle      = Signal.new(), ---@type ezdap.tk.Signal<fun(id:any,data:any,expanded:boolean)>
+        _on_selection   = Signal.new(), ---@type ezdap.util.Signal<fun(id:any,data:any)>
+        _on_toggle      = Signal.new(), ---@type ezdap.util.Signal<fun(id:any,data:any,expanded:boolean)>
         _bufnr          = -1,
         _tree           = Tree.new(),
         _flat_ids       = {}, ---@type any[]
@@ -92,9 +92,9 @@ local function _to_item(id, data)
     return { id = id, data = data.userdata, expandable = data.expandable, expanded = data.expanded }
 end
 
----@param tree ezdap.tk.Tree
+---@param tree ezdap.util.Tree
 ---@param starting_id any?  -- nil = whole tree
----@return ezdap.tk.Tree.FlatNode[]
+---@return ezdap.util.Tree.FlatNode[]
 local function _flatten(tree, starting_id)
     local out = {}
     local function visit(id, data, depth)
@@ -109,7 +109,7 @@ local function _flatten(tree, starting_id)
     return out
 end
 
----@param tree ezdap.tk.Tree
+---@param tree ezdap.util.Tree
 ---@param starting_id any?  -- nil = whole tree
 ---@return integer
 local function _tree_size(tree, starting_id)
@@ -215,7 +215,7 @@ function TreeBuffer:subscribe(callbacks)
 end
 
 ---@private
----@param flatnode ezdap.tk.Tree.FlatNode
+---@param flatnode ezdap.util.Tree.FlatNode
 ---@param row integer
 ---@return string line, table hl_calls, table extmarks
 function TreeBuffer:_render_node(flatnode, row)
@@ -285,7 +285,7 @@ end
 ---@private
 ---@param start_idx integer
 ---@param old_size integer
----@param new_flat ezdap.tk.Tree.FlatNode[]
+---@param new_flat ezdap.util.Tree.FlatNode[]
 function TreeBuffer:_render_range(start_idx, old_size, new_flat)
     local buf = self._bufnr
     if buf <= 0 or not vim.api.nvim_buf_is_loaded(buf) then return end

@@ -1,7 +1,7 @@
 local M = {}
 
-local timer = require("ezdap.tk.timer")
-local strutil = require("ezdap.tk.strutil")
+local timer = require("ezdap.util.timer")
+local strutil = require("ezdap.util.strutil")
 
 ---@param path string
 function M.file_exists(path)
@@ -297,7 +297,7 @@ function M.async_scan_dir(dir, include_regex_list, exclude_regex_list, on_file, 
     return cancel_fn
 end
 
----@class ezdap.tk.fsutil.walk_dir_opts
+---@class ezdap.util.fsutil.walk_dir_opts
 ---@field include_regex_list vim.regex[]?
 ---@field exclude_regex_list vim.regex[]?
 ---@field on_dir_enter fun(path:string)?
@@ -306,7 +306,7 @@ end
 ---@field follow_symlinks boolean?
 
 ---@param dir string
----@param opts ezdap.tk.fsutil.walk_dir_opts
+---@param opts ezdap.util.fsutil.walk_dir_opts
 ---@return function # cancel function
 function M.async_walk_dir(dir, opts)
     local pending_dirs = { dir }

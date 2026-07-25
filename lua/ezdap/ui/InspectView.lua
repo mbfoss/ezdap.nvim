@@ -6,8 +6,8 @@
 local TreeBuffer = require("ezdap.ui.TreeBuffer")
 local manager    = require("ezdap.manager")
 local config     = require("ezdap.config")
-local str_util   = require("ezdap.tk.strutil")
-local ui_util    = require("ezdap.util.ui_util")
+local str_util   = require("ezdap.util.strutil")
+local ui_util    = require("ezdap.util.ui")
 
 local M = {}
 

@@ -11,7 +11,7 @@
 
 local M = {}
 
-local fsutil               = require("ezdap.tk.fsutil")
+local fsutil               = require("ezdap.util.fsutil")
 local config               = require("ezdap.config")
 
 local _default_filename    = ".ezdap.json"

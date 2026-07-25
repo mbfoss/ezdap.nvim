@@ -5,7 +5,7 @@
 ---holds the highest-priority live one. One window is reused for all of them:
 ---registering a buffer swaps the occupant rather than opening a second split.
 
-local fixedwin = require("ezdap.tk.fixedwin")
+local fixedwin = require("ezdap.util.fixedwin")
 local config   = require("ezdap.config")
 
 local M        = {}

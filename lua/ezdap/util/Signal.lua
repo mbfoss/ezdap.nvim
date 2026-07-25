@@ -1,10 +1,10 @@
----@class ezdap.tk.Signal<T>
+---@class ezdap.util.Signal<T>
 ---@field _listeners T[]
 local Signal = {}
 Signal.__index = Signal
 
 ---@generic T: fun(...)
----@return ezdap.tk.Signal<T>
+---@return ezdap.util.Signal<T>
 function Signal.new()
     return setmetatable({ _listeners = {} }, Signal)
 end

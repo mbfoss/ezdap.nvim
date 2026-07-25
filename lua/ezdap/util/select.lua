@@ -5,9 +5,9 @@
 
 local M                  = {}
 
-local fsutil             = require("ezdap.tk.fsutil")
-local ui_util            = require("ezdap.util.ui_util")
-local timer              = require("ezdap.tk.timer")
+local fsutil             = require("ezdap.util.fsutil")
+local ui_util            = require("ezdap.util.ui")
+local timer              = require("ezdap.util.timer")
 
 local _NS_CURSOR         = vim.api.nvim_create_namespace("ezdap_select_cursor")
 local _NS_CONTENT        = vim.api.nvim_create_namespace("ezdap_select_content")

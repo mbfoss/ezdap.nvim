@@ -1,10 +1,10 @@
-local Signal = require("ezdap.tk.Signal")
+local Signal = require("ezdap.util.Signal")
 
 local M = {}
 
 ---Fired after extmark positions are synced for a file (on BufWritePost / BufUnload).
 ---Subscribers receive the normalised absolute file path.
-M.on_synced = Signal.new() ---@type ezdap.tk.Signal<fun(file: string)>
+M.on_synced = Signal.new() ---@type ezdap.util.Signal<fun(file: string)>
 
 ---@class ezdap.ui.extmarks.MarkInfo
 ---@field id number

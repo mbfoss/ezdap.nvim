@@ -4,7 +4,7 @@
 ---pickers, prompts, notifications and cursor handling.
 
 local select   = require("ezdap.util.select")
-local inputwin = require("ezdap.tk.inputwin")
+local inputwin = require("ezdap.util.inputwin")
 local manager  = require("ezdap.manager")
 
 local M        = {}
@@ -467,7 +467,7 @@ function M.breakpoint.list()
         initial        = initial,
     }, function(data)
         if not data then return end
-        require("ezdap.util.ui_util").smart_open_file(data.bp.source, data.bp.line)
+        require("ezdap.util.ui").smart_open_file(data.bp.source, data.bp.line)
     end)
 end
 

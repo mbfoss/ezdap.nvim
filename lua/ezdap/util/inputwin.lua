@@ -1,7 +1,7 @@
-local ui_util = require("ezdap.tk.ui")
+local ui_util = require("ezdap.util.ui")
 local M = {}
 
----@class ezdap.tk.inputwin.Opts
+---@class ezdap.util.inputwin.Opts
 ---@field prompt? string
 ---@field default? string
 ---@field default_width? number
@@ -9,7 +9,7 @@ local M = {}
 ---@field col_offset? number
 ---@field validate? fun(content:string):boolean,string?
 ---@
----@param opts ezdap.tk.inputwin.Opts
+---@param opts ezdap.util.inputwin.Opts
 ---@param on_confirm fun(value: string|nil)
 function M.open(opts, on_confirm)
     local prev_win = vim.api.nvim_get_current_win()

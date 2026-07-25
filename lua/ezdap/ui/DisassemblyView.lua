@@ -10,8 +10,8 @@
 
 local manager   = require("ezdap.manager")
 local config    = require("ezdap.config")
-local ui_util   = require("ezdap.util.ui_util")
-local throttle  = require("ezdap.tk.throttle")
+local ui_util   = require("ezdap.util.ui")
+local throttle  = require("ezdap.util.throttle")
 
 local _au_group_gen
 

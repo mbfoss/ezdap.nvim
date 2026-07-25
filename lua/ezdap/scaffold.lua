@@ -163,12 +163,12 @@ function M.new_run_file(assignments)
     end
     vim.list_extend(lines, { "}", "" })
 
-    local ok, werr = require("ezdap.tk.fsutil").write_content(dest, table.concat(lines, "\n"))
+    local ok, werr = require("ezdap.util.fsutil").write_content(dest, table.concat(lines, "\n"))
     if not ok then
         _err("new_run_file: failed to write " .. dest .. ": " .. tostring(werr))
         return
     end
-    require("ezdap.util.ui_util").smart_open_file(vim.fn.fnameescape(dest))
+    require("ezdap.util.ui").smart_open_file(vim.fn.fnameescape(dest))
     return dest
 end
 

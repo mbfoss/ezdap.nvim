@@ -152,8 +152,8 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   `:subscribe(fn)` (returns an unsubscribe fn), `:emit(...)`. This is the main
   decoupling mechanism between layers.
 - `Tree.lua`, `select.lua`, `inputwin.lua`, `usercmd.lua` (subcommand
-  registration/completion), plus `fsutil`, `str_util`, `table_util`, `term`,
-  `throttle`, `timer`, `ui_util`.
+  registration/completion), plus `fsutil`, `strutil`, `table`, `term`,
+  `throttle`, `timer`, `ui`.
 
 ### Conventions to keep in mind
 - Layers communicate through `Signal`s, not direct back-references. Lower layers

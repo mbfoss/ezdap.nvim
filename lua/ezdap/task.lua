@@ -1,6 +1,6 @@
 local OutputBuffer = require "ezdap.ui.OutputBuffer"
 local _config      = require "ezdap.config"
-local ui_util      = require "ezdap.util.ui_util"
+local ui_util      = require "ezdap.util.ui"
 
 ---A debug task — native DAP, sent as-is. `parameters` is the adapter's raw
 ---launch/attach body. This is the resolved shape `run`/`start_task` consume, which

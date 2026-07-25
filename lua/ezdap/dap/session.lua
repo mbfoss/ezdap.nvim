@@ -14,7 +14,7 @@
 ---  "start_debugging"   (child_config, parent_sess)— adapter requests child session
 
 local breakpoints = require("ezdap.dap.breakpoints")
-local ui_util     = require("ezdap.util.ui_util")
+local ui_util     = require("ezdap.util.ui")
 
 ---@class ezdap.dap.Thread
 ---@field id           integer
@@ -908,7 +908,7 @@ end
 ---@param args    ezdap.dap.proto.RunInTerminalRequestArguments
 ---@param respond ezdap.dap.RespondFn
 function Session:_run_in_terminal(args, respond)
-    local term = require("ezdap.tk.term")
+    local term = require("ezdap.util.term")
     local cmd  = args.args or {}
     if args.argsCanBeInterpretedByShell then
         cmd = { vim.o.shell, "-c", table.concat(cmd, " ") }

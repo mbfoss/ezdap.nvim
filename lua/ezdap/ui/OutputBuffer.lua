@@ -3,7 +3,7 @@
 ---`max_lines` cap is set, the oldest lines are trimmed once the buffer grows
 ---past it. Used for the run Output and raw DAP-messages panels.
 
-local ui_util = require "ezdap.util.ui_util"
+local ui_util = require "ezdap.util.ui"
 local ansi    = require "ezdap.ui.ansi"
 
 ---@class ezdap.OutputBuffer

@@ -8,7 +8,7 @@
 ---all lives in the command surface (command.lua) built on top of it.
 
 local client            = require("ezdap.dap.client")
-local Signal            = require("ezdap.tk.Signal")
+local Signal            = require("ezdap.util.Signal")
 
 local M                 = {}
 
@@ -16,18 +16,18 @@ local M                 = {}
 -- Consumers import only manager; client is an implementation detail.
 
 M.on_session_added      = client
-    .on_session_added ---@type ezdap.tk.Signal<fun(id:number, sess:ezdap.dap.Session, info:ezdap.client.SessionInfo)>
-M.on_session_removed    = client.on_session_removed ---@type ezdap.tk.Signal<fun(id:number)>
+    .on_session_added ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session, info:ezdap.client.SessionInfo)>
+M.on_session_removed    = client.on_session_removed ---@type ezdap.util.Signal<fun(id:number)>
 M.on_session_updated    = client
-    .on_session_updated ---@type ezdap.tk.Signal<fun(id:number, info:ezdap.client.SessionInfo)>
+    .on_session_updated ---@type ezdap.util.Signal<fun(id:number, info:ezdap.client.SessionInfo)>
 M.on_session_stopped    = client
-    .on_session_stopped ---@type ezdap.tk.Signal<fun(id:number, info:ezdap.client.SessionInfo)>
+    .on_session_stopped ---@type ezdap.util.Signal<fun(id:number, info:ezdap.client.SessionInfo)>
 M.on_raw_message        = client
-    .on_raw_message ---@type ezdap.tk.Signal<fun(id:number, direction:"in"|"out", msg:table)>
+    .on_raw_message ---@type ezdap.util.Signal<fun(id:number, direction:"in"|"out", msg:table)>
 M.on_variable_changed   = client
-    .on_variable_changed ---@type ezdap.tk.Signal<fun(id:number, sess:ezdap.dap.Session)>
+    .on_variable_changed ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
 M.on_breakpoint_updated = client
-    .on_breakpoint_updated ---@type ezdap.tk.Signal<fun(id:number, bp:table, status:ezdap.dap.BpStatus)>
+    .on_breakpoint_updated ---@type ezdap.util.Signal<fun(id:number, bp:table, status:ezdap.dap.BpStatus)>
 
 ---@param id number
 ---@return ezdap.dap.Session?
@@ -49,9 +49,9 @@ M.breakpoints = require("ezdap.dap.breakpoints")
 -- Active session
 
 ---Fires when the active (stepping) session changes: (id?, sess?)
-M.on_active_changed    = Signal.new() ---@type ezdap.tk.Signal<fun(id:number?, sess:ezdap.dap.Session?)>
+M.on_active_changed    = Signal.new() ---@type ezdap.util.Signal<fun(id:number?, sess:ezdap.dap.Session?)>
 ---Fires when thread or frame selection changes in the active session: (id, sess)
-M.on_selection_changed = Signal.new() ---@type ezdap.tk.Signal<fun(id:number, sess:ezdap.dap.Session)>
+M.on_selection_changed = Signal.new() ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
 
 ---@type number?
 local _active_id       = nil

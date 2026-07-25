@@ -7,7 +7,7 @@
 ---`on_change` fires whenever the desired set changes; live sessions subscribe to
 ---push the change to their adapter, and UI subscribes to repaint.
 
-local Signal = require("ezdap.tk.Signal")
+local Signal = require("ezdap.util.Signal")
 
 ---@class ezdap.dap.SourceBreakpoint
 ---@field internal_id   integer   internal stable id (for signs)
@@ -59,7 +59,7 @@ local M = {}
 ---Fires when the desired breakpoint set changes and adapters must re-sync.
 ---`path` is the affected source file for "source" changes (nil = all sources).
 ---`_emit_change` coalesces emits to the next tick: one notify per file/kind.
-M.on_change = Signal.new() ---@type ezdap.tk.Signal<fun(kind: ezdap.dap.BreakpointChangeKind, path: string?)>
+M.on_change = Signal.new() ---@type ezdap.util.Signal<fun(kind: ezdap.dap.BreakpointChangeKind, path: string?)>
 
 ---Pending coalesced changes for the next tick, or nil when none are queued.
 ---@type { sources: table<string,true>, all_sources: boolean, kinds: table<string,true> }?

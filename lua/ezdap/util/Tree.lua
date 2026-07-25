@@ -1,13 +1,13 @@
----@class ezdap.tk.Tree.Item
+---@class ezdap.util.Tree.Item
 ---@field id any
 ---@field data any
 
----@class ezdap.tk.Tree.ItemUpdate
+---@class ezdap.util.Tree.ItemUpdate
 ---@field id any
 ---@field data any
 ---@field keep_children boolean?
 
----@class ezdap.tk.Tree.Node
+---@class ezdap.util.Tree.Node
 ---@field parent_id any|nil
 ---@field data any
 ---@field first_child any|nil
@@ -15,14 +15,14 @@
 ---@field next_sibling any|nil
 ---@field prev_sibling any|nil
 
----@class ezdap.tk.Tree.FlatNode
+---@class ezdap.util.Tree.FlatNode
 ---@field id any
 ---@field data any
 ---@field depth integer
 
 ---@generic T
----@class ezdap.tk.Tree
----@field _nodes table<any, ezdap.tk.Tree.Node>
+---@class ezdap.util.Tree
+---@field _nodes table<any, ezdap.util.Tree.Node>
 ---@field _root_first any|nil
 ---@field _root_last any|nil
 local Tree = {}
@@ -36,7 +36,7 @@ end
 
 ---@private
 function Tree:_init()
-	---@type table<any, ezdap.tk.Tree.Node>
+	---@type table<any, ezdap.util.Tree.Node>
 	self._nodes = {}
 
 	---@type any|nil
@@ -208,7 +208,7 @@ end
 
 ---@generic T
 ---@param parent_id any|nil
----@param items ezdap.tk.Tree.Item[]
+---@param items ezdap.util.Tree.Item[]
 function Tree:set_children(parent_id, items)
 	assert(type(items) == "table")
 	local parent_node = parent_id and self._nodes[parent_id]
@@ -268,7 +268,7 @@ function Tree:set_children(parent_id, items)
 end
 
 ---@param parent_id any|nil
----@param items ezdap.tk.Tree.ItemUpdate[]
+---@param items ezdap.util.Tree.ItemUpdate[]
 function Tree:update_children(parent_id, items)
 	assert(type(items) == "table", "items must be a table")
 	local parent_node = parent_id and self._nodes[parent_id]
@@ -411,7 +411,7 @@ function Tree:is_root(id)
 	return node ~= nil and node.parent_id == nil
 end
 
----@return ezdap.tk.Tree.Item[]
+---@return ezdap.util.Tree.Item[]
 function Tree:get_roots()
 	local items = {}
 	local child_id = self._root_first
@@ -482,7 +482,7 @@ function Tree:get_depth(id)
 	return depth
 end
 
----@return ezdap.tk.Tree.Item[]
+---@return ezdap.util.Tree.Item[]
 function Tree:get_items()
 	local items = {}
 	for id, node in pairs(self._nodes) do
@@ -516,7 +516,7 @@ function Tree:get_children_ids(parent_id)
 end
 
 ---@param parent_id any|nil If nil, returns root nodes.
----@return ezdap.tk.Tree.Item[]
+---@return ezdap.util.Tree.Item[]
 function Tree:get_children(parent_id)
 	assert(parent_id, "id required")
 
@@ -592,7 +592,7 @@ function Tree:remove_item(id)
 end
 
 ---@private
----@param node ezdap.tk.Tree.Node
+---@param node ezdap.util.Tree.Node
 function Tree:_remove_children(node)
 	local child = node.first_child
 	while child do

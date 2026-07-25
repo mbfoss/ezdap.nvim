@@ -1,7 +1,7 @@
 ---@brief Global watch-expression registry.
 ---Expressions are stored here independent of any session or UI.
 
-local Signal = require("ezdap.tk.Signal")
+local Signal = require("ezdap.util.Signal")
 
 ---@class ezdap.Expression
 ---@field internal_id integer
@@ -10,7 +10,7 @@ local Signal = require("ezdap.tk.Signal")
 local M = {}
 
 ---Fires whenever the expression list changes.
-M.on_change = Signal.new() ---@type ezdap.tk.Signal<fun()>
+M.on_change = Signal.new() ---@type ezdap.util.Signal<fun()>
 
 ---@type ezdap.Expression[]
 local _expressions = {}

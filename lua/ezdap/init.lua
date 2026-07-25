@@ -91,7 +91,7 @@ end
 
 local function _register_user_commands()
     local cmd      = require("ezdap.command")
-    local usercmd  = require("ezdap.tk.usercmd")
+    local usercmd  = require("ezdap.util.usercmd")
 
     local _bp_subs = {
         "toggle", "add", "remove", "column",
@@ -191,7 +191,7 @@ local function _register_user_commands()
         "project", "clean", "report",
     }
 
-    ---@type ezdap.tk.usercmd.run_fn
+    ---@type ezdap.util.usercmd.run_fn
     local function _debug_run(_, args, opts)
         local sub = args[1]
         if sub == "run_file" then
@@ -312,7 +312,7 @@ local function _register_user_commands()
     end
 
     ---Completion for `:Debug …`.
-    ---@type ezdap.tk.usercmd.subcommand
+    ---@type ezdap.util.usercmd.subcommand
     local function _debug_complete_subs(_, rest, arg_lead)
         if #rest == 0 then return _debug_subs end
         if rest[1] == "breakpoint" then

@@ -1,10 +1,10 @@
 local M              = {}
 
-local str_util       = require("ezdap.tk.strutil")
+local str_util       = require("ezdap.util.strutil")
 local manager        = require("ezdap.manager")
 local config         = require("ezdap.config")
 local extmarks       = require("ezdap.ui.extmarks")
-local ui_util        = require("ezdap.util.ui_util")
+local themed_hl      = require("ezdap.util.themed_hl")
 
 local _group         = extmarks.define_group("inlinevars", { priority = 100 })
 local _seq           = 0
@@ -19,11 +19,11 @@ local _unsub_var
 local _mark_id       = 0
 local _clear_timer   = nil
 
-ui_util.define_themed_hl("EzdapPill", function()
+themed_hl.define_themed_hl("EzdapPill", function()
 	return { link = "Visual", default = true }
 end)
 
-ui_util.define_themed_hl("EzdapPillSep", function()
+themed_hl.define_themed_hl("EzdapPillSep", function()
 	vim.api.nvim_set_hl(0, "EzdapPill", { link = "Visual", default = true })
 	local hl = vim.api.nvim_get_hl(0, { name = "EzdapPill", link = false })
 	return {

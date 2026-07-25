@@ -3,9 +3,9 @@
 
 local extmarks   = require("ezdap.ui.extmarks")
 local manager    = require("ezdap.manager")
-local ui_util    = require("ezdap.util.ui_util")
+local ui_util    = require("ezdap.util.ui")
 local config     = require("ezdap.config")
-local timer      = require("ezdap.tk.timer")
+local timer      = require("ezdap.util.timer")
 
 local M          = {}
 
