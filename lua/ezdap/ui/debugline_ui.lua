@@ -22,7 +22,6 @@ local _stop_clear_timer
 
 local _SIGN_HL     = "EzdapFrameSign"
 local _LINE_HL     = "EzdapFrameLine"
-local _hl_init ---@type boolean?
 
 vim.api.nvim_set_hl(0, _SIGN_HL, { link = "Todo", default = true })
 vim.api.nvim_set_hl(0, _LINE_HL, { link = "DiffChange", default = true })
@@ -34,8 +33,11 @@ local function _show_stopped(sess)
     local src = frame.source
     if not src or not src.path or src.path == "" then return end
     local lnum = (frame.line and frame.line > 0) and frame.line or 1
+    -- Above Neovim's default sign priority (DECOR_PRIORITY_BASE = 4096), which is
+    -- what an extmark sign placed without an explicit priority gets (e.g. keystone
+    -- bookmarks). The current frame must win the gutter cell against those.
     _sign_group.set_file_extmark(_sign_id, src.path, lnum, 0,
-        { sign_text = config.signs.debug_frame, sign_hl_group = _SIGN_HL, priority = 100, hl_mode = "blend", }, nil)
+        { sign_text = config.signs.debug_frame, sign_hl_group = _SIGN_HL, priority = 5000, hl_mode = "blend", }, nil)
     _line_group.set_file_extmark(_sign_id, src.path, lnum, 0, { line_hl_group = _LINE_HL, priority = 40 }, nil)
     if sess.state_reason == "function call" then
         return -- spurious stop triggered by gdp

@@ -767,7 +767,7 @@ function DisassemblyView:_sync_from_source()
     self._src_win = win -- remember it for the asm -> source direction
 
     for l = entry.first, entry.last do
-        vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_block, l - 1, 0, { line_hl_group = _BLOCK_HL, priority = 30 })
+        vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_block, l - 1, 0, { line_hl_group = _BLOCK_HL, priority = 5000 })
     end
 
     self._syncing = true

@@ -101,13 +101,14 @@ local function _fmt_session(data, chunks)
     if not info then return end
     local paused        = info.is_paused
     local terminated    = info.state == "terminated" or info.state == "exited"
-    local icon          = terminated and "●" or (paused and "■" or "▶")
+    local icon          = terminated and "●" or (paused and "⏸" or "▶")
     local hl            = terminated and "NonText" or (paused and "DiagnosticWarn" or "DiagnosticOk")
     chunks[#chunks + 1] = { icon, hl }
     chunks[#chunks + 1] = { " ", nil }
     chunks[#chunks + 1] = { data.name, data.is_current and "Special" or nil }
     if info.state and info.state ~= "running" then
-        chunks[#chunks + 1] = { " [" .. info.state .. "]", "Tag" }
+        local st = info.state == "stopped" and "paused" or (info.state == "terminated" and "ended" or info.state)
+        chunks[#chunks + 1] = { " [" .. st .. "]", "Tag" }
     end
 end
 
@@ -138,7 +139,7 @@ end
 ---@param data ezdap.DebugView.ItemData
 ---@param chunks ezdap.DebugView.Chunk[]
 local function _fmt_expression(data, chunks)
-    chunks[#chunks + 1] = { data.name}
+    chunks[#chunks + 1] = { data.name }
     chunks[#chunks + 1] = { " = ", "NonText" }
     local val = str_util.crop_for_ui(tostring(data.value or ""):gsub("\n", "⏎"), config.debug_value_max_len)
     chunks[#chunks + 1] = { val, (data.is_na or data.greyout) and "NonText" or "@string" }
@@ -336,7 +337,7 @@ function DebugView:_init_tree()
             elseif data.kind == "stackframe" and data.frame_id then
                 manager.select_frame(data.frame_id)
             elseif data.kind == "breakpoint" and data.bp_kind == "source" and data.bp_source and data.bp_line then
-                ui.smart_open_file( data.bp_source, data.bp_line, nil, false)
+                ui.smart_open_file(data.bp_source, data.bp_line, nil, false)
             end
         end,
     })
@@ -753,7 +754,9 @@ function DebugView:_load_stack(ctx)
         for i = 1, math.min(cutoff, #frames) do
             local frame, path = frames[i], _roots.stack .. "/" .. i
             items[i] = {
-                id = path, expandable = false, expanded = false,
+                id = path,
+                expandable = false,
+                expanded = false,
                 data = {
                     kind       = "stackframe",
                     path       = path,
@@ -767,7 +770,9 @@ function DebugView:_load_stack(ctx)
         local hidden = #frames - cutoff
         if hidden > 0 then
             items[#items + 1] = {
-                id = _roots.stack .. "/__more__", expandable = false, expanded = false,
+                id = _roots.stack .. "/__more__",
+                expandable = false,
+                expanded = false,
                 data = {
                     kind    = "stackframe",
                     path    = _roots.stack .. "/__more__",
@@ -1034,11 +1039,11 @@ function DebugView:_load_breakpoints()
     local plain_src = {}
 
     for _, bp in ipairs(breakpoints.all()) do
-        local short       = vim.fn.fnamemodify(bp.source, ":~:.")
-        local path        = _roots.breakpoints .. "/src/" .. bp.internal_id
-        local src_st      = manager.bp_status(bp.internal_id)
-        local conditional = bp.condition or bp.hit_condition or bp.log_message
-        local bucket      = conditional and items or plain_src
+        local short         = vim.fn.fnamemodify(bp.source, ":~:.")
+        local path          = _roots.breakpoints .. "/src/" .. bp.internal_id
+        local src_st        = manager.bp_status(bp.internal_id)
+        local conditional   = bp.condition or bp.hit_condition or bp.log_message
+        local bucket        = conditional and items or plain_src
         bucket[#bucket + 1] = {
             id         = path,
             expandable = false,
@@ -1303,94 +1308,95 @@ function DebugView:_setup_keymaps(bufnr)
         end
     end)
 
-    map("c", "Change variable/expression value, breakpoint condition/hit condition, or data breakpoint access type", function()
-        local cur = self._tree:get_cursor_item()
-        if not cur or not cur.data then return end
-        local d = cur.data
-        if d.kind == "breakpoint" and d.bp_kind == "data" and d.bp_data_id then
-            local sess = manager.session()
-            if not sess then
-                vim.notify("[dap] no active session", vim.log.levels.WARN); return
+    map("c", "Change variable/expression value, breakpoint condition/hit condition, or data breakpoint access type",
+        function()
+            local cur = self._tree:get_cursor_item()
+            if not cur or not cur.data then return end
+            local d = cur.data
+            if d.kind == "breakpoint" and d.bp_kind == "data" and d.bp_data_id then
+                local sess = manager.session()
+                if not sess then
+                    vim.notify("[dap] no active session", vim.log.levels.WARN); return
+                end
+                local _types = { "read", "write", "readWrite" }
+                local cur_at = d.access_type
+                select.open({
+                    prompt = "Access type for " .. d.name .. ": ",
+                    items  = vim.tbl_map(function(t)
+                        return { label = (t == cur_at and "● " or "  ") .. t, data = t }
+                    end, _types),
+                }, function(at)
+                    if not at then return end
+                    sess:add_data_breakpoint({ data_id = d.bp_data_id, name = d.name, access_type = at })
+                end)
+            elseif d.kind == "breakpoint" and d.bp_kind == "source" and d.bp_source and d.bp_line then
+                inputwin.open({ prompt = "Condition (empty to clear): ", default = d.condition or "" }, function(cond)
+                    if cond == nil then return end
+                    inputwin.open({ prompt = "Hit condition (empty to clear): ", default = d.hit_condition or "" },
+                        function(hit)
+                            if hit == nil then return end
+                            breakpoints.patch(d.bp_source, d.bp_line, { condition = cond, hit_condition = hit })
+                        end)
+                end)
+            elseif d.kind == "breakpoint" and d.bp_kind == "exception_type" and d.bp_ex_name then
+                local _modes = { "always", "unhandled", "userUnhandled", "never" }
+                local cur_mode = d.break_mode
+                select.open({
+                    prompt = "Break mode for " .. d.bp_ex_name .. ": ",
+                    items  = vim.tbl_map(function(m)
+                        return { label = (m == cur_mode and "● " or "  ") .. m, data = m }
+                    end, _modes),
+                }, function(mode)
+                    if not mode then return end
+                    breakpoints.add_exception_name(d.bp_ex_name, mode)
+                end)
+            elseif d.kind == "variable" and self._active_sess then
+                local parent = self._tree:get_parent_item(cur.id)
+                local parent_ref = parent and parent.data and parent.data.variablesReference
+                inputwin.open({ prompt = "New value: ", default = d.value or "" }, function(input)
+                    if input == nil then return end
+                    self._active_sess:set_variable(parent_ref,
+                        {
+                            name = d.name,
+                            value = d.value,
+                            variablesReference = d.variablesReference or 0,
+                            evaluateName = d
+                                .evaluateName
+                        }, input,
+                        function(_, err)
+                            if err then return end
+                            self:_load_vars(self._query_ctx)
+                        end)
+                end)
+            elseif d.kind == "expression" and self._active_sess then
+                -- A watch expression is its own l-value: pass it as evaluateName so
+                -- set_variable picks setExpression/setVariable per adapter capability.
+                local parent = self._tree:get_parent_item(cur.id)
+                local parent_ref = parent and parent.data and parent.data.variablesReference
+                -- A top-level watch has no parent variablesReference, so setVariable
+                -- can't reach it; without setExpression there is no way to assign it.
+                -- Bail out now rather than prompting for a value we can't apply.
+                if type(parent_ref) ~= "number" and not self._active_sess:capable("supportsSetExpression") then
+                    vim.notify("[dap] adapter can't set a watch expression's value (no setExpression support)",
+                        vim.log.levels.WARN)
+                    return
+                end
+                inputwin.open({ prompt = "New value: ", default = d.value or "" }, function(input)
+                    if input == nil then return end
+                    self._active_sess:set_variable(parent_ref,
+                        {
+                            name               = d.name,
+                            value              = d.value,
+                            variablesReference = d.variablesReference or 0,
+                            evaluateName       = d.name,
+                        }, input,
+                        function(_, err)
+                            if err then return end
+                            self:_load_expressions(self._query_ctx)
+                        end)
+                end)
             end
-            local _types = { "read", "write", "readWrite" }
-            local cur_at = d.access_type
-            select.open({
-                prompt = "Access type for " .. d.name .. ": ",
-                items  = vim.tbl_map(function(t)
-                    return { label = (t == cur_at and "● " or "  ") .. t, data = t }
-                end, _types),
-            }, function(at)
-                if not at then return end
-                sess:add_data_breakpoint({ data_id = d.bp_data_id, name = d.name, access_type = at })
-            end)
-        elseif d.kind == "breakpoint" and d.bp_kind == "source" and d.bp_source and d.bp_line then
-            inputwin.open({ prompt = "Condition (empty to clear): ", default = d.condition or "" }, function(cond)
-                if cond == nil then return end
-                inputwin.open({ prompt = "Hit condition (empty to clear): ", default = d.hit_condition or "" },
-                    function(hit)
-                        if hit == nil then return end
-                        breakpoints.patch(d.bp_source, d.bp_line, { condition = cond, hit_condition = hit })
-                    end)
-            end)
-        elseif d.kind == "breakpoint" and d.bp_kind == "exception_type" and d.bp_ex_name then
-            local _modes = { "always", "unhandled", "userUnhandled", "never" }
-            local cur_mode = d.break_mode
-            select.open({
-                prompt = "Break mode for " .. d.bp_ex_name .. ": ",
-                items  = vim.tbl_map(function(m)
-                    return { label = (m == cur_mode and "● " or "  ") .. m, data = m }
-                end, _modes),
-            }, function(mode)
-                if not mode then return end
-                breakpoints.add_exception_name(d.bp_ex_name, mode)
-            end)
-        elseif d.kind == "variable" and self._active_sess then
-            local parent = self._tree:get_parent_item(cur.id)
-            local parent_ref = parent and parent.data and parent.data.variablesReference
-            inputwin.open({ prompt = "New value: ", default = d.value or "" }, function(input)
-                if input == nil then return end
-                self._active_sess:set_variable(parent_ref,
-                    {
-                        name = d.name,
-                        value = d.value,
-                        variablesReference = d.variablesReference or 0,
-                        evaluateName = d
-                            .evaluateName
-                    }, input,
-                    function(_, err)
-                        if err then return end
-                        self:_load_vars(self._query_ctx)
-                    end)
-            end)
-        elseif d.kind == "expression" and self._active_sess then
-            -- A watch expression is its own l-value: pass it as evaluateName so
-            -- set_variable picks setExpression/setVariable per adapter capability.
-            local parent = self._tree:get_parent_item(cur.id)
-            local parent_ref = parent and parent.data and parent.data.variablesReference
-            -- A top-level watch has no parent variablesReference, so setVariable
-            -- can't reach it; without setExpression there is no way to assign it.
-            -- Bail out now rather than prompting for a value we can't apply.
-            if type(parent_ref) ~= "number" and not self._active_sess:capable("supportsSetExpression") then
-                vim.notify("[dap] adapter can't set a watch expression's value (no setExpression support)",
-                    vim.log.levels.WARN)
-                return
-            end
-            inputwin.open({ prompt = "New value: ", default = d.value or "" }, function(input)
-                if input == nil then return end
-                self._active_sess:set_variable(parent_ref,
-                    {
-                        name               = d.name,
-                        value              = d.value,
-                        variablesReference = d.variablesReference or 0,
-                        evaluateName       = d.name,
-                    }, input,
-                    function(_, err)
-                        if err then return end
-                        self:_load_expressions(self._query_ctx)
-                    end)
-            end)
-        end
-    end)
+        end)
 
     map("K", "Show details / full value", function()
         local cur = self._tree:get_cursor_item()
