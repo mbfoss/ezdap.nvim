@@ -4,6 +4,18 @@ local str_util = require("ezdap.tk.strutil")
 
 local M = {}
 
+-- Re-exported so registry adapters (under `lua/ezdap-adapters/`) depend only on
+-- `ezdap.shared`, not on the plugin's internal module layout.
+
+---Spawn a command in a terminal buffer — see `ezdap.tk.term.spawn`.
+---@type fun(cmd: string|string[], opts: ezdap.tk.SpawnOpts, bufnr?: integer): ezdap.tk.TermHandle?, string?
+M.spawn = require("ezdap.tk.term").spawn
+
+---A buffer name unique against currently-loaded buffers — see
+---`ezdap.util.ui_util.unique_buf_name`.
+---@type fun(basename: string): string
+M.unique_buf_name = require("ezdap.util.ui_util").unique_buf_name
+
 ---Split a `command` input into the `program`/`args` pair a launch body wants. The
 ---first word is expanded (`~`, `$VAR`) as the program, the rest are its arguments
 ---verbatim; a list is accepted as-is. An unset command yields an empty program.

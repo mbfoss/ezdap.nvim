@@ -1,4 +1,4 @@
----@brief Built-in DAP adapter definitions.
+---@brief DAP adapter registry.
 ---
 ---The module is a plain table: each key is an adapter name, each value is an
 ---AdapterDef — native DAP process/connection config (command, host/port,
@@ -7,9 +7,11 @@
 ---read (via `ezdap.schema`) to scaffold a run file / assemble a
 ---native request body; the DAP core never touches them.
 ---
----Each built-in adapter lives in its own file under `ezdap/adapters/`, returning
----one AdapterDef; this module assembles them into the `name -> AdapterDef` table.
----Users can add adapters or override existing ones directly:
+---The plugin ships only the generic `remote` adapter. Every other adapter is
+---user-supplied: drop one file per adapter under `lua/ezdap-adapters/` on the
+---runtimepath (e.g. `~/.config/nvim/lua/ezdap-adapters/debugpy.lua`), each returning
+---one AdapterDef; this module globs and assembles them into the `name -> AdapterDef`
+---table, keyed by filename. Users can also add or override adapters directly:
 ---  local adapters = require("ezdap.adapters")
 ---  adapters.myAdapter = { command = "..." }
 
@@ -125,22 +127,51 @@
 ---@field setup?                 fun(config: ezdap.dap.Config, ctx: ezdap.AdapterSetupCtx, callback: fun(err?: string, state?: any))
 ---@field teardown?              fun(config: ezdap.dap.Config, ctx: any)
 
--- Built-in adapters
--- One file per adapter; keys with hyphens are loaded from the matching filename.
+-- The one shipped adapter: generic TCP attach — connect to a DAP server already
+-- listening on host:port. host/port live at the task level (they set the connection),
+-- so the attach body itself stays minimal.
+---@type ezdap.AdapterDef
+local remote = {
+    host     = "127.0.0.1",
+    port     = 0,
+    profiles = {
+        connect = {
+            description = "attach to a DAP server listening on host:port",
+            request     = "attach",
+            inputs = {
+                host = { type = "string", format = "host", description = "DAP server host" },
+                port = { type = "integer", format = "port", description = "DAP server port" },
+            },
+            build = function(_, connect, inputs)
+                connect.host = inputs.host
+                connect.port = inputs.port
+            end,
+        },
+    },
+}
+
+-- The registry: the shipped `remote` adapter, plus every user adapter found under
+-- `lua/ezdap-adapters/` on the runtimepath. Each user file returns one AdapterDef and
+-- is keyed by its filename stem; a file named `remote.lua` overrides the shipped one.
 
 ---@type table<string, ezdap.AdapterDef>
 local M = {
-    debugpy               = require("ezdap.adapters.debugpy"),
-    codelldb              = require("ezdap.adapters.codelldb"),
-    gdb                   = require("ezdap.adapters.gdb"),
-    netcoredbg            = require("ezdap.adapters.netcoredbg"),
-    remote                = require("ezdap.adapters.remote"),
-    ["java-debug-server"] = require("ezdap.adapters.java-debug-server"),
-    lldb                  = require("ezdap.adapters.lldb"),
-    delve                 = require("ezdap.adapters.delve"),
-    ["js-debug"]          = require("ezdap.adapters.js-debug"),
-    ["bash-debug-adapter"] = require("ezdap.adapters.bash-debug-adapter"),
-    ["local-lua-debugger"] = require("ezdap.adapters.local-lua-debugger"),
+    remote = remote,
 }
+
+-- Load each `lua/ezdap-adapters/*.lua` on the runtimepath. `init.lua` is skipped —
+-- it's a conventional module name, never a single adapter. A file that errors is
+-- reported and skipped so one broken adapter never breaks the rest of the registry.
+for _, path in ipairs(vim.api.nvim_get_runtime_file("lua/ezdap-adapters/*.lua", true)) do
+    local name = vim.fn.fnamemodify(path, ":t:r")
+    if name ~= "init" then
+        local ok, def = pcall(require, "ezdap-adapters." .. name)
+        if ok then
+            M[name] = def
+        else
+            vim.notify(("[ezdap] failed to load adapter '%s': %s"):format(name, def), vim.log.levels.ERROR)
+        end
+    end
+end
 
 return M

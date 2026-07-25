@@ -47,9 +47,11 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 - `proto.lua` — `---@meta` file of DAP spec types; never `require()` it.
 
 **Adapters & tasks**
-- [adapters/init.lua](lua/ezdap/adapters/init.lua) — built-in adapter
-  definitions as a plain `name -> ezdap.AdapterDef` table (one file per adapter
-  under `ezdap/adapters/`, assembled here): native DAP process/connection config
+- [adapters/init.lua](lua/ezdap/adapters/init.lua) — the adapter registry: a plain
+  `name -> ezdap.AdapterDef` table. The plugin ships only the generic `remote`
+  adapter; every other adapter is user-supplied, one file per adapter under
+  `lua/ezdap-adapters/` on the runtimepath, globbed and assembled here (keyed by
+  filename). An `AdapterDef` is native DAP process/connection config
   plus an optional `profiles` table (`name -> ezdap.Profile`) of
   launch/attach descriptions. Each `Profile` is self-describing: an `inputs`
   table declaring what it accepts (`name -> ezdap.Input`, each with a `type` and

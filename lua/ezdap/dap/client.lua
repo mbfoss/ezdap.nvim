@@ -264,8 +264,9 @@ function M._start_stdio(config, callbacks, progress)
     -- Catch it here with a friendly message instead of a raw Lua error from
     -- connection.stdio (which also leaves the run uncleaned — on_fail never fires).
     if vim.fn.executable(cmd[1]) == 0 then
-        local msg = ("adapter executable not found: %s"
-            .. "or override its `command` in require('ezdap.adapters')"):format(cmd[1])
+        local msg = ("adapter executable not found: %s "
+            .. "(override its `command` in the adapter file under lua/ezdap-adapters/, "
+            .. "or in require('ezdap.adapters'))"):format(cmd[1])
         vim.notify("[dap] " .. msg, vim.log.levels.ERROR)
         progress("[dap] " .. msg)
         if callbacks.on_fail then callbacks.on_fail() end

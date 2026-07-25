@@ -99,7 +99,7 @@ local function _check_adapter(name, cfg)
     health.ok(("%s: '%s' found (%s)"):format(name, exe, resolved))
 end
 
----Check each built-in adapter for its local dependencies.
+---Check each registered adapter for its local dependencies.
 local function _check_adapters()
     health.start("ezdap: adapters")
 
