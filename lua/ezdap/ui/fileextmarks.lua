@@ -6,7 +6,7 @@ local M = {}
 ---Subscribers receive the normalised absolute file path.
 M.on_synced = Signal.new() ---@type ezdap.util.Signal<fun(file: string)>
 
----@class ezdap.ui.extmarks.MarkInfo
+---@class ezdap.ui.fileextmarks.MarkInfo
 ---@field id number
 ---@field file string
 ---@field lnum number        -- 1-based
@@ -15,7 +15,7 @@ M.on_synced = Signal.new() ---@type ezdap.util.Signal<fun(file: string)>
 ---@field user_data any
 ---@field source "live"|"stored"
 
----@class ezdap.ui.extmarks.MarkData
+---@class ezdap.ui.fileextmarks.MarkData
 ---@field id number
 ---@field group string
 ---@field ns number
@@ -24,19 +24,15 @@ M.on_synced = Signal.new() ---@type ezdap.util.Signal<fun(file: string)>
 ---@field opts vim.api.keyset.set_extmark
 ---@field user_data any
 
----@alias ezdap.ui.extmarks.ById table<number, ezdap.ui.extmarks.MarkData>
----@alias ezdap.ui.extmarks.ByFile table<string, ezdap.ui.extmarks.ById>
+---@alias ezdap.ui.fileextmarks.ById table<number, ezdap.ui.fileextmarks.MarkData>
+---@alias ezdap.ui.fileextmarks.ByFile table<string, ezdap.ui.fileextmarks.ById>
 
----@class ezdap.ui.extmarks.GroupData
+---@class ezdap.ui.fileextmarks.GroupData
 ---@field ns number
----@field byfile ezdap.ui.extmarks.ByFile
+---@field byfile ezdap.ui.fileextmarks.ByFile
 ---@field id_to_file table<number, string>
 
----@class ezdap.ui.extmarks.GroupInfo
----@field priority number
----@field data ezdap.ui.extmarks.GroupData
-
----@type table<string, ezdap.ui.extmarks.GroupInfo>
+---@type table<string, ezdap.ui.fileextmarks.GroupData>
 local _defined_groups = {}
 
 local _init_done = false
@@ -54,7 +50,7 @@ local function _get_loaded_bufnr(file)
 end
 
 ---@param bufnr integer
----@param mark ezdap.ui.extmarks.MarkData
+---@param mark ezdap.ui.fileextmarks.MarkData
 local function _set_extmark(bufnr, mark)
     if not vim.api.nvim_buf_is_loaded(bufnr) then return end
 
@@ -81,14 +77,13 @@ end
 ---@param bufnr integer
 ---@param group string
 local function _apply_buffer_extmarks(bufnr, group)
-    local group_info = _defined_groups[group]
-    assert(group_info)
+    local group_data = _defined_groups[group]
+    assert(group_data)
 
     local file = vim.api.nvim_buf_get_name(bufnr)
     if file == "" then return end
     file = _normalize_file(file)
 
-    local group_data = group_info.data
     local file_data = group_data.byfile[file]
     if not file_data then return end
 
@@ -103,8 +98,7 @@ local function _sync_file_extmarks(bufnr)
     if file == "" then return end
     file = _normalize_file(file)
 
-    for _, group_info in pairs(_defined_groups) do
-        local group_data = group_info.data
+    for _, group_data in pairs(_defined_groups) do
         local file_table = group_data.byfile[file]
         if not file_table then
             goto continue
@@ -166,7 +160,7 @@ end
 ---@param lnum number        -- 1-based
 ---@param col number        -- 0-based
 ---@param group string
----@param opts vim.api.keyset.set_extmark       -- extmark opts
+---@param opts vim.api.keyset.set_extmark       -- extmark opts (include `priority` here)
 ---@param user_data any
 ---@see vim.api.nvim_buf_set_extmark
 local function _set_file_extmark(id, file, lnum, col, group, opts, user_data)
@@ -174,13 +168,12 @@ local function _set_file_extmark(id, file, lnum, col, group, opts, user_data)
 
     assert(lnum >= 1, "lnum must be 1-based")
 
-    local group_info = _defined_groups[group]
-    assert(group_info)
+    local group_data = _defined_groups[group]
+    assert(group_data)
 
     file = _normalize_file(file)
     local bufnr = _get_loaded_bufnr(file)
 
-    local group_data = group_info.data
     local old_file = group_data.id_to_file[id]
     if old_file then
         local old_bufnr = _get_loaded_bufnr(old_file)
@@ -192,17 +185,14 @@ local function _set_file_extmark(id, file, lnum, col, group, opts, user_data)
     group_data.id_to_file[id] = file
     group_data.byfile[file] = group_data.byfile[file] or {}
 
-    ---@type ezdap.ui.extmarks.MarkData
+    ---@type ezdap.ui.fileextmarks.MarkData
     local mark = {
         id = id,
         group = group,
         ns = group_data.ns,
         lnum = lnum,
         col = col,
-        opts = vim.tbl_extend("force", {
-            id = id,
-            priority = group_info.priority,
-        }, opts or {}),
+        opts = vim.tbl_extend("force", { id = id }, opts or {}),
         user_data = user_data,
     }
 
@@ -218,10 +208,7 @@ end
 local function _remove_extmark(id, group)
     _ensure_init()
 
-    local group_info = _defined_groups[group]
-    assert(group_info)
-
-    local group_data = group_info.data
+    local group_data = _defined_groups[group]
     if not group_data then return end
 
     local file = group_data.id_to_file[id]
@@ -245,12 +232,10 @@ end
 local function _remove_file_extmarks(file, group)
     _ensure_init()
 
-    local group_info = _defined_groups[group]
-    assert(group_info)
+    local group_data = _defined_groups[group]
+    assert(group_data)
 
     file = _normalize_file(file)
-
-    local group_data = group_info.data
 
     local file_table = group_data.byfile[file]
     if not file_table then return end
@@ -271,10 +256,7 @@ end
 local function _remove_extmarks(group)
     _ensure_init()
 
-    local group_info = _defined_groups[group]
-    assert(group_info)
-
-    local group_data = group_info.data
+    local group_data = _defined_groups[group]
     if not group_data then return end
 
     for file in pairs(group_data.byfile) do
@@ -290,14 +272,13 @@ end
 
 ---@param id number
 ---@param group string
----@return ezdap.ui.extmarks.MarkInfo?
+---@return ezdap.ui.fileextmarks.MarkInfo?
 local function _get_extmark_by_id(id, group)
     _ensure_init()
 
-    local group_info = _defined_groups[group]
-    assert(group_info)
+    local group_data = _defined_groups[group]
+    assert(group_data)
 
-    local group_data = group_info.data
     local file = group_data.id_to_file[id]
     if not file then return nil end
 
@@ -322,18 +303,17 @@ end
 ---@param line number
 ---@param group string
 ---@param live boolean
----@return ezdap.ui.extmarks.MarkInfo?
+---@return ezdap.ui.fileextmarks.MarkInfo?
 local function _get_extmark_by_location(file, line, group, live)
     _ensure_init()
 
     assert(type(live) == "boolean")
     assert(line >= 1, "line must be 1-based")
 
-    local group_info = _defined_groups[group]
-    assert(group_info)
+    local group_data = _defined_groups[group]
+    assert(group_data)
 
     file = _normalize_file(file)
-    local group_data = group_info.data
     local bufnr = live and _get_loaded_bufnr(file) or -1
     if bufnr >= 0 then
         local extmarks = vim.api.nvim_buf_get_extmarks(
@@ -372,18 +352,16 @@ end
 
 ---@param group string
 ---@param live boolean
----@return ezdap.ui.extmarks.MarkInfo[]
+---@return ezdap.ui.fileextmarks.MarkInfo[]
 local function _get_extmarks(group, live)
     _ensure_init()
 
     assert(type(live) == "boolean")
 
-    local group_info = _defined_groups[group]
-    assert(group_info)
+    local group_data = _defined_groups[group]
+    assert(group_data)
 
-    local group_data = group_info.data
-
-    ---@type ezdap.ui.extmarks.MarkInfo[]
+    ---@type ezdap.ui.fileextmarks.MarkInfo[]
     local result = {}
     for file, file_table in pairs(group_data.byfile) do
         local bufnr = live and _get_loaded_bufnr(file) or -1
@@ -431,7 +409,7 @@ end
 ---@param file string
 ---@param group string?
 ---@param live boolean
----@return ezdap.ui.extmarks.MarkInfo[]
+---@return ezdap.ui.fileextmarks.MarkInfo[]
 local function _get_file_extmarks(file, group, live)
     _ensure_init()
     assert(type(live) == "boolean")
@@ -442,15 +420,14 @@ local function _get_file_extmarks(file, group, live)
     local groups = {}
 
     if group then
-        local g_info = _defined_groups[group]
-        if not g_info then return result end
-        groups[group] = g_info
+        local gdata = _defined_groups[group]
+        if not gdata then return result end
+        groups[group] = gdata
     else
         groups = _defined_groups
     end
 
-    for _, g_info in pairs(groups) do
-        local gdata = g_info.data
+    for _, gdata in pairs(groups) do
         local file_table = gdata.byfile[file]
         if file_table then
             local bufnr = live and _get_loaded_bufnr(file) or -1
@@ -500,10 +477,8 @@ end
 local function _refresh_group(group)
     _ensure_init()
 
-    local group_info = _defined_groups[group]
-    assert(group_info)
-
-    local group_data = group_info.data
+    local group_data = _defined_groups[group]
+    assert(group_data)
 
     for file in pairs(group_data.byfile) do
         local bufnr = _get_loaded_bufnr(file)
@@ -514,34 +489,29 @@ local function _refresh_group(group)
     end
 end
 
----@class ezdap.ui.extmarks.GroupFunctions
+---@class ezdap.ui.fileextmarks.GroupFunctions
 ---@field set_file_extmark fun(id:number, file:string,lnum:number,col:number,opts:vim.api.keyset.set_extmark, user_data:any)
 ---@field remove_extmarks fun()
 ---@field remove_extmark fun(id:number)
 ---@field remove_file_extmarks fun(file:string)
----@field get_extmark_by_id fun(id:number):ezdap.ui.extmarks.MarkInfo?
----@field get_extmark_by_location fun(file:string,line:number,live:boolean):ezdap.ui.extmarks.MarkInfo?
----@field get_extmarks fun(live:boolean):ezdap.ui.extmarks.MarkInfo[]
----@field get_file_extmarks fun(file:string,live:boolean):ezdap.ui.extmarks.MarkInfo[]
+---@field get_extmark_by_id fun(id:number):ezdap.ui.fileextmarks.MarkInfo?
+---@field get_extmark_by_location fun(file:string,line:number,live:boolean):ezdap.ui.fileextmarks.MarkInfo?
+---@field get_extmarks fun(live:boolean):ezdap.ui.fileextmarks.MarkInfo[]
+---@field get_file_extmarks fun(file:string,live:boolean):ezdap.ui.fileextmarks.MarkInfo[]
 ---@field refresh fun()
 
 ---@param group string
----@param group_opts { priority: number}
----@return ezdap.ui.extmarks.GroupFunctions
-function M.define_group(group, group_opts)
+---@return ezdap.ui.fileextmarks.GroupFunctions
+function M.define_group(group)
     assert(group, "group required")
-    assert(type(group_opts.priority) == "number", "missing opts")
     assert(not _defined_groups[group], "group already defined")
-    ---@type ezdap.ui.extmarks.GroupInfo
-    local group_info = {
-        priority = group_opts.priority,
-        data = {
-            ns = vim.api.nvim_create_namespace(_group_prefix .. group),
-            byfile = {},
-            id_to_file = {},
-        }
+    ---@type ezdap.ui.fileextmarks.GroupData
+    local group_data = {
+        ns = vim.api.nvim_create_namespace(_group_prefix .. group),
+        byfile = {},
+        id_to_file = {},
     }
-    _defined_groups[group] = group_info
+    _defined_groups[group] = group_data
 
     _ensure_init()
     for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
@@ -550,7 +520,7 @@ function M.define_group(group, group_opts)
         end
     end
 
-    ---@type ezdap.ui.extmarks.GroupFunctions
+    ---@type ezdap.ui.fileextmarks.GroupFunctions
     return {
         set_file_extmark = function(id, file, lnum, col, opts, user_data)
             _set_file_extmark(id, file, lnum, col, group, opts, user_data)

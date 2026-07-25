@@ -1,27 +1,27 @@
 ---@brief Singleton that shows the current execution position as a sign + line highlight.
 ---Tracks the active session; clears/moves the sign on stopped/continued/terminated.
 
-local extmarks   = require("ezdap.ui.extmarks")
-local manager    = require("ezdap.manager")
-local ui_util    = require("ezdap.util.ui")
-local config     = require("ezdap.config")
-local timer      = require("ezdap.util.timer")
+local fileextmarks = require("ezdap.ui.fileextmarks")
+local manager      = require("ezdap.manager")
+local ui_util      = require("ezdap.util.ui")
+local config       = require("ezdap.config")
+local timer        = require("ezdap.util.timer")
 
-local M          = {}
+local M            = {}
 
 local _init_done
 
----@type ezdap.ui.extmarks.GroupFunctions?
+---@type ezdap.ui.fileextmarks.GroupFunctions?
 local _sign_group
----@type ezdap.ui.extmarks.GroupFunctions?
+---@type ezdap.ui.fileextmarks.GroupFunctions?
 local _line_group
-local _sign_id   = 1 -- fixed id: we only ever show one debugline sign at a time
-local _gen       = 0 -- generation counter to guard stale session callbacks
+local _sign_id     = 1 -- fixed id: we only ever show one debugline sign at a time
+local _gen         = 0 -- generation counter to guard stale session callbacks
 ---@type function?  stop fn for the pending deferred clear, if any
 local _stop_clear_timer
 
-local _SIGN_HL   = "EzdapFrameSign"
-local _LINE_HL   = "EzdapFrameLine"
+local _SIGN_HL     = "EzdapFrameSign"
+local _LINE_HL     = "EzdapFrameLine"
 local _hl_init ---@type boolean?
 
 vim.api.nvim_set_hl(0, _SIGN_HL, { link = "Todo", default = true })
@@ -35,7 +35,7 @@ local function _show_stopped(sess)
     if not src or not src.path or src.path == "" then return end
     local lnum = (frame.line and frame.line > 0) and frame.line or 1
     _sign_group.set_file_extmark(_sign_id, src.path, lnum, 0,
-        { sign_text = config.signs.debug_frame, sign_hl_group = _SIGN_HL, priority = 20 }, nil)
+        { sign_text = config.signs.debug_frame, sign_hl_group = _SIGN_HL, priority = 100, hl_mode = "blend", }, nil)
     _line_group.set_file_extmark(_sign_id, src.path, lnum, 0, { line_hl_group = _LINE_HL, priority = 40 }, nil)
     if sess.state_reason == "function call" then
         return -- spurious stop triggered by gdp
@@ -76,8 +76,8 @@ function M.init()
     if _init_done then return end
     _init_done = true
 
-    _sign_group = extmarks.define_group("framesign", { priority = 20 })
-    _line_group = extmarks.define_group("frameline", { priority = 20 })
+    _sign_group = fileextmarks.define_group("framesign")
+    _line_group = fileextmarks.define_group("frameline")
 
     manager.on_active_changed:subscribe(function(_, sess)
         _clear()

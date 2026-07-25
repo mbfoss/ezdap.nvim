@@ -2,24 +2,26 @@
 ---Subscribes to breakpoints.on_change and keeps the marks in sync.
 ---
 ---Line breakpoints are gutter signs. Column breakpoints render an inline glyph
----right before their column instead. Both drive the extmarks module directly
+---right before their column instead. Both drive the fileextmarks module directly
 ---(the signs module only ever places marks in the gutter at column 0).
 
-local extmarks    = require("ezdap.ui.extmarks")
-local breakpoints = require("ezdap.dap.breakpoints")
-local config      = require("ezdap.config")
-local manager     = require("ezdap.manager")
+local fileextmarks = require("ezdap.ui.fileextmarks")
+local breakpoints  = require("ezdap.dap.breakpoints")
+local config       = require("ezdap.config")
+local manager      = require("ezdap.manager")
 
-local M           = {}
+local M            = {}
 
----@type ezdap.ui.extmarks.GroupFunctions?
+---@type ezdap.ui.fileextmarks.GroupFunctions?
 local _group
 local _init_done
 
 local _BP_HL      = "EzdapBreakpoint"
 vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
 
----Glyph per sign name, resolved locally now that `_group` is a raw extmarks
+local _PRIORITY   = 10
+
+---Glyph per sign name, resolved locally now that `_group` is a raw fileextmarks
 ---group with no `define_sign`. Populated in `init` from `config.signs`.
 ---@type table<string, string>
 local _glyphs = {}
@@ -57,7 +59,7 @@ local function _refresh()
             local name  = _sign_name(bp, st)
             local glyph = _glyphs[name]
             ---@type vim.api.keyset.set_extmark
-            local opts  = {}
+            local opts  = { priority = _PRIORITY }
             local col   = 0
             if bp.column then
                 -- Column breakpoint: inline glyph just before the column only, no
@@ -90,7 +92,7 @@ function M.init()
         { "disabled_cond_breakpoint", s.disabled_cond_breakpoint },
         { "disabled_logpoint",        s.disabled_logpoint },
     }
-    _group       = extmarks.define_group("breakpoints", { priority = 10 })
+    _group       = fileextmarks.define_group("breakpoints")
     for _, d in ipairs(defs) do
         _glyphs[d[1]] = d[2]
     end
@@ -100,7 +102,7 @@ function M.init()
     manager.on_breakpoint_updated:subscribe(function() _refresh() end)
     manager.on_active_changed:subscribe(function() _refresh() end)
 
-    extmarks.on_synced:subscribe(function(file)
+    fileextmarks.on_synced:subscribe(function(file)
         local marks = _group.get_file_extmarks(file, false)
         if #marks == 0 then return end
         local positions = {}

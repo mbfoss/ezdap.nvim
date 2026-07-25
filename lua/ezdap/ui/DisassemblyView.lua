@@ -436,7 +436,8 @@ function DisassemblyView:_draw_pc(pc_row)
         line_hl_group = _PC_HL,
         sign_text     = config.signs.debug_frame,
         sign_hl_group = _PC_HL,
-        priority      = 40,
+        priority      = 100,
+        hl_mode       = "blend",
     })
 end
 

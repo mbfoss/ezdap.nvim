@@ -3,10 +3,11 @@ local M              = {}
 local str_util       = require("ezdap.util.strutil")
 local manager        = require("ezdap.manager")
 local config         = require("ezdap.config")
-local extmarks       = require("ezdap.ui.extmarks")
+local fileextmarks   = require("ezdap.ui.fileextmarks")
 local themed_hl      = require("ezdap.util.themed_hl")
 
-local _group         = extmarks.define_group("inlinevars", { priority = 100 })
+local _group         = fileextmarks.define_group("inlinevars")
+local _PRIORITY      = 100
 local _seq           = 0
 local _max_size      = 30
 -- "eol" pills carry the variable name too, so they get a larger budget; the
@@ -97,6 +98,7 @@ local function _set_inline_extmark(file, row, col, text)
 		virt_text = _pill(text),
 		virt_text_pos = "inline",
 		hl_mode = "combine",
+		priority = _PRIORITY,
 	}, nil)
 end
 
@@ -125,6 +127,7 @@ local function _set_line_extmark(file, row, items, pos)
 		virt_text = virt_text,
 		virt_text_pos = pos,
 		hl_mode = "combine",
+		priority = _PRIORITY,
 	}, nil)
 end
 
