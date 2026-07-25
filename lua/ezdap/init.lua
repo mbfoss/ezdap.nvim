@@ -1,15 +1,5 @@
 local M = {}
 
-setmetatable(M, {
-    __index = function(t, k)
-        if k == "adapters" then
-            local adapters = require("ezdap.adapters")
-            rawset(t, k, adapters)
-            return adapters
-        end
-    end,
-})
-
 ---@type ezdap.DebugView?
 local _debug_view
 ---@type ezdap.DisassemblyView?

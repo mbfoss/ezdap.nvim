@@ -6,14 +6,10 @@ local _specs = {}
 ---@type integer?
 local _group
 
--- Named off this module's own table address, so a second loaded copy (e.g. a
--- separate vendoring) gets a distinct augroup instead of clearing this one's.
-local _group_name = "ezdap_themed_hl_" .. (tostring(_specs):match("0x%x+") or "0")
-
 ---@return integer
 local function _ensure_group()
     if _group then return _group end
-    _group = vim.api.nvim_create_augroup(_group_name, { clear = true })
+    _group = vim.api.nvim_create_augroup("ezdap_themed_hl", { clear = true })
     vim.api.nvim_create_autocmd("ColorScheme", {
         group = _group,
         callback = function()
