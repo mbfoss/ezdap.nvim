@@ -17,7 +17,7 @@ adapter, set a breakpoint, and start stepping.
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick start](#quick-start)
-- [Built-in adapters](#built-in-adapters)
+- [Adapters](#adapters)
 - [Starting a debug session](#starting-a-debug-session)
 - [Breakpoints](#breakpoints)
 - [The debug UI](#the-debug-ui)
@@ -35,8 +35,9 @@ adapter, set a breakpoint, and start stepping.
 ## Highlights
 
 - **No `nvim-dap` dependency** — a self-contained DAP client.
-- **Batteries-included adapters** — Python, C/C++/Rust, Go, .NET, Node/JS/TS,
-  Java, Bash and Lua work out of the box (see [below](#built-in-adapters)).
+- **Any DAP adapter, no glue plugins** — point ezdap at an adapter with a small
+  self-describing file and it's fully wired: completion, scaffolding and a
+  process picker come for free (see [Adapters](#adapters)).
 - **Full breakpoint palette** — line, conditional, hit-count, **logpoints**,
   **column**, **function**, **exception** (filters and named types) and
   **data breakpoints / watchpoints**.
@@ -58,9 +59,10 @@ adapter, set a breakpoint, and start stepping.
 ## Requirements
 
 - **Neovim >= 0.10**
-- A debug adapter for the target language (see [Built-in adapters](#built-in-adapters)).
-  Many are trivially installed via [mason.nvim](https://github.com/williamboman/mason.nvim) —
-  ezdap auto-resolves several of them from Mason's install path.
+- A debug adapter for the target language, plus a small ezdap adapter file that
+  points at it (see [Adapters](#adapters)). Many debug adapters are trivially
+  installed via [mason.nvim](https://github.com/williamboman/mason.nvim); an
+  adapter file can resolve its executable from Mason's install path.
 
 ## Installation
 
@@ -104,9 +106,13 @@ persistence, and initialises the UI.
 require("ezdap").setup()
 ```
 
-Then start debugging. The fastest path is `:Debug quick_run`, which launches
-(or attaches to) an adapter using one of its named profiles, filled in
-with a few `input=value` arguments:
+First tell ezdap about an adapter — one small file per adapter under
+`lua/ezdap-adapters/` on your runtimepath (see [Adapters](#adapters)). With,
+say, `codelldb` and `debugpy` files in place, start debugging.
+
+The fastest path is `:Debug quick_run`, which launches (or attaches to) an
+adapter using one of its named profiles, filled in with a few `input=value`
+arguments:
 
 ```vim
 " Launch a native binary under codelldb
@@ -131,28 +137,33 @@ The debug panel opens automatically when a session starts, showing the call
 stack, variables and breakpoints. See [The debug UI](#the-debug-ui) and
 [Keymaps example](#keymaps-example) to make this comfortable.
 
-## Built-in adapters
+## Adapters
+
+ezdap ships **one** adapter — `remote`, a generic TCP attach that connects to a
+DAP server already listening on `host:port`. Every language adapter is one you
+add: a small file that says how to reach the debug adapter and what its
+launch/attach profiles accept.
 
 Adapters live in `require("ezdap.adapters")` as a plain `name → definition`
-table. Any entry can be overridden, and new ones added — see
-[Adding a custom adapter](#adding-a-custom-adapter).
+table. It is assembled at load time from two sources:
 
-| Adapter              | Language(s)          | Requests          | Tooling                                                       |
-| -------------------- | -------------------- | ----------------- | ------------------------------------------------------------- |
-| `debugpy`            | Python (local/remote)| launch / attach   | `debugpy` (auto-resolved from Mason, else system `python3`)   |
-| `codelldb`           | C / C++ / Rust       | launch / attach   | `codelldb` on `PATH`                                          |
-| `lldb`               | C / C++ / Rust       | launch / attach   | `lldb-dap` on `PATH`                                          |
-| `gdb`                | C / C++ / native     | launch / attach   | `gdb` (>= 14, `--interpreter=dap`) on `PATH`                  |
-| `delve`              | Go                   | launch / attach   | `dlv` on `PATH` (`dlv dap`)                                   |
-| `netcoredbg`         | .NET / C#            | launch / attach   | `netcoredbg` on `PATH`                                        |
-| `js-debug`           | JavaScript / TS / Node | launch / attach | `js-debug-adapter` (auto-resolved from Mason), `node`        |
-| `bash-debug-adapter` | Bash                 | launch            | `bash-debug-adapter` on `PATH`                                |
-| `local-lua-debugger` | Lua                  | launch            | `local-lua-debugger-vscode` (auto-resolved from Mason), `node` |
-| `remote`             | any                  | attach            | connects to a DAP server on `host:port`                      |
-| `java-debug-server`  | Java                 | attach            | external debug server (e.g. via `nvim-jdtls`)                |
+- the shipped `remote` entry, and
+- every `lua/ezdap-adapters/*.lua` file found on your runtimepath — one
+  `AdapterDef` per file, keyed by its filename stem. Drop
+  `~/.config/nvim/lua/ezdap-adapters/debugpy.lua` and a `debugpy` adapter
+  appears; a file named `remote.lua` overrides the shipped one.
 
-Run `:checkhealth ezdap` to see which adapters have their tooling available on
-the current machine.
+The table is also writable at runtime, so you can add or override an entry
+straight from your config (`require("ezdap.adapters").foo = { … }`).
+
+An adapter file is small and self-describing: native process/connection config
+plus named **profiles** that declare their inputs. From that one description,
+ezdap wires completion, scaffolding (`:Debug new_run_file`), and the resolve
+path for `quick_run` and run files — no per-adapter glue. Writing one is the
+subject of [Adding a custom adapter](#adding-a-custom-adapter).
+
+Run `:checkhealth ezdap` to see which registered adapters have their tooling
+available on the current machine.
 
 ## Starting a debug session
 
@@ -571,7 +582,7 @@ won't be persisted. Check where you are with:
 ```
 
 Reports the Neovim version, whether `setup()` has run, the resolved project
-state, and which built-in adapters have their tooling installed.
+state, and which registered adapters have their tooling installed.
 
 ## Keymaps example
 
@@ -599,20 +610,36 @@ map("x", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: i
 
 ## Adding a custom adapter
 
-`require("ezdap.adapters")` is a plain `name → definition` table, and it is
-writable. Adding an adapter is assigning a key; overriding a built-in is
-assigning an existing one. There is no registration call and no `adapters`
-option in `setup()` — do it anywhere after the plugin loads:
+Every adapter beyond `remote` is one you add. There are two ways, and they build
+the same `name → definition` registry — there is no registration call and no
+`adapters` option in `setup()`.
+
+**Drop a file (recommended).** Put one file per adapter under
+`lua/ezdap-adapters/` anywhere on your runtimepath, returning a single
+definition. ezdap globs these at load and keys each by its filename stem, so
+`lua/ezdap-adapters/myadapter.lua` becomes the `myadapter` adapter:
+
+```lua
+-- ~/.config/nvim/lua/ezdap-adapters/myadapter.lua
+---@type ezdap.AdapterDef
+return {
+  command = { "my-dap-adapter", "--stdio" },  -- stdio adapter: spawned, framed over its pipes
+}
+```
+
+**Assign at runtime.** `require("ezdap.adapters")` is a plain, writable table.
+Assigning a new key adds an adapter; assigning an existing one overrides it. Do
+it anywhere after the plugin loads:
 
 ```lua
 local adapters = require("ezdap.adapters")
 
 adapters.myadapter = {
-  command = { "my-dap-adapter", "--stdio" },  -- stdio adapter: spawned, framed over its pipes
+  command = { "my-dap-adapter", "--stdio" },
 }
 ```
 
-That is already enough to run:
+Either way, that bare definition is already enough to run:
 
 ```lua
 require("ezdap").run({
@@ -670,9 +697,8 @@ adapters.myserver = {
 
 Note that when an adapter defines `setup`, ezdap leaves `config.host`/`port`
 entirely to it and ignores the task's — the adapter knows where it put the
-server. [delve](lua/ezdap/adapters/delve.lua) is a compact worked example: it
-spawns `dlv dap`, scrapes the "DAP server listening at:" line, and points the
-connection there.
+server. A `delve`-style adapter is the canonical example: it spawns `dlv dap`,
+scrapes the "DAP server listening at:" line, and points the connection there.
 
 ### Adding profiles
 
@@ -743,13 +769,13 @@ How the pieces fit:
 
 Because `quick_run`, `new_run_file` and profile-based run files all resolve
 through the same `inputs` → `build` path, a profile is described in exactly one
-place and the three cannot drift apart. The built-in adapters under
-[lua/ezdap/adapters/](lua/ezdap/adapters/) are the reference: `lldb.lua` for a
-plain stdio adapter with several profiles, `delve.lua` for a spawn-then-connect
-`setup`, `remote.lua` for a profile that configures `connect` instead of
-`params`.
+place and the three cannot drift apart. The shipped `remote` adapter in
+[adapters.lua](lua/ezdap/adapters.lua) is a compact reference for a profile that
+configures `connect` (a task-level `host`/`port`) instead of `params`; for a
+spawn-then-connect adapter that starts a server and points the connection at it,
+see the `setup`/`teardown` example [above](#the-adapter-definition).
 
-Custom adapters are picked up by `:checkhealth ezdap` too — it reports whether
+Adapters you add are picked up by `:checkhealth ezdap` too — it reports whether
 each definition's `command` is present on the current machine.
 
 ## Contributing
