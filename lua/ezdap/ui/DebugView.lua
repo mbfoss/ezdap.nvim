@@ -86,6 +86,14 @@ local _roots = {
     breakpoints = "bps",
 }
 
+---@param state string  a `ezdap.dap.Session.state` value
+---@return string
+local function _session_state(state)
+    if state == "stopped" then return "paused" end
+    if state == "terminated" or state == "exited" then return "stopped" end
+    return state
+end
+
 -- Formatters
 
 ---@param data ezdap.DebugView.ItemData
@@ -107,8 +115,7 @@ local function _fmt_session(data, chunks)
     chunks[#chunks + 1] = { " ", nil }
     chunks[#chunks + 1] = { data.name, data.is_current and "Special" or nil }
     if info.state and info.state ~= "running" then
-        local st = info.state == "stopped" and "paused" or (info.state == "terminated" and "ended" or info.state)
-        chunks[#chunks + 1] = { " [" .. st .. "]", "Tag" }
+        chunks[#chunks + 1] = { " [" .. _session_state(info.state) .. "]", "Tag" }
     end
 end
 
@@ -496,25 +503,28 @@ function DebugView:_session_details(block, data)
     local sess = id and manager.get_session(id) or nil
 
     block:kv("Name", data.name)
-    local state = (sess and sess.state) or (info and info.state) or "unknown"
+    local state = _session_state((sess and sess.state) or (info and info.state) or "unknown")
     if sess and sess.state_reason then state = state .. "  (" .. sess.state_reason .. ")" end
-    state = state == "stopped" and "paused" or (state == "terminated" and "ended" or state)
     block:kv("State", state)
 
-    if not sess then block:blank():line("session is no longer running") return end
+    if not sess then
+        block:blank():line("session is no longer running")
+        return
+    end
 
     local threads_info
     do
-        local threads, running, stopped = sess.threads or {}, 0, 0
+        local threads, running, paused = sess.threads or {}, 0, 0
         for _, thread in ipairs(threads) do
             if thread.status == "stopped" then
-                stopped = stopped + 1
+                paused = paused + 1
             elseif thread.status == "running" then
                 running = running + 1
             end
         end
-        local out = ("%d total, %d running, %d stopped"):format(#threads, running, stopped)
-        local exited = #threads - running - stopped
+        local out = ("%d total, %d running, %s paused"):format(
+            #threads, running, paused)
+        local exited = #threads - running - paused
         if exited > 0 then out = out .. (", %d exited"):format(exited) end
         threads_info = out
     end
@@ -1221,10 +1231,10 @@ function DebugView:_open(focus)
         function(ratio) self._width_ratio = ratio end,
         { enter = focus })
     vim.api.nvim_win_set_buf(win, bufnr)
-    _setlocal(win,"winfixbuf", true)
-    _setlocal(win,"signcolumn", "no")
-    _setlocal(win,"number", false)
-    _setlocal(win,"relativenumber", false)
+    _setlocal(win, "winfixbuf", true)
+    _setlocal(win, "signcolumn", "no")
+    _setlocal(win, "number", false)
+    _setlocal(win, "relativenumber", false)
 end
 
 ---Open the DebugView in a vertical split (or focus if already visible).
