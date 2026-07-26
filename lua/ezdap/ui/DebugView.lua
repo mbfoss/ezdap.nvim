@@ -52,7 +52,7 @@ local ui          = require("ezdap.util.ui")
 ---@field hit_condition string?
 ---@field log_message   string?
 
----@alias ezdap.DebugView.Chunk { [1]: string, [2]: string? }
+---@alias ezdap.DebugView.Chunk ezdap.ui.Chunk
 
 -- `vim.wo[win].opt = val` sets both the window-local value AND nvim's hidden global
 -- default, even for options with no real global scope — leaking this window's
@@ -87,14 +87,6 @@ local _roots = {
     breakpoints = "bps",
 }
 
----@param state string  a `ezdap.dap.Session.state` value
----@return string
-local function _session_state(state)
-    if state == "stopped" then return "paused" end
-    if state == "terminated" or state == "exited" then return "stopped" end
-    return state
-end
-
 -- Formatters
 
 ---@param data ezdap.DebugView.ItemData
@@ -108,15 +100,12 @@ end
 local function _fmt_session(data, chunks)
     local info = data.session_info
     if not info then return end
-    local paused        = info.is_paused
-    local terminated    = info.state == "terminated" or info.state == "exited"
-    local icon          = terminated and "●" or (paused and "⏸" or "▶")
-    local hl            = terminated and "NonText" or (paused and "DiagnosticWarn" or "DiagnosticOk")
+    local icon, hl      = format.session_sign(info)
     chunks[#chunks + 1] = { icon, hl }
     chunks[#chunks + 1] = { " ", nil }
     chunks[#chunks + 1] = { data.name, data.is_current and "Special" or nil }
     if info.state and info.state ~= "running" then
-        chunks[#chunks + 1] = { " [" .. _session_state(info.state) .. "]", "Tag" }
+        chunks[#chunks + 1] = { " [" .. format.session_state(info.state) .. "]", "Tag" }
     end
 end
 
@@ -140,8 +129,7 @@ local function _fmt_variable(data, chunks)
     local base_hl = data.greyout and "NonText" or nil
     chunks[#chunks + 1] = { data.name, base_hl }
     chunks[#chunks + 1] = { ": ", base_hl or "NonText" }
-    local val = str_util.crop_for_ui(tostring(data.value or ""):gsub("\n", "⏎"), config.debug_value_max_len)
-    chunks[#chunks + 1] = { val, base_hl or "@string" }
+    chunks[#chunks + 1] = { format.value(data.value), base_hl or "@string" }
 end
 
 ---@param data ezdap.DebugView.ItemData
@@ -149,8 +137,7 @@ end
 local function _fmt_expression(data, chunks)
     chunks[#chunks + 1] = { data.name }
     chunks[#chunks + 1] = { " = ", "NonText" }
-    local val = str_util.crop_for_ui(tostring(data.value or ""):gsub("\n", "⏎"), config.debug_value_max_len)
-    chunks[#chunks + 1] = { val, (data.is_na or data.greyout) and "NonText" or "@string" }
+    chunks[#chunks + 1] = { format.value(data.value), (data.is_na or data.greyout) and "NonText" or "@string" }
 end
 
 -- Columns the tree prefix (indent + expand padding) eats before a depth-1 row.
@@ -202,14 +189,9 @@ local function _fmt_breakpoint(data, chunks, width)
             suffix[#suffix + 1] = { " • log: " .. data.log_message, "Comment" }
         end
 
-        local dir, tail = data.name:match("^(.*/)(.-)$")
-        if not dir then dir, tail = "", data.name end
-        local used = _BP_PREFIX_W + 2 + vim.fn.strdisplaywidth(tail)
+        local used = _BP_PREFIX_W + 2
         for _, c in ipairs(suffix) do used = used + vim.fn.strdisplaywidth(c[1]) end
-        local budget = (width or config.debug_value_max_len) - used
-        if dir ~= "" and #dir > budget then
-            dir = str_util.crop_for_ui(dir, budget, true)
-        end
+        local dir, tail = format.fit_path(data.name, (width or config.debug_value_max_len) - used)
 
         chunks[#chunks + 1] = { dir, name_hl }
         chunks[#chunks + 1] = { tail, name_hl }
@@ -466,21 +448,6 @@ end
 
 -- Hover
 
----Capability keys the adapter reports as supported, `supports` prefix dropped.
----@param sess ezdap.dap.Session
----@return string[]
-local function _capability_names(sess)
-    local names = {}
-    for key, val in pairs(sess.capabilities or {}) do
-        if val == true then
-            local name = key:gsub("^supports", "")
-            names[#names + 1] = name:sub(1, 1):lower() .. name:sub(2)
-        end
-    end
-    table.sort(names)
-    return names
-end
-
 ---Fill `block` with the session hover: identity, adapter/connection config, live
 ---thread and frame state, breakpoint counts, pending exception and capabilities.
 ---A row whose session ended keeps only what its stored `session_info` knows.
@@ -493,7 +460,7 @@ function DebugView:_session_details(block, data)
     local sess = id and manager.get_session(id) or nil
 
     block:kv("Name", data.name)
-    local state = _session_state((sess and sess.state) or (info and info.state) or "unknown")
+    local state = format.session_state((sess and sess.state) or (info and info.state))
     if sess and sess.state_reason then state = state .. "  (" .. sess.state_reason .. ")" end
     block:kv("State", state)
 
@@ -533,7 +500,7 @@ function DebugView:_session_details(block, data)
         block:section("Exception"):text(sess.exception_description, "  ")
     end
 
-    local caps = _capability_names(sess)
+    local caps = format.capability_names(sess)
     if #caps > 0 then
         block:section(("Capabilities (%d)"):format(#caps)):list(caps)
     end
@@ -650,7 +617,7 @@ end
 ---@return boolean
 local function _is_finished(data)
     local info = data and data.session_info
-    return info ~= nil and (info.state == "terminated" or info.state == "exited")
+    return info ~= nil and format.session_finished(info.state)
 end
 
 ---Drop the rows of finished sessions matching `pred`.

@@ -10,6 +10,7 @@
 
 local manager   = require("ezdap.manager")
 local config    = require("ezdap.config")
+local format    = require("ezdap.ui.format")
 local ui_util   = require("ezdap.util.ui")
 local throttle  = require("ezdap.util.throttle")
 
@@ -26,7 +27,7 @@ local _PC_HL    = "EzdapDisasmPC"
 local _BLOCK_HL = "EzdapDisasmBlock"
 local _BP_HL    = "EzdapDisasmBp"
 
-vim.api.nvim_set_hl(0, _PC_HL, { link = "DiffChange", default = true })
+vim.api.nvim_set_hl(0, _PC_HL, { link = "ToDo", default = true })
 vim.api.nvim_set_hl(0, _BLOCK_HL, { link = "CursorLine", default = true })
 vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
 
@@ -471,9 +472,9 @@ function DisassemblyView:_draw_bps()
     for lnum, ins in pairs(self._rows) do
         local st = ins.address and bps[ins.address]
         if st then
-            local sign = st.verified
-                and config.signs.active_breakpoint
-                or config.signs.inactive_breakpoint
+            -- Instruction breakpoints carry no condition; only the verified flag
+            -- picks the glyph. The highlight stays this view's own.
+            local sign = format.breakpoint_sign({ verified = st.verified == true })
             vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_bp, lnum - 1, 0, {
                 sign_text = sign, sign_hl_group = _BP_HL,
             })

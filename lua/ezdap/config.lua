@@ -13,6 +13,9 @@
 ---@field exception_breakpoint_unsupported string  exception type breakpoint the adapter does not support
 ---@field data_breakpoint          string  data breakpoint (watchpoint), verified
 ---@field inactive_data_breakpoint string  data breakpoint, not yet verified
+---@field session_running          string  session running
+---@field session_paused           string  session paused at a stop
+---@field session_stopped          string  session terminated or exited
 
 ---Where to render inline variable values while stopped. Names other than "off"
 ---map directly to a `virt_text_pos` (see `:h nvim_buf_set_extmark`):
@@ -65,6 +68,9 @@ local M = {
 		exception_breakpoint_unsupported = "✗",
 		data_breakpoint          = "◉",
 		inactive_data_breakpoint = "◌",
+		session_running          = "▶",
+		session_paused           = "⏸︎",
+		session_stopped          = "●",
 	},
 }
 

@@ -5,6 +5,7 @@
 
 local TreeBuffer = require("ezdap.util.TreeBuffer")
 local manager    = require("ezdap.manager")
+local format     = require("ezdap.ui.format")
 local ui_util    = require("ezdap.util.ui")
 
 local M = {}
@@ -24,8 +25,7 @@ local function _format_node(data)
     local chunks = {}
     chunks[#chunks + 1] = { data.name }
     chunks[#chunks + 1] = { data.is_root and " = " or ": ", "NonText" }
-    local val = tostring(data.value or ""):gsub("\n", "⏎")
-    chunks[#chunks + 1] = { val, "@string" }
+    chunks[#chunks + 1] = { format.oneline(data.value), "@string" }
     return chunks, {}
 end
 
