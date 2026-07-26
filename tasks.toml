@@ -1,0 +1,9 @@
+[tasks.debug-remote]
+type = "debug"
+if_running = "restart"
+adapter = "remote"
+profile = "connect"
+parameters = {
+  host = "0.0.0.0",
+  port = 8086
+}

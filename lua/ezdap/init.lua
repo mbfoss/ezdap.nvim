@@ -229,7 +229,7 @@ local function _register_user_commands()
         elseif sub == "inspect" then
             -- A `'<,'>` range (e.g. `:'<,'>Debug inspect` from visual mode) sets
             -- opts.range > 0; inspect then reads the `'<`/`'>` marks.
-            cmd.debug.inspect(nil, opts.range and opts.range > 0)
+            cmd.debug.inspect(args[2], opts.range and opts.range > 0)
         elseif sub == "disassemble" then
             cmd.debug.disassemble()
         elseif sub == "session" then
