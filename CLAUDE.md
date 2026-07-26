@@ -148,7 +148,9 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   `config.signs` name and from there to a glyph + highlight
   (`breakpoint_sign`/`session_sign`), plus the value (`oneline`/`value`), path
   (`fit_path`) and label (`session_state`, `capability_names`) helpers the views
-  share. Views own their layout; they never spell an icon themselves.
+  share. It also owns every `Ezdap*` highlight group (`format.hl.*`), each a
+  `default` link to a stock group, so one `:hi` recolours that state everywhere.
+  Views own their layout; they never spell an icon or a highlight themselves.
 - `signs.lua`, `breakpoints_ui.lua`, `debugline_ui.lua`, `inlinevars.lua`,
   `extmarks.lua`, `expressions.lua`, `ReplBuffer.lua` — gutter signs, inline
   values, REPL, etc.

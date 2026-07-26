@@ -21,15 +21,13 @@ local _au_group_gen
 local _COUNT    = 80 -- fallback instruction count when the window doesn't exist yet
 local _ADDR_W   = 18 -- width of the address column
 
--- Highlight groups
+-- Highlight groups. The PC marker and breakpoint signs share ezdap's own groups
+-- (see `ezdap.ui.format`); only the source-block band is this view's own.
 
-local _PC_HL    = "EzdapDisasmPC"
+local _PC_HL    = format.hl.debug_frame
 local _BLOCK_HL = "EzdapDisasmBlock"
-local _BP_HL    = "EzdapDisasmBp"
 
-vim.api.nvim_set_hl(0, _PC_HL, { link = "ToDo", default = true })
 vim.api.nvim_set_hl(0, _BLOCK_HL, { link = "CursorLine", default = true })
-vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
 
 
 -- Helpers
@@ -473,10 +471,10 @@ function DisassemblyView:_draw_bps()
         local st = ins.address and bps[ins.address]
         if st then
             -- Instruction breakpoints carry no condition; only the verified flag
-            -- picks the glyph. The highlight stays this view's own.
-            local sign = format.breakpoint_sign({ verified = st.verified == true })
+            -- picks the glyph and its highlight.
+            local sign, hl = format.breakpoint_sign({ verified = st.verified == true })
             vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_bp, lnum - 1, 0, {
-                sign_text = sign, sign_hl_group = _BP_HL,
+                sign_text = sign, sign_hl_group = hl,
             })
         end
     end

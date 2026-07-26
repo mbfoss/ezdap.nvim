@@ -1,6 +1,8 @@
 ---@brief Shared UI presentation: how debug state becomes glyphs, highlights and
----display strings. Every view resolves its icons here, so a `config.signs`
----override lands everywhere at once. Pure — no buffers, windows or state.
+---display strings. Every view resolves its icons here, so a `config.signs` glyph
+---or an `Ezdap*` highlight override lands everywhere at once. Defining those
+---groups is this module's only side effect; nothing else touches buffers,
+---windows or state.
 
 local config   = require("ezdap.config")
 local str_util = require("ezdap.util.strutil")
@@ -13,32 +15,51 @@ local M        = {}
 ---A key of `ezdap.Signs` naming one appearance.
 ---@alias ezdap.ui.SignName string
 
----Highlight per sign name. A name missing here falls back to `Debug`.
+-- Highlight groups
+
+---The highlight groups ezdap owns, and the stock group each links to. `default`
+---links, so a colorscheme or a user `:hi` wins and re-colours that state
+---everywhere it is drawn.
+---@type table<string, string>
+local _HL_LINKS = {
+    EzdapBreakpoint     = "Debug",
+    EzdapDebugFrame     = "Todo",
+    EzdapDebugFrameLine = "DiffChange",
+    EzdapSessionRunning = "DiagnosticOk",
+    EzdapSessionPaused  = "DiagnosticWarn",
+    EzdapSessionStopped = "NonText",
+}
+
+for name, link in pairs(_HL_LINKS) do
+    vim.api.nvim_set_hl(0, name, { link = link, default = true })
+end
+
+---Ezdap's highlight groups by role, so views name a role rather than a string.
+M.hl = {
+    breakpoint       = "EzdapBreakpoint",
+    debug_frame      = "EzdapDebugFrame",
+    debug_frame_line = "EzdapDebugFrameLine",
+    session_running  = "EzdapSessionRunning",
+    session_paused   = "EzdapSessionPaused",
+    session_stopped  = "EzdapSessionStopped",
+}
+
+---Highlight per sign name. Every breakpoint flavour — conditional, pending,
+---disabled, logpoint, exception, data — shares one highlight: its glyph already
+---tells them apart. A name missing here falls back to `EzdapBreakpoint`.
 ---@type table<ezdap.ui.SignName, string>
 local _HIGHLIGHTS = {
-    active_breakpoint                = "DiagnosticOk",
-    inactive_breakpoint              = "DiagnosticWarn",
-    cond_breakpoint                  = "DiagnosticWarn",
-    inactive_cond_breakpoint         = "DiagnosticWarn",
-    logpoint                         = "DiagnosticHint",
-    inactive_logpoint                = "DiagnosticWarn",
-    disabled_breakpoint              = "NonText",
-    disabled_cond_breakpoint         = "NonText",
-    disabled_logpoint                = "NonText",
-    exception_breakpoint             = "DiagnosticInfo",
-    exception_breakpoint_unsupported = "DiagnosticError",
-    data_breakpoint                  = "DiagnosticInfo",
-    inactive_data_breakpoint         = "DiagnosticWarn",
-    session_running                  = "DiagnosticOk",
-    session_paused                   = "DiagnosticWarn",
-    session_stopped                  = "NonText",
+    debug_frame     = M.hl.debug_frame,
+    session_running = M.hl.session_running,
+    session_paused  = M.hl.session_paused,
+    session_stopped = M.hl.session_stopped,
 }
 
 ---@param name ezdap.ui.SignName
 ---@return string glyph
 ---@return string highlight
 function M.sign(name)
-    return config.signs[name] or "●", _HIGHLIGHTS[name] or "Debug"
+    return config.signs[name] or "●", _HIGHLIGHTS[name] or M.hl.breakpoint
 end
 
 -- Breakpoints

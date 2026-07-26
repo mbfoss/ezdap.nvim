@@ -5,6 +5,7 @@ local fileextmarks = require("ezdap.ui.fileextmarks")
 local manager      = require("ezdap.manager")
 local ui_util      = require("ezdap.util.ui")
 local config       = require("ezdap.config")
+local format       = require("ezdap.ui.format")
 local timer        = require("ezdap.util.timer")
 
 local M            = {}
@@ -20,11 +21,8 @@ local _gen         = 0 -- generation counter to guard stale session callbacks
 ---@type function?  stop fn for the pending deferred clear, if any
 local _stop_clear_timer
 
-local _SIGN_HL     = "EzdapFrameSign"
-local _LINE_HL     = "EzdapFrameLine"
-
-vim.api.nvim_set_hl(0, _SIGN_HL, { link = "Todo", default = true })
-vim.api.nvim_set_hl(0, _LINE_HL, { link = "DiffChange", default = true })
+local _SIGN_HL     = format.hl.debug_frame
+local _LINE_HL     = format.hl.debug_frame_line
 
 local function _show_stopped(sess)
     if not _sign_group or not _line_group then return end

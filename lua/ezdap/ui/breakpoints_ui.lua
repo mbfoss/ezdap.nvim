@@ -16,10 +16,7 @@ local M            = {}
 local _group
 local _init_done
 
-local _BP_HL      = "EzdapBreakpoint"
-vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
-
-local _PRIORITY   = 10
+local _PRIORITY    = 10
 
 local function _refresh()
     if not _group then return end
@@ -32,9 +29,7 @@ local function _refresh()
             -- when there is no session (st is nil) or it was not moved.
             local st    = manager.bp_status(bp.internal_id)
             local lnum  = (st and st.line) or bp.line
-            -- Gutter/inline marks keep the single `EzdapBreakpoint` highlight; only
-            -- the glyph comes from the shared resolver.
-            local glyph, _, name = format.breakpoint_sign({
+            local glyph, hl, name = format.breakpoint_sign({
                 kind          = "source",
                 disabled      = bp.disabled,
                 verified      = st and st.verified,
@@ -49,12 +44,12 @@ local function _refresh()
                 -- Column breakpoint: inline glyph just before the column only, no
                 -- gutter sign.
                 col                = math.max(0, bp.column - 1)
-                opts.virt_text     = { { glyph, _BP_HL } }
+                opts.virt_text     = { { glyph, hl } }
                 opts.virt_text_pos = "inline"
             else
                 -- Line breakpoint: gutter sign.
                 opts.sign_text     = glyph
-                opts.sign_hl_group = _BP_HL
+                opts.sign_hl_group = hl
             end
             _group.set_file_extmark(bp.internal_id, bp.source, lnum, col, opts, { name = name })
         end
