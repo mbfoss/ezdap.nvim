@@ -219,29 +219,46 @@ function M.try_tcp(host, port, opts, cb)
         vim.schedule(function() conn:_dispatch(msg) end)
     end
 
-    tcp:connect(host, port, function(err)
+    vim.uv.getaddrinfo(host, nil, { socktype = "stream" }, function(err, res)
         if err then
-            tcp:close()
-            vim.schedule(function() cb(nil, err) end)
+            vim.schedule(function()
+                cb(nil, ("DNS lookup failed: %s"):format(err))
+            end)
             return
         end
 
-        tcp:read_start(function(read_err, chunk)
-            if read_err or not chunk then
-                vim.schedule(function() conn:close() end)
+        if not res or #res == 0 then
+            vim.schedule(function()
+                cb(nil, "No addresses found")
+            end)
+            return
+        end
+
+        local ip = res[1].addr
+        tcp:connect(ip, port, function(err)
+            if err then
+                tcp:close()
+                vim.schedule(function() cb(nil, err) end)
                 return
             end
-            parser:feed(chunk)
+
+            tcp:read_start(function(read_err, chunk)
+                if read_err or not chunk then
+                    vim.schedule(function() conn:close() end)
+                    return
+                end
+                parser:feed(chunk)
+            end)
+
+            conn._write = function(data) tcp:write(data) end
+            conn._close = function()
+                tcp:read_stop()
+                if not tcp:is_closing() then tcp:close() end
+            end
+            conn.on_close = opts.on_close or function() end
+
+            vim.schedule(function() cb(conn, nil) end)
         end)
-
-        conn._write = function(data) tcp:write(data) end
-        conn._close = function()
-            tcp:read_stop()
-            if not tcp:is_closing() then tcp:close() end
-        end
-        conn.on_close = opts.on_close or function() end
-
-        vim.schedule(function() cb(conn, nil) end)
     end)
 end
 
