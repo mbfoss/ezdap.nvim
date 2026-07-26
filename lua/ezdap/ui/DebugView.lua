@@ -1254,6 +1254,29 @@ function DebugView:_setup_keymaps(bufnr)
         vim.keymap.set("n", key, fn, { buffer = bufnr, desc = desc })
     end
 
+    -- Maps `key` in both normal and visual mode; `fn` runs once per item, on the
+    -- cursor item in normal mode and on every selected line in visual mode.
+    ---@param key string
+    ---@param desc string
+    ---@param fn fun(item: ezdap.util.TreeBuffer.Item)
+    local function map_items(key, desc, fn)
+        map(key, desc, function()
+            local cur = self._tree:get_cursor_item()
+            if cur then fn(cur) end
+        end)
+        vim.keymap.set("x", key, function()
+            local first, last = vim.fn.line("v"), vim.fn.line(".")
+            if first > last then first, last = last, first end
+            vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+            local items = {}
+            for row = first, last do
+                local item = self._tree:get_item_at_row(row)
+                if item then items[#items + 1] = item end
+            end
+            for _, item in ipairs(items) do fn(item) end
+        end, { buffer = bufnr, desc = desc })
+    end
+
     map("i", "Add watch expression / function breakpoint / toggle data breakpoint", function()
         local cur = self._tree:get_cursor_item()
         if not cur then return end
@@ -1272,9 +1295,8 @@ function DebugView:_setup_keymaps(bufnr)
         end
     end)
 
-    map("d", "Remove watch expression or breakpoint", function()
-        local cur = self._tree:get_cursor_item()
-        if not cur or not cur.data then return end
+    map_items("d", "Remove watch expression or breakpoint", function(cur)
+        if not cur.data then return end
         if cur.data.kind == "expression" then
             for _, e in ipairs(expressions.all()) do
                 if e.expr == cur.data.name then
@@ -1306,9 +1328,8 @@ function DebugView:_setup_keymaps(bufnr)
         end)
     end)
 
-    map("x", "Toggle breakpoint enabled/disabled", function()
-        local cur = self._tree:get_cursor_item()
-        if not cur or not cur.data or cur.data.kind ~= "breakpoint" then return end
+    map_items("x", "Toggle breakpoint enabled/disabled", function(cur)
+        if not cur.data or cur.data.kind ~= "breakpoint" then return end
         local d = cur.data
         if d.bp_kind == "source" and d.bp_source and d.bp_line then
             breakpoints.patch(d.bp_source, d.bp_line, { disabled = not d.disabled })
@@ -1424,9 +1445,9 @@ function DebugView:_setup_keymaps(bufnr)
             "<CR>  Select session / switch frame / jump to breakpoint source",
             "K     Show full value / session info / frame details / breakpoint details",
             "i     Add: watch expression (expressions) / function breakpoint (breakpoints) / data breakpoint (variable)",
-            "d     Remove watch expression or breakpoint",
+            "d     Remove watch expression or breakpoint (visual: all selected)",
             "r     Rename expression",
-            "x     Toggle breakpoint enabled/disabled",
+            "x     Toggle breakpoint enabled/disabled (visual: all selected)",
             "c     Change variable/expression value / breakpoint condition or hit condition / exception break mode / data access type",
         }, "\n"), { title = "Keymaps" })
     end)
