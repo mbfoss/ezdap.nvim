@@ -371,6 +371,9 @@ local function _init()
             store.invalidate()
             _warned_rootless = false
             _load()
+            -- The reloaded state belongs to another project; undoing into it
+            -- would resurrect the old one's breakpoints.
+            if _debug_view then _debug_view:clear_undo() end
         end,
         desc = "ezdap: restore project state after cwd change",
     })

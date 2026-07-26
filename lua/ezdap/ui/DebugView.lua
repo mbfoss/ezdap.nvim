@@ -12,6 +12,7 @@ local timer       = require("ezdap.util.timer")
 local floatwin    = require("ezdap.util.floatwin")
 local fixedwin    = require("ezdap.util.fixedwin")
 local ui          = require("ezdap.util.ui")
+local UndoStack   = require("ezdap.util.UndoStack")
 
 ---@alias ezdap.DebugView.ItemKind
 ---| "root"
@@ -40,6 +41,7 @@ local ui          = require("ezdap.util.ui")
 ---@field bp_id         integer?
 ---@field bp_source     string?
 ---@field bp_line       integer?
+---@field bp_column     integer?
 ---@field bp_filter     string?
 ---@field bp_ex_name    string?
 ---@field bp_data_id    string?
@@ -234,6 +236,7 @@ end
 ---@field private _greyout_timer    fun()?
 ---@field private _session_timer    fun()?
 ---@field private _dbp_gen          integer?
+---@field private _undo             ezdap.util.UndoStack
 local DebugView = {}
 DebugView.__index = DebugView
 
@@ -245,6 +248,7 @@ function DebugView.new()
         _query_ctx   = 0,
         _subs        = {},
         _expanded    = {},
+        _undo        = UndoStack.new(),
     }, DebugView)
     self:init()
     return self
@@ -1244,6 +1248,73 @@ function DebugView:_toggle_data_breakpoint(cur)
     end)
 end
 
+---Drop every recorded undo. Called when the state the entries refer to is
+---replaced wholesale, e.g. after a project switch.
+function DebugView:clear_undo()
+    self._undo:clear()
+end
+
+---Builds the inverse of removing a breakpoint, capturing its state now so the
+---returned callback can re-create it later.
+---@private
+---@param d ezdap.DebugView.ItemData  breakpoint data, read while it still exists
+---@return fun()?  nil if this breakpoint kind can't be re-created
+function DebugView:_restore_bp_fn(d)
+    if d.bp_kind == "source" and d.bp_source and d.bp_line then
+        local source, line = assert(d.bp_source), assert(d.bp_line)
+        local opts = {
+            column        = d.bp_column,
+            condition     = d.condition,
+            hit_condition = d.hit_condition,
+            log_message   = d.log_message,
+            disabled      = d.disabled,
+        }
+        return function() breakpoints.add(source, line, opts) end
+    elseif d.bp_kind == "function" and d.name then
+        local name, disabled = assert(d.name), d.disabled
+        return function() breakpoints.add_function(name, { disabled = disabled }) end
+    elseif d.bp_kind == "exception_type" and d.bp_ex_name then
+        local name, mode, disabled = assert(d.bp_ex_name), d.break_mode, d.disabled
+        return function()
+            breakpoints.add_exception_name(name, mode)
+            if disabled then breakpoints.set_exception_name_enabled(name, false) end
+        end
+    elseif d.bp_kind == "data" and d.bp_data_id then
+        local args = { data_id = d.bp_data_id, name = d.name, access_type = d.access_type }
+        return function()
+            local sess = manager.session()
+            if sess then sess:add_data_breakpoint(args) end
+        end
+    end
+end
+
+---Builds the inverse of changing a breakpoint's enabled state.
+---@private
+---@param d ezdap.DebugView.ItemData
+---@return fun()?
+function DebugView:_restore_bp_enabled_fn(d)
+    local enabled = not d.disabled
+    if d.bp_kind == "source" and d.bp_source and d.bp_line then
+        local source, line = assert(d.bp_source), assert(d.bp_line)
+        return function() breakpoints.patch(source, line, { disabled = not enabled }) end
+    elseif d.bp_kind == "function" and d.name then
+        local name = assert(d.name)
+        return function() breakpoints.add_function(name, { disabled = not enabled }) end
+    elseif d.bp_kind == "exception_filter" and d.bp_filter then
+        local filter = assert(d.bp_filter)
+        return function() breakpoints.set_exception_enabled(filter, enabled) end
+    elseif d.bp_kind == "exception_type" and d.bp_ex_name then
+        local name = assert(d.bp_ex_name)
+        return function() breakpoints.set_exception_name_enabled(name, enabled) end
+    elseif d.bp_kind == "data" and d.bp_data_id then
+        local data_id = d.bp_data_id
+        return function()
+            local sess = manager.session()
+            if sess then sess:set_data_breakpoint_enabled(data_id, enabled) end
+        end
+    end
+end
+
 ---@private
 ---@param bufnr integer
 function DebugView:_setup_keymaps(bufnr)
@@ -1255,14 +1326,15 @@ function DebugView:_setup_keymaps(bufnr)
     end
 
     -- Maps `key` in both normal and visual mode; `fn` runs once per item, on the
-    -- cursor item in normal mode and on every selected line in visual mode.
-    ---@param key string
+    -- cursor item in normal mode and on every selected line in visual mode. One
+    -- keypress is one undo entry, however many items it touched.
+    ---@param key  string
     ---@param desc string
-    ---@param fn fun(item: ezdap.util.TreeBuffer.Item)
+    ---@param fn   fun(item: ezdap.util.TreeBuffer.Item)
     local function map_items(key, desc, fn)
         map(key, desc, function()
             local cur = self._tree:get_cursor_item()
-            if cur then fn(cur) end
+            if cur then self._undo:group(function() fn(cur) end) end
         end)
         vim.keymap.set("x", key, function()
             local first, last = vim.fn.line("v"), vim.fn.line(".")
@@ -1273,7 +1345,9 @@ function DebugView:_setup_keymaps(bufnr)
                 local item = self._tree:get_item_at_row(row)
                 if item then items[#items + 1] = item end
             end
-            for _, item in ipairs(items) do fn(item) end
+            self._undo:group(function()
+                for _, item in ipairs(items) do fn(item) end
+            end)
         end, { buffer = bufnr, desc = desc })
     end
 
@@ -1284,11 +1358,23 @@ function DebugView:_setup_keymaps(bufnr)
         local function under(root) return id == root or vim.startswith(id, root .. "/") end
         if under(_roots.expressions) then
             inputwin.open({ prompt = "Watch expression: " }, function(expr)
-                if expr and expr ~= "" then expressions.add(expr) end
+                if not expr or expr == "" then return end
+                local e = expressions.add(expr)
+                if e then
+                    self._undo:push(function() expressions.remove(e.internal_id) end)
+                end
             end)
         elseif under(_roots.breakpoints) then
             inputwin.open({ prompt = "Function breakpoint: " }, function(name)
-                if name and name ~= "" then breakpoints.add_function(name) end
+                if not name or name == "" then return end
+                local existed = false
+                for _, bp in ipairs(breakpoints.function_breakpoints()) do
+                    if bp.name == name then existed = true; break end
+                end
+                breakpoints.add_function(name)
+                if not existed then
+                    self._undo:push(function() breakpoints.remove_function(name) end)
+                end
             end)
         elseif cur.data and cur.data.kind == "variable" then
             self:_toggle_data_breakpoint(cur)
@@ -1300,21 +1386,32 @@ function DebugView:_setup_keymaps(bufnr)
         if cur.data.kind == "expression" then
             for _, e in ipairs(expressions.all()) do
                 if e.expr == cur.data.name then
-                    expressions.remove(e.internal_id); break
+                    local expr = e.expr
+                    if expressions.remove(e.internal_id) then
+                        -- Undo re-adds at the end of the list; position isn't restored.
+                        self._undo:push(function() expressions.add(expr) end)
+                    end
+                    break
                 end
             end
         elseif cur.data.kind == "breakpoint" then
             local d = cur.data
+            local restore = self:_restore_bp_fn(d)
+            local removed = false
             if d.bp_kind == "source" and d.bp_source and d.bp_line then
-                breakpoints.remove(d.bp_source, d.bp_line, d.bp_column)
+                removed = breakpoints.remove(d.bp_source, d.bp_line, d.bp_column)
             elseif d.bp_kind == "function" then
-                breakpoints.remove_function(d.name)
+                removed = breakpoints.remove_function(d.name)
             elseif d.bp_kind == "exception_type" and d.bp_ex_name then
-                breakpoints.remove_exception_name(d.bp_ex_name)
+                removed = breakpoints.remove_exception_name(d.bp_ex_name)
             elseif d.bp_kind == "data" and d.bp_data_id then
                 local sess = manager.session()
-                if sess then sess:remove_data_breakpoint(d.bp_data_id) end
+                if sess then
+                    sess:remove_data_breakpoint(d.bp_data_id)
+                    removed = true
+                end
             end
+            if removed and restore then self._undo:push(restore) end
         end
     end)
 
@@ -1322,15 +1419,21 @@ function DebugView:_setup_keymaps(bufnr)
         local cur = self._tree:get_cursor_item()
         if not cur or not cur.data or cur.data.kind ~= "expression" then return end
         local d = cur.data
-        if not d.expr_id then return end
-        inputwin.open({ prompt = "Expression: ", default = d.name or "" }, function(input)
-            if input and input ~= "" then expressions.update(d.expr_id, input) end
+        local id, old = d.expr_id, d.name
+        if not id then return end
+        inputwin.open({ prompt = "Expression: ", default = old or "" }, function(input)
+            if not input or input == "" then return end
+            if expressions.update(id, input) and old then
+                self._undo:push(function() expressions.update(id, old) end)
+            end
         end)
     end)
 
     map_items("x", "Toggle breakpoint enabled/disabled", function(cur)
         if not cur.data or cur.data.kind ~= "breakpoint" then return end
         local d = cur.data
+        local restore = self:_restore_bp_enabled_fn(d)
+        if restore then self._undo:push(restore) end
         if d.bp_kind == "source" and d.bp_source and d.bp_line then
             breakpoints.patch(d.bp_source, d.bp_line, { disabled = not d.disabled })
         elseif d.bp_kind == "function" then
@@ -1363,8 +1466,14 @@ function DebugView:_setup_keymaps(bufnr)
                         return { label = (t == cur_at and "● " or "  ") .. t, data = t }
                     end, _types),
                 }, function(at)
-                    if not at then return end
+                    if not at or at == cur_at then return end
                     sess:add_data_breakpoint({ data_id = d.bp_data_id, name = d.name, access_type = at })
+                    self._undo:push(function()
+                        local s = manager.session()
+                        if s then
+                            s:add_data_breakpoint({ data_id = d.bp_data_id, name = d.name, access_type = cur_at })
+                        end
+                    end)
                 end)
             elseif d.kind == "breakpoint" and d.bp_kind == "source" and d.bp_source and d.bp_line then
                 inputwin.open({ prompt = "Condition (empty to clear): ", default = d.condition or "" }, function(cond)
@@ -1372,7 +1481,13 @@ function DebugView:_setup_keymaps(bufnr)
                     inputwin.open({ prompt = "Hit condition (empty to clear): ", default = d.hit_condition or "" },
                         function(hit)
                             if hit == nil then return end
-                            breakpoints.patch(d.bp_source, d.bp_line, { condition = cond, hit_condition = hit })
+                            local source, line = d.bp_source, d.bp_line
+                            local old_cond, old_hit = d.condition or "", d.hit_condition or ""
+                            if cond == old_cond and hit == old_hit then return end
+                            breakpoints.patch(source, line, { condition = cond, hit_condition = hit })
+                            self._undo:push(function()
+                                breakpoints.patch(source, line, { condition = old_cond, hit_condition = old_hit })
+                            end)
                         end)
                 end)
             elseif d.kind == "breakpoint" and d.bp_kind == "exception_type" and d.bp_ex_name then
@@ -1384,8 +1499,12 @@ function DebugView:_setup_keymaps(bufnr)
                         return { label = (m == cur_mode and "● " or "  ") .. m, data = m }
                     end, _modes),
                 }, function(mode)
-                    if not mode then return end
-                    breakpoints.add_exception_name(d.bp_ex_name, mode)
+                    if not mode or mode == cur_mode then return end
+                    local name = d.bp_ex_name
+                    breakpoints.add_exception_name(name, mode)
+                    self._undo:push(function()
+                        breakpoints.add_exception_name(name, cur_mode)
+                    end)
                 end)
             elseif d.kind == "variable" and self._active_sess then
                 local parent = self._tree:get_parent_item(cur.id)
@@ -1435,6 +1554,10 @@ function DebugView:_setup_keymaps(bufnr)
             end
         end)
 
+    map("u", "Undo last breakpoint/expression change", function()
+        self._undo:undo()
+    end)
+
     map("K", "Show details / full value", function()
         local cur = self._tree:get_cursor_item()
         if cur and cur.data then self:_show_hover(cur.data) end
@@ -1449,6 +1572,7 @@ function DebugView:_setup_keymaps(bufnr)
             "r     Rename expression",
             "x     Toggle breakpoint enabled/disabled (visual: all selected)",
             "c     Change variable/expression value / breakpoint condition or hit condition / exception break mode / data access type",
+            "u     Undo the last breakpoint/expression change",
         }, "\n"), { title = "Keymaps" })
     end)
 end

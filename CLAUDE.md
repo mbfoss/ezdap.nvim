@@ -159,6 +159,10 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 - `Signal.lua` — the pub/sub primitive used throughout: `Signal.new()`,
   `:subscribe(fn)` (returns an unsubscribe fn), `:emit(...)`. This is the main
   decoupling mechanism between layers.
+- `UndoStack.lua` — a bounded stack of undo groups. Callers register the inverse
+  of what they just did (`push`), optionally batched into one entry (`group`);
+  `undo` runs the newest group's callbacks in reverse. It knows nothing about
+  breakpoints — the DebugView builds the inverse callbacks.
 - `Tree.lua`, `select.lua`, `inputwin.lua`, `usercmd.lua` (subcommand
   registration/completion), plus `fsutil`, `strutil`, `table`, `term`,
   `throttle`, `timer`, `ui`.
