@@ -143,6 +143,10 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 - `output_win.lua` — the one bottom split a run's buffers share. `ezdap.runner`
   registers each buffer it spawns with a priority; the window holds the
   highest-priority live one and closes with the run's last buffer.
+- `format.lua` — the shared breakpoint appearance resolver: a state spec
+  (kind/disabled/verified/condition/log message) maps to a `config.signs` name,
+  its glyph and its highlight. Both the gutter signs and the DebugView
+  breakpoints section resolve their glyph here.
 - `signs.lua`, `breakpoints_ui.lua`, `debugline_ui.lua`, `inlinevars.lua`,
   `extmarks.lua`, `expressions.lua`, `ReplBuffer.lua` — gutter signs, inline
   values, REPL, etc.

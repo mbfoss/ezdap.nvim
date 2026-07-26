@@ -11,6 +11,8 @@
 ---@field disabled_logpoint        string  logpoint, disabled
 ---@field exception_breakpoint     string  exception filter/type breakpoint, enabled
 ---@field exception_breakpoint_unsupported string  exception type breakpoint the adapter does not support
+---@field data_breakpoint          string  data breakpoint (watchpoint), verified
+---@field inactive_data_breakpoint string  data breakpoint, not yet verified
 
 ---Where to render inline variable values while stopped. Names other than "off"
 ---map directly to a `virt_text_pos` (see `:h nvim_buf_set_extmark`):
@@ -61,6 +63,8 @@ local M = {
 		disabled_logpoint        = "ø",
 		exception_breakpoint     = "↯",
 		exception_breakpoint_unsupported = "✗",
+		data_breakpoint          = "◉",
+		inactive_data_breakpoint = "◌",
 	},
 }
 

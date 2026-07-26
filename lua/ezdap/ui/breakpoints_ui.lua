@@ -7,7 +7,7 @@
 
 local fileextmarks = require("ezdap.ui.fileextmarks")
 local breakpoints  = require("ezdap.dap.breakpoints")
-local config       = require("ezdap.config")
+local format       = require("ezdap.ui.format")
 local manager      = require("ezdap.manager")
 
 local M            = {}
@@ -21,30 +21,6 @@ vim.api.nvim_set_hl(0, _BP_HL, { link = "Debug", default = true })
 
 local _PRIORITY   = 10
 
----Glyph per sign name, resolved locally now that `_group` is a raw fileextmarks
----group with no `define_sign`. Populated in `init` from `config.signs`.
----@type table<string, string>
-local _glyphs = {}
-
----@param bp ezdap.dap.SourceBreakpoint
----@param st ezdap.dap.BpStatus?
-local function _sign_name(bp, st)
-    local has_cond = bp.condition or bp.hit_condition
-    if bp.disabled then
-        if bp.log_message then return "disabled_logpoint" end
-        if has_cond then return "disabled_cond_breakpoint" end
-        return "disabled_breakpoint"
-    end
-    local verified = st and st.verified
-    if bp.log_message then
-        return verified == false and "inactive_logpoint" or "logpoint"
-    end
-    if has_cond then
-        return verified == false and "inactive_cond_breakpoint" or "cond_breakpoint"
-    end
-    return verified == false and "inactive_breakpoint" or "active_breakpoint"
-end
-
 local function _refresh()
     if not _group then return end
     _group.remove_extmarks()
@@ -56,8 +32,16 @@ local function _refresh()
             -- when there is no session (st is nil) or it was not moved.
             local st    = manager.bp_status(bp.internal_id)
             local lnum  = (st and st.line) or bp.line
-            local name  = _sign_name(bp, st)
-            local glyph = _glyphs[name]
+            -- Gutter/inline marks keep the single `EzdapBreakpoint` highlight; only
+            -- the glyph comes from the shared resolver.
+            local glyph, _, name = format.breakpoint_sign({
+                kind          = "source",
+                disabled      = bp.disabled,
+                verified      = st and st.verified,
+                condition     = bp.condition,
+                hit_condition = bp.hit_condition,
+                log_message   = bp.log_message,
+            })
             ---@type vim.api.keyset.set_extmark
             local opts  = { priority = _PRIORITY }
             local col   = 0
@@ -79,23 +63,8 @@ end
 
 function M.init()
     if _init_done then return end
-    _init_done   = true
-    local s      = config.signs
-    local defs   = {
-        { "active_breakpoint",        s.active_breakpoint },
-        { "inactive_breakpoint",      s.inactive_breakpoint },
-        { "cond_breakpoint",          s.cond_breakpoint },
-        { "inactive_cond_breakpoint", s.inactive_cond_breakpoint },
-        { "logpoint",                 s.logpoint },
-        { "inactive_logpoint",        s.inactive_logpoint },
-        { "disabled_breakpoint",      s.disabled_breakpoint },
-        { "disabled_cond_breakpoint", s.disabled_cond_breakpoint },
-        { "disabled_logpoint",        s.disabled_logpoint },
-    }
-    _group       = fileextmarks.define_group("breakpoints")
-    for _, d in ipairs(defs) do
-        _glyphs[d[1]] = d[2]
-    end
+    _init_done = true
+    _group     = fileextmarks.define_group("breakpoints")
 
     breakpoints.on_change:subscribe(_refresh)
     -- Adapter-verified status is session-scoped; repaint signs when it changes.

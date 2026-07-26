@@ -4,6 +4,7 @@ local manager     = require("ezdap.manager")
 local config      = require("ezdap.config")
 local expressions = require("ezdap.ui.expressions")
 local breakpoints = require("ezdap.dap.breakpoints")
+local format      = require("ezdap.ui.format")
 local str_util    = require("ezdap.util.strutil")
 local inputwin    = require("ezdap.util.inputwin")
 local select      = require("ezdap.util.select")
@@ -159,26 +160,15 @@ local _BP_PREFIX_W = 4
 ---@param chunks ezdap.DebugView.Chunk[]
 ---@param width integer  available DebugView window width
 local function _fmt_breakpoint(data, chunks, width)
-    local icon, hl
-    if data.disabled then
-        icon, hl = "ø", "NonText"
-    elseif data.bp_kind == "exception_type" and data.unsupported then
-        icon, hl = config.signs.exception_breakpoint_unsupported, "DiagnosticError"
-    elseif data.bp_kind == "exception_filter" or data.bp_kind == "exception_type" then
-        icon, hl = config.signs.exception_breakpoint, "DiagnosticInfo"
-    elseif data.bp_kind == "data" then
-        icon, hl = (data.verified == false) and "◌" or "◉",
-            (data.verified == false) and "DiagnosticWarn" or "DiagnosticInfo"
-    elseif data.log_message then
-        icon, hl = (data.verified == false) and "◇" or "◆",
-            (data.verified == false) and "DiagnosticWarn" or "DiagnosticHint"
-    elseif data.condition or data.hit_condition then
-        icon, hl = (data.verified == false) and "□" or "■", "DiagnosticWarn"
-    elseif data.verified == false then
-        icon, hl = "○", "DiagnosticWarn"
-    else
-        icon, hl = "●", "DiagnosticOk"
-    end
+    local icon, hl      = format.breakpoint_sign({
+        kind          = data.bp_kind,
+        disabled      = data.disabled,
+        verified      = data.verified,
+        condition     = data.condition,
+        hit_condition = data.hit_condition,
+        log_message   = data.log_message,
+        unsupported   = data.unsupported,
+    })
     chunks[#chunks + 1] = { icon .. " ", hl }
     local name_hl = data.disabled and "NonText" or nil
 
