@@ -905,6 +905,21 @@ function Session:_handle_adapter_request(command, args, respond)
     end
 end
 
+---The debuggee's environment as a job wants it. DAP spells "do not inherit this
+---variable" as a JSON `null`, which decodes to `vim.NIL` and would otherwise be
+---spawned as the literal string "vim.NIL"; dropping the key is the nearest thing
+---jobstart can express.
+---@param env table<string, string|nil>?
+---@return table<string, string>?
+local function _spawn_env(env)
+    if not env then return nil end
+    local out = {}
+    for k, v in pairs(env) do
+        if v ~= vim.NIL then out[k] = tostring(v) end
+    end
+    return next(out) and out or nil
+end
+
 ---@param args    ezdap.dap.proto.RunInTerminalRequestArguments
 ---@param respond ezdap.dap.RespondFn
 function Session:_run_in_terminal(args, respond)
@@ -921,7 +936,7 @@ function Session:_run_in_terminal(args, respond)
         handle = term.spawn(cmd, {
             bufname = ui_util.unique_buf_name("ezdap://" .. name .. "_run"),
             cwd     = args.cwd,
-            env     = args.env,
+            env     = _spawn_env(args.env),
             on_exit = function() if handle then self:_emit("terminal_exit", handle.bufnr) end end,
         })
     end)
