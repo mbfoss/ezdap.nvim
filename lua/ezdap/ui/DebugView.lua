@@ -499,11 +499,6 @@ function DebugView:_session_details(block, data)
     if sess.exception_description then
         block:section("Exception"):text(sess.exception_description, "  ")
     end
-
-    local caps = format.capability_names(sess)
-    if #caps > 0 then
-        block:section(("Capabilities (%d)"):format(#caps)):list(caps)
-    end
 end
 
 ---@param data ezdap.DebugView.ItemData

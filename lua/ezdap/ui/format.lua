@@ -170,22 +170,6 @@ function M.session_sign(spec)
     return glyph, hl, name
 end
 
----Capability keys the adapter reports as supported, `supports` prefix dropped
----and sorted, ready to list in a hover.
----@param sess ezdap.dap.Session?
----@return string[]
-function M.capability_names(sess)
-    local names = {}
-    for key, val in pairs(sess and sess.capabilities or {}) do
-        if val == true then
-            local name = key:gsub("^supports", "")
-            names[#names + 1] = name:sub(1, 1):lower() .. name:sub(2)
-        end
-    end
-    table.sort(names)
-    return names
-end
-
 -- Values and paths
 
 ---A value on one line: newlines become `⏎`, nothing is cropped.
