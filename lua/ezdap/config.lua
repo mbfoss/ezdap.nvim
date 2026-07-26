@@ -69,7 +69,7 @@ local M = {
 		data_breakpoint          = "◉",
 		inactive_data_breakpoint = "◌",
 		session_running          = "▶",
-		session_paused           = "⏸︎",
+		session_paused           = "■",
 		session_stopped          = "●",
 	},
 }
