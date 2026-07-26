@@ -836,12 +836,16 @@ function M.debug.frame()
     end
     local cur_frame = sess:current_stack_frame()
     ---@param f ezdap.dap.proto.StackFrame
+    ---@return string?
+    local function frame_loc(f)
+        if not (f.source and f.source.path) then return nil end
+        return vim.fn.fnamemodify(f.source.path, ":~:.") .. ":" .. (f.line or "?")
+    end
+    ---@param f ezdap.dap.proto.StackFrame
     ---@return string
     local function frame_key(f)
-        local loc = f.source and f.source.path
-            and ("  " .. vim.fn.fnamemodify(f.source.path, ":~:.") .. ":" .. (f.line or "?"))
-            or ""
-        return f.name .. loc
+        local loc = frame_loc(f)
+        return f.name .. (loc and ("  " .. loc) or "")
     end
     local cur_key = cur_frame and frame_key(cur_frame) or nil
     local initial ---@type integer?
@@ -852,11 +856,18 @@ function M.debug.frame()
         local is_cur = cur_key ~= nil and not initial and key == cur_key
         if is_cur then initial = i end
         local data = { frame = f }
+        local loc  = frame_loc(f)
         if f.source and f.source.path then
             data.filepath = f.source.path
             data.lnum     = f.line
         end
-        items[i] = { label = key .. (is_cur and "  *" or ""), data = data }
+        items[i] = {
+            label     = f.name .. (is_cur and "  *" or ""),
+            data      = data,
+            -- The location is context, not something to match on: it rides
+            -- under the frame name so only the name takes part in filtering.
+            virt_line = loc and { { loc, "@namespace" } } or nil,
+        }
     end
     select.open({
         prompt         = "Select frame",
