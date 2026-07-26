@@ -12,6 +12,7 @@ trap 'rm -rf "$TMP"' EXIT
 FILES=(
     Signal
     Tree
+    TreeBuffer
     fixedwin
     floatwin
     fsutil

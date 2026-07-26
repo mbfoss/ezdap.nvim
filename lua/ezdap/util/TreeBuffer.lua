@@ -1,40 +1,38 @@
 local Tree = require("ezdap.util.Tree")
-local ui_util = require("ezdap.util.ui")
+local uiutil = require("ezdap.util.ui")
 local Signal = require("ezdap.util.Signal")
 
----@class ezdap.ui.TreeBuffer.Item
+---@class ezdap.util.TreeBuffer.Item
 ---@field id any
 ---@field data any
 ---@field expandable boolean
 ---@field expanded boolean
 
----@class ezdap.ui.TreeBuffer.ItemDef
+---@class ezdap.util.TreeBuffer.ItemDef
 ---@field id any
 ---@field data any
 ---@field expandable boolean?
 ---@field expanded boolean?
 
----@class ezdap.ui.TreeBuffer.ItemData
+---@class ezdap.util.TreeBuffer.ItemData
 ---@field userdata any
 ---@field expandable boolean?
 ---@field expanded boolean?
 
----@alias ezdap.ui.TreeBuffer.FormatterFn fun(id:any, data:any, expanded:boolean):string[][], string[][]
+---@alias ezdap.util.TreeBuffer.FormatterFn fun(id:any, data:any, expanded:boolean):string[][], string[][], string?
 
----@class ezdap.ui.TreeBuffer.Opts
+---@class ezdap.util.TreeBuffer.Opts
 ---@field filetype string?
----@field formatter ezdap.ui.TreeBuffer.FormatterFn
+---@field formatter ezdap.util.TreeBuffer.FormatterFn
 ---@field expand_char string?
 ---@field collapse_char string?
 ---@field icon_hl string?
 ---@field indent_string string?
 ---@field collapsible boolean?  -- whether nodes can be expanded/collapsed (default true)
 
-local _ns_id = vim.api.nvim_create_namespace('nvtoolkitTreeBuffer')
-
----@class ezdap.ui.TreeBuffer
+---@class ezdap.util.TreeBuffer
 ---@field private _filetype string?
----@field private _formatter ezdap.ui.TreeBuffer.FormatterFn
+---@field private _formatter ezdap.util.TreeBuffer.FormatterFn
 ---@field private _expand_char string
 ---@field private _collapse_char string
 ---@field private _icon_hl string
@@ -44,6 +42,7 @@ local _ns_id = vim.api.nvim_create_namespace('nvtoolkitTreeBuffer')
 ---@field private _on_selection ezdap.util.Signal<fun(id:any,data:any)>
 ---@field private _on_toggle ezdap.util.Signal<fun(id:any,data:any,expanded:boolean)>
 ---@field private _bufnr integer
+---@field private _ns_id integer
 ---@field private _tree ezdap.util.Tree
 ---@field private _flat_ids any[]
 ---@field private _id_to_idx table<any, integer>
@@ -51,8 +50,8 @@ local _ns_id = vim.api.nvim_create_namespace('nvtoolkitTreeBuffer')
 local TreeBuffer = {}
 TreeBuffer.__index = TreeBuffer
 
----@param opts ezdap.ui.TreeBuffer.Opts
----@return ezdap.ui.TreeBuffer
+---@param opts ezdap.util.TreeBuffer.Opts
+---@return ezdap.util.TreeBuffer
 function TreeBuffer.new(opts)
     local indent_str = opts.indent_string or "  "
     local expand_char = opts.expand_char or "›"
@@ -72,6 +71,7 @@ function TreeBuffer.new(opts)
         _on_selection   = Signal.new(), ---@type ezdap.util.Signal<fun(id:any,data:any)>
         _on_toggle      = Signal.new(), ---@type ezdap.util.Signal<fun(id:any,data:any,expanded:boolean)>
         _bufnr          = -1,
+        _ns_id          = -1,
         _tree           = Tree.new(),
         _flat_ids       = {}, ---@type any[]
         _id_to_idx      = {}, ---@type table<any, integer>
@@ -79,15 +79,15 @@ function TreeBuffer.new(opts)
     }, TreeBuffer)
 end
 
----@param item ezdap.ui.TreeBuffer.ItemDef
----@return ezdap.ui.TreeBuffer.ItemData
+---@param item ezdap.util.TreeBuffer.ItemDef
+---@return ezdap.util.TreeBuffer.ItemData
 local function _to_itemdata(item)
     return { userdata = item.data, expandable = item.expandable, expanded = item.expanded }
 end
 
 ---@param id any
----@param data ezdap.ui.TreeBuffer.ItemData
----@return ezdap.ui.TreeBuffer.Item
+---@param data ezdap.util.TreeBuffer.ItemData
+---@return ezdap.util.TreeBuffer.Item
 local function _to_item(id, data)
     return { id = id, data = data.userdata, expandable = data.expandable, expanded = data.expanded }
 end
@@ -138,20 +138,18 @@ function TreeBuffer:create_buffer(on_deleted)
         return self._bufnr, false
     end
 
-    self._bufnr = ui_util.create_scratch_buffer(false, {
+    self._bufnr = uiutil.create_scratch_buffer(false, {
         buftype      = "nofile",
-        bufhidden    = "wipe",
-        filetype     = self._filetype,
+        filetype     = self._filetype or "neotoolkit-tree",
         modifiable   = false,
         swapfile     = false,
         undolevels   = -1,
-        buflisted    = false,
-        modeline     = false,
         spelloptions = "noplainbuffer",
     }, function()
         self._bufnr = -1
         on_deleted()
     end)
+    self._ns_id = vim.api.nvim_create_namespace("TreeBuffer_" .. self._bufnr)
 
     self:_full_render()
 
@@ -230,7 +228,7 @@ function TreeBuffer:_render_node(flatnode, row)
         prefix = indent
     end
 
-    local text_chunks, virt = self._formatter(id, data.userdata, data.expanded)
+    local text_chunks, virt, line_hl = self._formatter(id, data.userdata, data.expanded)
     local line = prefix
     local col = #prefix
     local hl_calls = {}
@@ -249,8 +247,11 @@ function TreeBuffer:_render_node(flatnode, row)
     end
 
     local extmarks = {}
+    if line_hl then
+        extmarks[#extmarks + 1] = { row, 0, { line_hl_group = line_hl } }
+    end
     if virt and #virt > 0 then
-        extmarks[1] = { row, 0, { virt_text = virt, hl_mode = "combine" } }
+        extmarks[#extmarks + 1] = { row, 0, { virt_text = virt, hl_mode = "combine" } }
     end
 
     return line, hl_calls, extmarks
@@ -275,7 +276,7 @@ function TreeBuffer:_full_render()
         for _, e in ipairs(exts) do extmarks[#extmarks + 1] = e end
     end
 
-    vim.api.nvim_buf_clear_namespace(buf, _ns_id, 0, -1)
+    vim.api.nvim_buf_clear_namespace(buf, self._ns_id, 0, -1)
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
@@ -302,7 +303,7 @@ function TreeBuffer:_render_range(start_idx, old_size, new_flat)
         for _, e in ipairs(exts) do extmarks[#extmarks + 1] = e end
     end
 
-    vim.api.nvim_buf_clear_namespace(buf, _ns_id, start_row, start_row + old_size)
+    vim.api.nvim_buf_clear_namespace(buf, self._ns_id, start_row, start_row + old_size)
 
     local end_row = start_row + old_size
     if old_size == 0 and #self._flat_ids == 0 then end_row = -1 end
@@ -360,7 +361,7 @@ end
 
 ---@private
 ---@param id any
----@param data ezdap.ui.TreeBuffer.ItemData?
+---@param data ezdap.util.TreeBuffer.ItemData?
 function TreeBuffer:_render_line(id, data)
     data = data or self._tree:get_data(id)
     assert(data, "failed to render line, invalid data")
@@ -376,12 +377,12 @@ end
 ---@param extmarks table
 function TreeBuffer:_apply_metadata(buf, hl_calls, extmarks)
     for _, h in ipairs(hl_calls) do
-        vim.api.nvim_buf_set_extmark(buf, _ns_id, h.row, h.s_col, {
+        vim.api.nvim_buf_set_extmark(buf, self._ns_id, h.row, h.s_col, {
             end_col = h.e_col, hl_group = h.hl,
         })
     end
     for _, d in ipairs(extmarks) do
-        vim.api.nvim_buf_set_extmark(buf, _ns_id, d[1], d[2], d[3])
+        vim.api.nvim_buf_set_extmark(buf, self._ns_id, d[1], d[2], d[3])
     end
 end
 
@@ -396,7 +397,7 @@ function TreeBuffer:get_winid()
 end
 
 ---@private
----@return any?, ezdap.ui.TreeBuffer.ItemData?
+---@return any?, ezdap.util.TreeBuffer.ItemData?
 function TreeBuffer:_get_cur_item()
     local winid = self:get_winid()
     if winid <= 0 then return end
@@ -406,10 +407,20 @@ function TreeBuffer:_get_cur_item()
     return id, self._tree:get_data(id)
 end
 
----@return ezdap.ui.TreeBuffer.Item?
+---@return ezdap.util.TreeBuffer.Item?
 function TreeBuffer:get_cursor_item()
     local id, data = self:_get_cur_item()
     if not id or not data then return nil end
+    return _to_item(id, data)
+end
+
+---@param row integer 1-based buffer line number
+---@return ezdap.util.TreeBuffer.Item?
+function TreeBuffer:get_item_at_row(row)
+    local id = self._flat_ids[row]
+    if not id then return nil end
+    local data = self._tree:get_data(id)
+    if not data then return nil end
     return _to_item(id, data)
 end
 
@@ -423,7 +434,7 @@ function TreeBuffer:set_cursor_by_id(id)
     return ok
 end
 
----@return ezdap.ui.TreeBuffer.Item?
+---@return ezdap.util.TreeBuffer.Item?
 function TreeBuffer:get_item(id)
     local data = self._tree:get_data(id)
     if not data then return nil end
@@ -435,7 +446,7 @@ function TreeBuffer:get_parent_id(id)
     return self._tree:get_parent_id(id)
 end
 
----@return ezdap.ui.TreeBuffer.Item[]
+---@return ezdap.util.TreeBuffer.Item[]
 function TreeBuffer:get_children(parent_id)
     local items = {}
     for _, ti in ipairs(self._tree:get_children(parent_id)) do
@@ -469,7 +480,7 @@ function TreeBuffer:clear_items()
 end
 
 ---@param parent_id any  -- nil for root
----@param children ezdap.ui.TreeBuffer.ItemDef[]
+---@param children ezdap.util.TreeBuffer.ItemDef[]
 ---@return boolean
 function TreeBuffer:set_children(parent_id, children)
     if parent_id and not self._tree:have_item(parent_id) then return false end
@@ -506,7 +517,7 @@ function TreeBuffer:remove_children(id)
 end
 
 ---@param parent_id any  -- nil for root
----@param item ezdap.ui.TreeBuffer.ItemDef
+---@param item ezdap.util.TreeBuffer.ItemDef
 ---@return boolean
 function TreeBuffer:add_item(parent_id, item)
     if parent_id and not self._tree:have_item(parent_id) then return false end
@@ -534,7 +545,7 @@ function TreeBuffer:add_item(parent_id, item)
 end
 
 ---@param reference_id any
----@param item ezdap.ui.TreeBuffer.ItemDef
+---@param item ezdap.util.TreeBuffer.ItemDef
 ---@param before boolean  true to insert before reference, false to insert after
 ---@return boolean
 function TreeBuffer:add_sibling(reference_id, item, before)
@@ -664,7 +675,7 @@ function TreeBuffer:get_item_data(id)
     return data and data.userdata or nil
 end
 
----@return ezdap.ui.TreeBuffer.Item[]
+---@return ezdap.util.TreeBuffer.Item[]
 function TreeBuffer:get_items()
     local items = {}
     for _, ti in ipairs(self._tree:get_items()) do
@@ -673,7 +684,7 @@ function TreeBuffer:get_items()
     return items
 end
 
----@return ezdap.ui.TreeBuffer.Item[]
+---@return ezdap.util.TreeBuffer.Item[]
 function TreeBuffer:get_roots()
     local items = {}
     for _, ti in ipairs(self._tree:get_roots()) do
@@ -682,7 +693,7 @@ function TreeBuffer:get_roots()
     return items
 end
 
----@return ezdap.ui.TreeBuffer.Item?
+---@return ezdap.util.TreeBuffer.Item?
 function TreeBuffer:get_parent_item(id)
     local par_id = self._tree:get_parent_id(id)
     if not par_id then return nil end
@@ -692,7 +703,7 @@ function TreeBuffer:get_parent_item(id)
 end
 
 ---@param winid integer
----@return ezdap.ui.TreeBuffer.Item[]
+---@return ezdap.util.TreeBuffer.Item[]
 function TreeBuffer:get_visible_items(winid)
     if not winid or not vim.api.nvim_win_is_valid(winid) then return {} end
     if vim.api.nvim_win_get_buf(winid) ~= self._bufnr then return {} end

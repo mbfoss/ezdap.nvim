@@ -3,10 +3,8 @@
 ---TreeBuffer as the DebugView, but throwaway — the buffer/window are wiped as
 ---soon as the float is left or dismissed.
 
-local TreeBuffer = require("ezdap.ui.TreeBuffer")
+local TreeBuffer = require("ezdap.util.TreeBuffer")
 local manager    = require("ezdap.manager")
-local config     = require("ezdap.config")
-local str_util   = require("ezdap.util.strutil")
 local ui_util    = require("ezdap.util.ui")
 
 local M = {}

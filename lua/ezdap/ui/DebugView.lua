@@ -1,4 +1,5 @@
-local TreeBuffer  = require("ezdap.ui.TreeBuffer")
+local TreeBuffer  = require("ezdap.util.TreeBuffer")
+local DetailBlock = require("ezdap.ui.DetailBlock")
 local manager     = require("ezdap.manager")
 local config      = require("ezdap.config")
 local expressions = require("ezdap.ui.expressions")
@@ -10,7 +11,6 @@ local timer       = require("ezdap.util.timer")
 local floatwin    = require("ezdap.util.floatwin")
 local fixedwin    = require("ezdap.util.fixedwin")
 local ui          = require("ezdap.util.ui")
-local ui_util     = require("ezdap.util.ui")
 
 ---@alias ezdap.DebugView.ItemKind
 ---| "root"
@@ -245,7 +245,7 @@ end
 -- DebugView class
 
 ---@class ezdap.DebugView
----@field private _tree             ezdap.ui.TreeBuffer
+---@field private _tree             ezdap.util.TreeBuffer
 ---@field private _width_ratio      number?   last-known width ratio, reused on the next open
 ---@field private _active_id        number?
 ---@field private _active_sess      ezdap.dap.Session?
@@ -469,37 +469,6 @@ end
 
 -- Hover
 
--- Label column, list wrap width and thread-row cap of the session-info hover.
-local _HOVER_LABEL_W = 13
-local _HOVER_WRAP_W = 72
-local _HOVER_THREADS = 12
-
----@param lines string[]
----@param label string
----@param value string|number|nil  anything else is skipped
-local function _kv(lines, label, value)
-    if type(value) ~= "string" and type(value) ~= "number" then return end
-    if value == "" then return end
-    lines[#lines + 1] = ("%-" .. _HOVER_LABEL_W .. "s%s"):format(label, value)
-end
-
----Append `items` as an indented comma-separated list wrapped at `_HOVER_WRAP_W`.
----@param lines string[]
----@param items string[]
-local function _append_wrapped(lines, items)
-    local cur = ""
-    for _, item in ipairs(items) do
-        local piece = (cur == "") and item or (cur .. ", " .. item)
-        if cur ~= "" and vim.fn.strdisplaywidth(piece) > _HOVER_WRAP_W then
-            lines[#lines + 1] = "  " .. cur .. ","
-            cur = item
-        else
-            cur = piece
-        end
-    end
-    if cur ~= "" then lines[#lines + 1] = "  " .. cur end
-end
-
 ---Capability keys the adapter reports as supported, `supports` prefix dropped.
 ---@param sess ezdap.dap.Session
 ---@return string[]
@@ -515,112 +484,59 @@ local function _capability_names(sess)
     return names
 end
 
----Assemble the session hover: identity, adapter/connection config, live thread
----and frame state, breakpoint counts, pending exception and capabilities. A row
----whose session has ended keeps only what its stored `session_info` still knows.
+---Fill `block` with the session hover: identity, adapter/connection config, live
+---thread and frame state, breakpoint counts, pending exception and capabilities.
+---A row whose session ended keeps only what its stored `session_info` knows.
 ---@private
----@param data ezdap.DebugView.ItemData
----@return string[]
-function DebugView:_session_lines(data)
-    local id    = data.session_id
-    local info  = data.session_info
-    local sess  = id and manager.get_session(id) or nil
-    local lines = {}
+---@param block ezdap.ui.DetailBlock
+---@param data  ezdap.DebugView.ItemData
+function DebugView:_session_details(block, data)
+    local id   = data.session_id
+    local info = data.session_info
+    local sess = id and manager.get_session(id) or nil
 
-    _kv(lines, "Name", data.name)
-    _kv(lines, "Id", tostring(id) .. (self._active_id == id and "  (active)" or ""))
-
+    block:kv("Name", data.name)
     local state = (sess and sess.state) or (info and info.state) or "unknown"
     if sess and sess.state_reason then state = state .. "  (" .. sess.state_reason .. ")" end
-    _kv(lines, "State", state)
+    state = state == "stopped" and "paused" or (state == "terminated" and "ended" or state)
+    block:kv("State", state)
 
-    local cfg = sess and sess.config
-    if cfg then
-        _kv(lines, "Adapter", cfg.adapter or cfg.type)
-        _kv(lines, "Request", cfg.request)
-        local cmd = cfg.command
-        _kv(lines, "Command", type(cmd) == "table" and table.concat(cmd, " ") or cmd --[[@as string?]])
-        if cfg.port then _kv(lines, "Address", (cfg.host or "127.0.0.1") .. ":" .. cfg.port) end
-        _kv(lines, "Cwd", cfg.cwd and vim.fn.fnamemodify(cfg.cwd, ":~"))
-        local args = cfg.request_args or {}
-        _kv(lines, "Program", args.program)
-        _kv(lines, "Pid", args.processId or args.pid)
-    end
+    if not sess then block:blank():line("session is no longer running") return end
 
-    if not sess then
-        lines[#lines + 1] = ""
-        lines[#lines + 1] = "session is no longer running"
-        return lines
-    end
-
-    local threads = sess.threads or {}
-    local current = sess:current_thread()
-    lines[#lines + 1] = ""
-    lines[#lines + 1] = ("Threads      %d total, %d paused"):format(#threads, #sess:stopped_threads())
-    for i, thread in ipairs(threads) do
-        if i > _HOVER_THREADS then
-            lines[#lines + 1] = ("  … %d more"):format(#threads - _HOVER_THREADS)
-            break
+    local threads_info
+    do
+        local threads, running, stopped = sess.threads or {}, 0, 0
+        for _, thread in ipairs(threads) do
+            if thread.status == "stopped" then
+                stopped = stopped + 1
+            elseif thread.status == "running" then
+                running = running + 1
+            end
         end
-        lines[#lines + 1] = ("  %s %-5s %-26s %s"):format(
-            (current and thread.id == current.id) and "▸" or " ",
-            thread.id,
-            str_util.crop_for_ui(thread.name or "?", 26),
-            thread.status or "?")
+        local out = ("%d total, %d running, %d stopped"):format(#threads, running, stopped)
+        local exited = #threads - running - stopped
+        if exited > 0 then out = out .. (", %d exited"):format(exited) end
+        threads_info = out
     end
+    block:blank():kv("Threads", threads_info)
 
     local frame = sess:current_stack_frame()
     if frame then
         local src = frame.source
         local loc = src and (src.path and vim.fn.fnamemodify(src.path, ":~:.") or src.name)
-        lines[#lines + 1] = ""
-        _kv(lines, "Frame", frame.name)
-        _kv(lines, "Location", loc and (loc .. ":" .. (frame.line or "?")))
-    end
-
-    local bp_parts, n_src, n_verified, n_filters = {}, 0, 0, 0
-    for _, bp in ipairs(breakpoints.all()) do
-        n_src = n_src + 1
-        local st = sess:bp_status(bp.internal_id)
-        if st and st.verified then n_verified = n_verified + 1 end
-    end
-    for _, bp in ipairs(breakpoints.exception_breakpoints()) do
-        if not bp.disabled then n_filters = n_filters + 1 end
-    end
-    if n_src > 0 then
-        bp_parts[1] = ("%d source (%d verified)"):format(n_src, n_verified)
-    end
-    ---@param n integer
-    ---@param label string
-    local function count(n, label)
-        if n > 0 then bp_parts[#bp_parts + 1] = n .. " " .. label end
-    end
-    count(#breakpoints.function_breakpoints(), "function")
-    count(n_filters, "exception filter")
-    count(#breakpoints.exception_name_breakpoints(), "exception type")
-    count(#sess:data_breakpoints(), "data")
-    count(vim.tbl_count(sess:instruction_breakpoints()), "instruction")
-    if #bp_parts > 0 then
-        lines[#lines + 1] = ""
-        _kv(lines, "Breakpoints", table.concat(bp_parts, ", "))
+        block:blank()
+        block:kv("Frame", frame.name)
+        block:kv("Location", loc and (loc .. ":" .. (frame.line or "?")))
     end
 
     if sess.exception_description then
-        lines[#lines + 1] = ""
-        lines[#lines + 1] = "Exception"
-        for _, l in ipairs(vim.split(sess.exception_description, "\n", { plain = true })) do
-            lines[#lines + 1] = "  " .. l
-        end
+        block:section("Exception"):text(sess.exception_description, "  ")
     end
 
     local caps = _capability_names(sess)
     if #caps > 0 then
-        lines[#lines + 1] = ""
-        lines[#lines + 1] = ("Capabilities (%d)"):format(#caps)
-        _append_wrapped(lines, caps)
+        block:section(("Capabilities (%d)"):format(#caps)):list(caps)
     end
-
-    return lines
 end
 
 ---@param data ezdap.DebugView.ItemData
@@ -628,17 +544,7 @@ function DebugView:_show_hover(data)
     local kind = data and data.kind
     if not kind then return end
     local sess = self._active_sess
-
-    ---@param lines string[]
-    ---@param title string
-    local function _float(lines, title)
-        vim.lsp.util.open_floating_preview(lines, "plaintext", {
-            border = "rounded",
-            title = title,
-            focus_id = "ezdap_view",
-
-        })
-    end
+    local block = DetailBlock.new({ focus_id = "ezdap_view" })
 
     if kind == "stackframe" then
         local frame
@@ -651,30 +557,25 @@ function DebugView:_show_hover(data)
             end
         end
         if not frame then return end
-        local lines = { frame.name or data.name }
+        block:line(frame.name or data.name)
         local src = frame.source
         if src then
-            if src.path and src.path ~= "" then
-                lines[#lines + 1] = vim.fn.fnamemodify(src.path, ":~:.")
-            elseif src.name then
-                lines[#lines + 1] = src.name
-            end
+            block:line(src.path and src.path ~= "" and vim.fn.fnamemodify(src.path, ":~:.") or src.name)
         end
-        if frame.line then lines[#lines + 1] = "line " .. frame.line end
-        if frame.instructionPointerReference then
-            lines[#lines + 1] = frame.instructionPointerReference
-        end
-        _float(lines, "Stack Frame")
+        if frame.line then block:line("line " .. frame.line) end
+        block:line(frame.instructionPointerReference)
+        block:show("Stack Frame")
         return
     end
 
     if kind == "session" then
-        _float(self:_session_lines(data), "Session")
+        self:_session_details(block, data)
+        block:show("Session")
         return
     end
 
     if (kind == "variable" or kind == "expression") and data.is_na then
-        _float(vim.split(data.error or "not available", "\n", { plain = true }), data.name)
+        block:text(data.error or "not available"):show(data.name)
         return
     end
 
@@ -683,66 +584,61 @@ function DebugView:_show_hover(data)
         local expr = (kind == "variable") and (data.evaluateName or data.name) or data.name
         sess:evaluate({ expression = expr, context = "hover" }, function(body, err)
             if err or not body then
-                _float({ err or "not available" }, data.name)
+                block:line(err or "not available"):show(data.name)
                 return
             end
-            local lines = {}
             if body.type and body.type ~= "" then
-                lines[#lines + 1] = body.type
-                lines[#lines + 1] = ""
+                block:line(body.type):blank()
             end
-            vim.list_extend(lines, vim.split(body.result or "", "\n", { plain = true }))
-            _float(lines, data.name)
+            block:text(body.result or ""):show(data.name)
         end)
         return
     end
 
     if kind == "breakpoint" then
-        local lines = {}
         if data.bp_kind == "source" then
             if data.bp_source and data.bp_source ~= "" then
-                lines[#lines + 1] = vim.fn.fnamemodify(data.bp_source, ":~:.")
+                block:line(vim.fn.fnamemodify(data.bp_source, ":~:."))
             end
-            if data.bp_line then lines[#lines + 1] = "line " .. data.bp_line end
+            if data.bp_line then block:line("line " .. data.bp_line) end
         elseif data.bp_kind == "function" then
-            lines[#lines + 1] = "function: " .. (data.name or "?")
+            block:line("function: " .. (data.name or "?"))
         elseif data.bp_kind == "exception_filter" then
-            lines[#lines + 1] = "filter: " .. (data.bp_filter or data.name or "?")
+            block:line("filter: " .. (data.bp_filter or data.name or "?"))
         elseif data.bp_kind == "exception_type" then
-            lines[#lines + 1] = "exception: " .. (data.bp_ex_name or data.name or "?")
-            if data.break_mode then lines[#lines + 1] = "break mode: " .. data.break_mode end
-            if data.unsupported then lines[#lines + 1] = "(not supported by adapter)" end
+            block:line("exception: " .. (data.bp_ex_name or data.name or "?"))
+            if data.break_mode then block:line("break mode: " .. data.break_mode) end
+            if data.unsupported then block:line("(not supported by adapter)") end
         elseif data.bp_kind == "data" then
-            lines[#lines + 1] = "data: " .. (data.name or "?")
-            if data.access_type then lines[#lines + 1] = "access: " .. data.access_type end
+            block:line("data: " .. (data.name or "?"))
+            if data.access_type then block:line("access: " .. data.access_type) end
         end
         if data.condition and data.condition ~= "" then
-            lines[#lines + 1] = "condition: " .. data.condition
+            block:line("condition: " .. data.condition)
         end
         if data.hit_condition and data.hit_condition ~= "" then
-            lines[#lines + 1] = "hit: " .. data.hit_condition
+            block:line("hit: " .. data.hit_condition)
         end
         if data.log_message and data.log_message ~= "" then
-            lines[#lines + 1] = "log: " .. data.log_message
+            block:line("log: " .. data.log_message)
         end
         local st = data.bp_id and sess and sess:bp_status(data.bp_id)
         if st then
             if st.message and st.message ~= "" then
-                lines[#lines + 1] = ""
-                lines[#lines + 1] = st.message
+                block:blank():line(st.message)
             end
             if st.hits and st.hits > 0 then
-                lines[#lines + 1] = "hit count: " .. st.hits
+                block:line("hit count: " .. st.hits)
             end
         end
         if data.disabled then
-            lines[#lines + 1] = "disabled"
+            block:line("disabled")
         elseif data.verified == false then
-            lines[#lines + 1] = "not verified"
+            block:line("not verified")
         elseif data.verified then
-            lines[#lines + 1] = "verified"
+            block:line("verified")
         end
-        if #lines > 0 then _float(lines, "Breakpoint") end
+        block:show("Breakpoint")
         return
     end
 end
@@ -939,8 +835,12 @@ function DebugView:_load_stack(ctx)
     end)
 end
 
+---Reconcile `new_children` into `parent_id` in place: surviving ids keep their
+---node — and so their expansion state — with data and expandability refreshed,
+---new ids are added, and ids no longer listed are removed.
+---@private
 ---@param parent_id any
----@param new_children ezdap.ui.TreeBuffer.ItemDef[]
+---@param new_children ezdap.util.TreeBuffer.ItemDef[]
 function DebugView:_merge_children(parent_id, new_children)
     local existing = self._tree:get_children(parent_id)
     local existing_map = {}
@@ -1276,7 +1176,7 @@ end
 function DebugView:get_bufnr(on_deleted)
     local bufnr, created = self._tree:create_buffer(on_deleted)
     if created and bufnr > 0 then
-        vim.api.nvim_buf_set_name(bufnr, ui_util.unique_buf_name("ezdap://Debug View"))
+        vim.api.nvim_buf_set_name(bufnr, ui.unique_buf_name("ezdap://Debug View"))
         self:_setup_keymaps(bufnr)
         -- apply initial state for any already-running sessions
         for id, sess in pairs(manager.sessions()) do
@@ -1321,10 +1221,10 @@ function DebugView:_open(focus)
         function(ratio) self._width_ratio = ratio end,
         { enter = focus })
     vim.api.nvim_win_set_buf(win, bufnr)
-    _setlocal(win, "winfixbuf", true)
-    _setlocal(win, "signcolumn", "no")
-    _setlocal(win, "number", false)
-    _setlocal(win, "relativenumber", false)
+    _setlocal(win,"winfixbuf", true)
+    _setlocal(win,"signcolumn", "no")
+    _setlocal(win,"number", false)
+    _setlocal(win,"relativenumber", false)
 end
 
 ---Open the DebugView in a vertical split (or focus if already visible).
@@ -1343,7 +1243,7 @@ end
 ---dataId against the active session and prompting for an access type when the
 ---adapter offers several.
 ---@private
----@param cur ezdap.ui.TreeBuffer.Item  a node whose data.kind == "variable"
+---@param cur ezdap.util.TreeBuffer.Item  a node whose data.kind == "variable"
 function DebugView:_toggle_data_breakpoint(cur)
     local sess = self._active_sess
     if not sess then
