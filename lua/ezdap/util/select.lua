@@ -26,6 +26,7 @@ local _antiflicker_delay = 200
 ---@field data ezdap.select.ItemData?  -- passed to the callback and previewer
 ---@field icon string?  -- glyph drawn before the label, excluded from matching
 ---@field icon_hl string?  -- highlight for `icon`
+---@field virt_line {[1]:string,[2]:string?}[]?  -- one display-only line under the item
 
 ---@class ezdap.select.Preview
 ---@field content string|string[]|nil
@@ -45,6 +46,7 @@ local _antiflicker_delay = 200
 ---@field height_ratio number?
 ---@field width_ratio number?
 ---@field list_wrap boolean?
+---@field list_wrap_indent integer?  -- indent for wrapped list lines; defaults to 0 with separators, else 2
 
 ---@class ezdap.select.Layout
 ---@field prompt_row integer
@@ -64,6 +66,7 @@ local _antiflicker_delay = 200
 ---@field icon string?
 ---@field icon_hl string?
 ---@field label_chunks {[1]:string,[2]:string?}[]?
+---@field virt_line {[1]:string,[2]:string?}[]?
 ---@field score number?
 ---@field data any
 
@@ -286,6 +289,8 @@ local _active_picker = nil
 ---@field preview_timer table?
 ---@field _source_items ezdap.select.ListItem[]
 ---@field _initial integer?
+---@field _list_sep_line string?
+---@field _has_virt_lines boolean
 local Picker = {}
 Picker.__index = Picker
 
@@ -309,6 +314,9 @@ function Picker:init(opts, callback)
 
     ---@type ezdap.select.ListItem[]
     self._source_items         = {}
+    -- Separators are not a caller decision: they appear exactly when at least
+    -- one item carries a virtual line, to keep an entry and its line together.
+    self._has_virt_lines       = false
     for _, it in ipairs(opts.items or {}) do
         local label, data
         if type(it) == "string" then
@@ -317,11 +325,14 @@ function Picker:init(opts, callback)
             label, data = it.label or "", it.data
         end
         label = (tostring(label):gsub("\n", " "))
+        local virt_line = type(it) == "table" and it.virt_line or nil
+        if virt_line then self._has_virt_lines = true end
         table.insert(self._source_items, {
-            label   = label,
-            data    = data,
-            icon    = type(it) == "table" and it.icon or nil,
-            icon_hl = type(it) == "table" and it.icon_hl or nil,
+            label     = label,
+            data      = data,
+            icon      = type(it) == "table" and it.icon or nil,
+            icon_hl   = type(it) == "table" and it.icon_hl or nil,
+            virt_line = virt_line,
         })
     end
 
@@ -355,6 +366,10 @@ function Picker:relayout()
         height_ratio = opts.height_ratio,
         width_ratio  = opts.width_ratio,
     }
+
+    if self._has_virt_lines then
+        self._list_sep_line = string.rep("─", self.layout.list_width)
+    end
 
     local base_cfg    = { relative = "editor", style = "minimal", border = "rounded" }
     local winhl       = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title"
@@ -431,6 +446,13 @@ function Picker:relayout()
         vim.wo[self.lwin].winhighlight = winhl
         vim.wo[self.lwin].wrap = self.opts.list_wrap ~= false
         vim.wo[self.lwin].cursorline = false
+        -- Indent wrapped lines so continuations read as part of the entry above.
+        -- A separator already delimits entries, so it defaults that case to 0.
+        local wrap_indent = opts.list_wrap_indent or (self._has_virt_lines and 0 or 2)
+        if wrap_indent > 0 then
+            vim.wo[self.lwin].breakindent = true
+            vim.wo[self.lwin].breakindentopt = "shift:" .. wrap_indent
+        end
     else
         vim.api.nvim_win_set_config(self.lwin, vim.tbl_extend("force", base_cfg, {
             row    = self.layout.list_row,
@@ -484,6 +506,7 @@ function Picker:run_filter()
                 label        = src.label,
                 icon         = src.icon,
                 icon_hl      = src.icon_hl,
+                virt_line    = src.virt_line,
                 label_chunks = { { src.label } },
                 data         = src.data,
                 score        = nil,
@@ -497,6 +520,7 @@ function Picker:run_filter()
                     label        = src.label,
                     icon         = src.icon,
                     icon_hl      = src.icon_hl,
+                    virt_line    = src.virt_line,
                     label_chunks = m.chunks,
                     data         = src.data,
                     score        = m.score,
@@ -521,6 +545,9 @@ function Picker:run_filter()
 
     if #self.list_items > 0 and self.lwin and vim.api.nvim_win_is_valid(self.lwin) then
         vim.api.nvim_win_set_cursor(self.lwin, { target, 0 })
+        vim.schedule(function()
+            if not self.closed and target == #self.list_items then self:_reveal_virt_lines(target) end
+        end)
     end
     self:render_cursor()
     self:render_position()
@@ -559,6 +586,23 @@ function Picker:render_list()
                 end
             end
         end
+
+        -- Display-only lines hung under the entry: the item's own `virt_line`
+        -- (aligned with the label by the row prefix) then the separator rule.
+        local vlines = {}
+        if item.virt_line then
+            table.insert(vlines, vim.list_extend({ { prefix } }, item.virt_line))
+        end
+        if self._list_sep_line then
+            table.insert(vlines, { { self._list_sep_line, "NonText" } })
+        end
+        if #vlines > 0 then
+            table.insert(extmarks, {
+                row  = row,
+                col  = 0,
+                opts = { virt_lines = vlines, hl_mode = "blend" },
+            })
+        end
     end
 
     vim.bo[self.lbuf].modifiable = true
@@ -580,6 +624,34 @@ function Picker:get_cursor()
     return vim.api.nvim_win_get_cursor(self.lwin)[1]
 end
 
+---Neovim won't scroll to reveal virt_lines hanging below the cursor line, so an
+---entry on the bottom row of the viewport has its virtual lines clipped. When
+---that's the case, scroll the view up by the entry's own virtual line.
+---@param row integer
+function Picker:_reveal_virt_lines(row)
+    if not self.lwin or not vim.api.nvim_win_is_valid(self.lwin) then return end
+    local item = self.list_items[row]
+    if not item then return end
+
+    local nvirt = item.virt_line and 1 or 0
+    if nvirt == 0 and not self._list_sep_line then return end
+
+    vim.api.nvim_win_call(self.lwin, function()
+        -- Screen height of the entry's own text (wrapped rows, excluding virt_lines).
+        local line_height = vim.api.nvim_win_text_height(self.lwin, {
+            start_row = row - 1,
+            end_row   = row - 1,
+        }).all
+        -- Only act when the entry's last row is the bottom row of the viewport.
+        if vim.fn.winline() + line_height - 1 < vim.api.nvim_win_get_height(self.lwin) then
+            return
+        end
+        local view = vim.fn.winsaveview()
+        view.topline = view.topline + nvirt
+        vim.fn.winrestview(view)
+    end)
+end
+
 ---@param row integer
 ---@param force boolean?
 ---@param clamp boolean?
@@ -597,6 +669,9 @@ function Picker:move_cursor(row, force, clamp)
     end
 
     vim.api.nvim_win_set_cursor(self.lwin, { row, 0 })
+    vim.schedule(function()
+        if not self.closed and row == #self.list_items then self:_reveal_virt_lines(row) end
+    end)
     self:render_cursor()
     self:render_position()
     self:update_preview()
