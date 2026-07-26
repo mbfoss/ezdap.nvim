@@ -59,9 +59,14 @@
 ---some other way than by omitting the field (an attach profile asks the user
 ---to pick a process for an unset `pid`, which is why no adapter marks that input
 ---`required`).
+---`choices` are the values an input is normally written with, when the adapter
+---names them itself — a `console`, a mode, a backend. They are offered by
+---completion and by a typed file's schema (as `examples`), never enforced: a value
+---outside them reaches `build` unhindered, in either authoring form.
 ---@class ezdap.Input
 ---@field type?        ezdap.InputType    default `string`
 ---@field format?      ezdap.InputFormat  default: read by `type` alone
+---@field choices?     string[]  the values this input takes, when they're a fixed set
 ---@field required?    boolean  unset is an error (default false)
 ---@field description? string   a few words on what the input means
 

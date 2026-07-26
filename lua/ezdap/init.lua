@@ -280,12 +280,11 @@ local function _register_user_commands()
             local name = arg_lead:sub(1, eq - 1)
             local pfx  = arg_lead:sub(1, eq)
             local val  = arg_lead:sub(eq + 1)
-            -- Completing an input's value: whatever the input's own format says it
-            -- can offer — paths for the path-ish ones, nothing for the rest.
+            -- Completing an input's value: whatever the input itself can offer —
+            -- paths, true/false, a fixed set of values, nothing for the rest.
             local input = schema.profile_inputs(adapter, profile_name)[name]
-            local comp_type = require("ezdap.inputs").completion(input)
-            if not comp_type then return {} end
-            return vim.tbl_map(function(f) return pfx .. f end, vim.fn.getcompletion(val, comp_type))
+            local values = require("ezdap.inputs").completion(input, val)
+            return vim.tbl_map(function(v) return pfx .. v end, values)
         end
 
         -- No `=` yet: complete the adapter, then the profile, then input names.

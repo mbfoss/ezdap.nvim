@@ -3,7 +3,7 @@
 ---A profile's `inputs` declares a *value space*, and each consumer wants a
 ---different projection of it — `quick_run` parses a command-line string into it,
 ---a tasks-file LSP describes it as JSON Schema, the scaffolders seed a starting
----document with it, and `:Debug` completion offers paths for the path-ish formats.
+---document with it, and `:Debug` completion offers the values it can enumerate.
 ---Each projection used to be its own switch over the format enum, spread across
 ---two plugins, so adding a format meant finding all four and no two could be
 ---checked against each other. They live here instead, one row each.
@@ -46,7 +46,7 @@ local M = {}
 ---@field schema     table               JSON Schema for the typed authored form
 ---@field parse?     fun(raw: string): any?, string?  the string authored form → a value of `type`
 ---@field seed?      any                 starting value for a scaffolded document
----@field complete?  "file"|"dir"        value completion kind, for command lines
+---@field complete?  fun(partial: string): string[]  candidate values, for command lines
 
 ---Read a raw string as a value of `input_type`. This is the no-format path — the
 ---string form of a format-less input, and the fallback for a row without a `parse`.
@@ -127,17 +127,34 @@ local function _map(raw)
     return out
 end
 
+---Completion drawn from Neovim's own `getcompletion` — paths, for the path-ish
+---formats. `kind` is a `getcompletion` type ("file"/"dir").
+---@param kind string
+---@return fun(partial: string): string[]
+local function _paths(kind)
+    return function(partial) return vim.fn.getcompletion(partial, kind) end
+end
+
+---Completion over a fixed set of values, offering those that extend `partial`.
+---@param values string[]
+---@return fun(partial: string): string[]
+local function _choices(values)
+    return function(partial)
+        return vim.tbl_filter(function(v) return vim.startswith(v, partial) end, values)
+    end
+end
+
 ---Every declared `ezdap.InputFormat`. `file`/`dir` differ only in the completion
 ---they drive, not in the value they produce.
 ---@type table<string, ezdap.FormatDef>
 M.formats = {
-    file       = { type = "string",  schema = { type = "string" }, parse = _expand,  seed = "", complete = "file" },
-    dir        = { type = "string",  schema = { type = "string" }, parse = _expand,  seed = "", complete = "dir" },
-    cwd        = { type = "string",  schema = { type = "string" }, parse = _abspath, seed = "", complete = "dir" },
-    host       = { type = "string",  schema = { type = "string" }, seed = "" },
-    port       = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
-    map        = { type = "table",   item_type = "string", schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map,  seed = {} },
-    list       = { type = "table",   item_type = "string", schema = { type = "array", items = { type = "string" } },    parse = _list, seed = {} },
+    file = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _paths("file") },
+    dir  = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _paths("dir") },
+    cwd  = { type = "string", schema = { type = "string" }, parse = _abspath, seed = "", complete = _paths("dir") },
+    host = { type = "string", schema = { type = "string" }, seed = "", complete = _choices({ "localhost", "127.0.0.1", "0.0.0.0" }) },
+    port = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
+    map  = { type = "table", item_type = "string", schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map, seed = {} },
+    list = { type = "table", item_type = "string", schema = { type = "array", items = { type = "string" } }, parse = _list, seed = {} },
 }
 
 -- Projections
@@ -166,13 +183,27 @@ function M.parse(input, raw)
 end
 
 ---JSON Schema for an input's **typed form** — how a structured file writes it.
+---An input's `choices` are `examples`, not an `enum`: they are offered, never
+---required, so the typed form stays as permissive as the command line.
 ---A fresh table each call: callers annotate it (with the input's `description`)
 ---and must not reach the registry's own rows.
 ---@param input ezdap.Input?
 ---@return table
 function M.json_schema(input)
     local def = _def(input)
-    if def then return vim.deepcopy(def.schema) end
+    if def then
+        local schema = vim.deepcopy(def.schema)
+        if input and input.choices then
+            -- A collection's choices are what one *entry* may be, so they describe
+            -- the element schema — the array's items, the object's values.
+            local element = schema.items or schema.additionalProperties or schema
+            element.examples = vim.deepcopy(input.choices)
+        end
+        return schema
+    end
+    if input and input.choices then
+        return { type = input.type or "string", examples = vim.deepcopy(input.choices) }
+    end
 
     local input_type = input and input.type
     if input_type == "integer" or input_type == "number" or input_type == "boolean" then
@@ -198,13 +229,30 @@ function M.seed(input)
     return ""
 end
 
----The completion kind for an input's value on a command line, or nil for an input
----whose values can't be enumerated.
+---Candidate values for an input's **string form** — what a command line offers for
+---the value half of `name=value`. An input's own `choices` answer first, then its
+---type (a boolean is written one of two ways), then its format (paths, hosts).
+---Empty for an input whose values can't be enumerated.
 ---@param input ezdap.Input?
----@return "file"|"dir"|nil
-function M.completion(input)
+---@param partial string?  the value typed so far
+---@return string[]
+function M.completion(input, partial)
+    partial = partial or ""
     local def = _def(input)
-    return def and def.complete or nil
+
+    if input and input.choices then
+        -- A collection's string form is comma-separated, so it is the entry being
+        -- typed — everything after the last comma — that a value completes.
+        local head = def and def.item_type and partial:match("^.*,") or ""
+        local tail = partial:sub(#head + 1)
+        return vim.tbl_map(function(v) return head .. v end, _choices(input.choices)(tail))
+    end
+
+    local input_type = (def and def.type) or (input and input.type)
+    if input_type == "boolean" then return _choices({ "true", "false" })(partial) end
+
+    if def and def.complete then return def.complete(partial) end
+    return {}
 end
 
 ---What one element of an input's value becomes — a `list` entry, a `map` value.

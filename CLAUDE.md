@@ -55,7 +55,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   plus an optional `profiles` table (`name -> ezdap.Profile`) of
   launch/attach descriptions. Each `Profile` is self-describing: an `inputs`
   table declaring what it accepts (`name -> ezdap.Input`, each with a `type` and
-  `description`, plus an optional `format` and `required`) and a
+  `description`, plus an optional `format`, `choices` and `required`) and a
   `build(params, connect, inputs)` that assembles the native request body — and any
   task-level `host`/`port` — in place. Both `quick_run` and a scaffolded run file
   resolve the same way (`values -> build -> task`), so `inputs` is the single
@@ -70,7 +70,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   `build` receives), `item_type` (what one element of a collection becomes),
   `schema` (JSON Schema for the typed authored form), `parse` (the string authored
   form), `seed` (a scaffolded document's starting value) and `complete`
-  (command-line value completion). Consumers call the five projections
+  (the candidate values a command line offers). Consumers call the five projections
   (`parse`/`json_schema`/`seed`/`completion`/`item_type`) and **never switch on a format name**;
   an unknown or absent format falls back to `type` alone. Adding a format is one
   row here, and every consumer — in both plugins — picks it up.

@@ -70,6 +70,12 @@ local function _input_lines(adapter, profile_name)
     local lines = {}
     for i, name in ipairs(names) do
         local comment = specs[name].description or ""
+        -- An input that names its values says them here too, so the file shows what
+        -- may be written without having to run completion.
+        if specs[name].choices then
+            local listed = table.concat(specs[name].choices, "|")
+            comment = comment == "" and listed or (comment .. ": " .. listed)
+        end
         local line = "        " .. codes[i]
         if comment ~= "" then
             line = line .. string.rep(" ", width - #codes[i]) .. "  -- " .. comment

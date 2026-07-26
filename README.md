@@ -191,8 +191,9 @@ declares a **type** that decides how the value is read: `file`/`dir`/`cwd`
 request, unless the profile marks it required.
 
 Tab-completion offers adapters, then profile names, then the inputs
-available for the chosen profile — and, once you type `=`, path
-completion for inputs whose type is path-like.
+available for the chosen profile — and, once you type `=`, the values that
+input can take: paths for the path-like ones, `true`/`false` for a boolean,
+and the fixed set an input like `console` or `backend` names.
 
 ### Run files — versionable debug configs
 
@@ -750,6 +751,10 @@ How the pieces fit:
   The full vocabulary is one row per format in
   [inputs.lua](lua/ezdap/inputs.lua) — every consumer reads those rows, so a new
   format is a single addition there, never a `if format == …` anywhere else.
+- **`choices`** — the values an input is normally written with, when the adapter
+  names them itself (`console`, `terminal`, `backend`, …). Completion offers them
+  and a typed file's schema lists them as `examples`, but nothing rejects a value
+  outside them. A boolean input completes as `true`/`false` on its own.
 - **`required`** — an unset required input is a resolve error naming the input.
   Leave it off and an unset input simply arrives as `nil`; since Lua drops
   nil-valued keys, `params.cwd = inputs.cwd` omits `cwd` entirely. Assign
