@@ -137,6 +137,15 @@ function M.session_state(state)
     return state or "unknown"
 end
 
+---The user-facing name of a thread's status. Same reasoning as
+---`session_state`, but a thread that ended really did exit.
+---@param status string?  an `ezdap.dap.Thread.status` value
+---@return string
+function M.thread_status(status)
+    if status == "stopped" then return "paused" end
+    return status or "unknown"
+end
+
 ---@param spec ezdap.ui.format.SessionSpec?
 ---@return ezdap.ui.SignName
 function M.session_sign_name(spec)

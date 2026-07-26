@@ -6,7 +6,7 @@
 local select   = require("ezdap.util.select")
 local inputwin = require("ezdap.util.inputwin")
 local manager  = require("ezdap.manager")
-local labels   = require("ezdap.ui.labels")
+local format   = require("ezdap.ui.format")
 
 local M        = {}
 
@@ -783,7 +783,7 @@ function M.debug.thread()
     select.open({
         prompt = "Select thread",
         items  = vim.tbl_map(function(t)
-            return { label = "[" .. labels.thread_status(t.status) .. "] " .. t.id .. ": " .. t.name, data = t }
+            return { label = "[" .. format.thread_status(t.status) .. "] " .. t.id .. ": " .. t.name, data = t }
         end, threads),
     }, function(t)
         if t then manager.select_thread(t.id) end
@@ -800,7 +800,7 @@ function M.debug.terminate_thread()
         select.open({
             prompt = "Terminate thread",
             items  = vim.tbl_map(function(t)
-                return { label = t.id .. ": " .. t.name .. "  [" .. labels.thread_status(t.status) .. "]", data = t }
+                return { label = t.id .. ": " .. t.name .. "  [" .. format.thread_status(t.status) .. "]", data = t }
             end, threads),
         }, function(t)
             if t then manager.terminate_threads({ t.id }) end
