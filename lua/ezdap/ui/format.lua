@@ -23,6 +23,7 @@ local M        = {}
 ---@type table<string, string>
 local _HL_LINKS = {
     EzdapBreakpoint     = "Debug",
+    EzdapBreakpointSoft = "DiagnosticWarn",
     EzdapDebugFrame     = "Todo",
     EzdapDebugFrameLine = "DiffChange",
     EzdapSessionRunning = "DiagnosticOk",
@@ -37,6 +38,7 @@ end
 ---Ezdap's highlight groups by role, so views name a role rather than a string.
 M.hl = {
     breakpoint       = "EzdapBreakpoint",
+    breakpoint_soft  = "EzdapBreakpointSoft",
     debug_frame      = "EzdapDebugFrame",
     debug_frame_line = "EzdapDebugFrameLine",
     session_running  = "EzdapSessionRunning",
@@ -56,10 +58,12 @@ local _HIGHLIGHTS = {
 }
 
 ---@param name ezdap.ui.SignName
+---@param soft boolean?  use the muted breakpoint highlight (panels, not the gutter)
 ---@return string glyph
 ---@return string highlight
-function M.sign(name)
-    return config.signs[name] or "●", _HIGHLIGHTS[name] or M.hl.breakpoint
+local function _sign(name, soft)
+    local fallback = soft and M.hl.breakpoint_soft or M.hl.breakpoint
+    return config.signs[name] or "●", _HIGHLIGHTS[name] or fallback
 end
 
 -- Breakpoints
@@ -106,12 +110,13 @@ function M.breakpoint_sign_name(spec)
 end
 
 ---@param spec ezdap.ui.format.BreakpointSpec
+---@param soft boolean?  muted highlight, for panel rows where the gutter red is too loud
 ---@return string glyph
 ---@return string highlight
 ---@return ezdap.ui.SignName name
-function M.breakpoint_sign(spec)
+function M.breakpoint_sign(spec, soft)
     local name = M.breakpoint_sign_name(spec)
-    local glyph, hl = M.sign(name)
+    local glyph, hl = _sign(name, soft)
     return glyph, hl, name
 end
 
@@ -161,7 +166,7 @@ end
 ---@return ezdap.ui.SignName name
 function M.session_sign(spec)
     local name = M.session_sign_name(spec)
-    local glyph, hl = M.sign(name)
+    local glyph, hl = _sign(name)
     return glyph, hl, name
 end
 

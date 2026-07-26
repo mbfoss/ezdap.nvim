@@ -444,11 +444,16 @@ function M.breakpoint.list()
     local items    = {}
     for i, bp in ipairs(bps.all()) do
         ---@cast bp ezdap.dap.SourceBreakpoint
-        local icon = bp.disabled and "○"
-            or bp.log_message and "◆"
-            or (bp.condition or bp.hit_condition) and "■"
-            or "●"
-        local label = icon .. " " .. vim.fn.fnamemodify(bp.source, ":~:.") .. ":" .. bp.line
+        local st            = manager.bp_status(bp.internal_id)
+        local icon, icon_hl = format.breakpoint_sign({
+            kind          = "source",
+            disabled      = bp.disabled,
+            verified      = st and st.verified,
+            condition     = bp.condition,
+            hit_condition = bp.hit_condition,
+            log_message   = bp.log_message,
+        }, true)
+        local label = vim.fn.fnamemodify(bp.source, ":~:.") .. ":" .. bp.line
         if bp.column then label = label .. ":" .. bp.column end
         if bp.condition then label = label .. "  [" .. bp.condition .. "]" end
         if bp.hit_condition then label = label .. "  [hits:" .. bp.hit_condition .. "]" end
@@ -456,7 +461,12 @@ function M.breakpoint.list()
         if not initial and bp.line == cur_line and vim.fn.fnamemodify(bp.source, ":p") == cur_path then
             initial = i
         end
-        items[i] = { label = label, data = { filepath = bp.source, lnum = bp.line, bp = bp } }
+        items[i] = {
+            label   = label,
+            icon    = icon,
+            icon_hl = icon_hl,
+            data    = { filepath = bp.source, lnum = bp.line, bp = bp },
+        }
     end
     if #items == 0 then
         vim.notify("[dap] no breakpoints", vim.log.levels.INFO); return

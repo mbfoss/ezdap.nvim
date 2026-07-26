@@ -155,7 +155,7 @@ local function _fmt_breakpoint(data, chunks, width)
         hit_condition = data.hit_condition,
         log_message   = data.log_message,
         unsupported   = data.unsupported,
-    })
+    }, true)
     chunks[#chunks + 1] = { icon .. " ", hl }
     local name_hl = data.disabled and "NonText" or nil
 

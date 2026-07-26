@@ -24,6 +24,8 @@ local _antiflicker_delay = 200
 ---@class ezdap.select.Item
 ---@field label string  -- display text; fuzzy-matched and match-highlighted
 ---@field data ezdap.select.ItemData?  -- passed to the callback and previewer
+---@field icon string?  -- glyph drawn before the label, excluded from matching
+---@field icon_hl string?  -- highlight for `icon`
 
 ---@class ezdap.select.Preview
 ---@field content string|string[]|nil
@@ -59,6 +61,8 @@ local _antiflicker_delay = 200
 
 ---@class ezdap.select.ListItem
 ---@field label string
+---@field icon string?
+---@field icon_hl string?
 ---@field label_chunks {[1]:string,[2]:string?}[]?
 ---@field score number?
 ---@field data any
@@ -313,7 +317,12 @@ function Picker:init(opts, callback)
             label, data = it.label or "", it.data
         end
         label = (tostring(label):gsub("\n", " "))
-        table.insert(self._source_items, { label = label, data = data })
+        table.insert(self._source_items, {
+            label   = label,
+            data    = data,
+            icon    = type(it) == "table" and it.icon or nil,
+            icon_hl = type(it) == "table" and it.icon_hl or nil,
+        })
     end
 
     self._initial = type(opts.initial) == "number" and opts.initial or nil
@@ -473,8 +482,10 @@ function Picker:run_filter()
         for _, src in ipairs(self._source_items) do
             table.insert(self.list_items, {
                 label        = src.label,
-                data         = src.data,
+                icon         = src.icon,
+                icon_hl      = src.icon_hl,
                 label_chunks = { { src.label } },
+                data         = src.data,
                 score        = nil,
             })
         end
@@ -484,8 +495,10 @@ function Picker:run_filter()
             if m then
                 table.insert(self.list_items, {
                     label        = src.label,
-                    data         = src.data,
+                    icon         = src.icon,
+                    icon_hl      = src.icon_hl,
                     label_chunks = m.chunks,
+                    data         = src.data,
                     score        = m.score,
                 })
             end
@@ -521,11 +534,18 @@ function Picker:render_list()
     local extmarks = {}
 
     for row_idx, item in ipairs(self.list_items) do
-        local row = row_idx - 1
-        table.insert(lines, prefix .. item.label)
-        if item.label_chunks then
+        local row  = row_idx - 1
+        -- The icon sits between the row prefix and the label, and carries its own
+        -- highlight; only the label takes part in matching.
+        local icon = item.icon and (item.icon .. " ") or ""
+        table.insert(lines, prefix .. icon .. item.label)
+        local chunks = item.label_chunks
+        if chunks then
             local col = #prefix
-            for _, chunk in ipairs(item.label_chunks) do
+            if icon ~= "" then
+                chunks = vim.list_extend({ { icon, item.icon_hl } }, chunks)
+            end
+            for _, chunk in ipairs(chunks) do
                 local text, hl = chunk[1], chunk[2]
                 if text and #text > 0 then
                     if hl then
