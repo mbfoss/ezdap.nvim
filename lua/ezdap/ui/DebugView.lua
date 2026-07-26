@@ -467,6 +467,162 @@ function DebugView:_ungreyout_items()
     end
 end
 
+-- Hover
+
+-- Label column, list wrap width and thread-row cap of the session-info hover.
+local _HOVER_LABEL_W = 13
+local _HOVER_WRAP_W = 72
+local _HOVER_THREADS = 12
+
+---@param lines string[]
+---@param label string
+---@param value string|number|nil  anything else is skipped
+local function _kv(lines, label, value)
+    if type(value) ~= "string" and type(value) ~= "number" then return end
+    if value == "" then return end
+    lines[#lines + 1] = ("%-" .. _HOVER_LABEL_W .. "s%s"):format(label, value)
+end
+
+---Append `items` as an indented comma-separated list wrapped at `_HOVER_WRAP_W`.
+---@param lines string[]
+---@param items string[]
+local function _append_wrapped(lines, items)
+    local cur = ""
+    for _, item in ipairs(items) do
+        local piece = (cur == "") and item or (cur .. ", " .. item)
+        if cur ~= "" and vim.fn.strdisplaywidth(piece) > _HOVER_WRAP_W then
+            lines[#lines + 1] = "  " .. cur .. ","
+            cur = item
+        else
+            cur = piece
+        end
+    end
+    if cur ~= "" then lines[#lines + 1] = "  " .. cur end
+end
+
+---Capability keys the adapter reports as supported, `supports` prefix dropped.
+---@param sess ezdap.dap.Session
+---@return string[]
+local function _capability_names(sess)
+    local names = {}
+    for key, val in pairs(sess.capabilities or {}) do
+        if val == true then
+            local name = key:gsub("^supports", "")
+            names[#names + 1] = name:sub(1, 1):lower() .. name:sub(2)
+        end
+    end
+    table.sort(names)
+    return names
+end
+
+---Assemble the session hover: identity, adapter/connection config, live thread
+---and frame state, breakpoint counts, pending exception and capabilities. A row
+---whose session has ended keeps only what its stored `session_info` still knows.
+---@private
+---@param data ezdap.DebugView.ItemData
+---@return string[]
+function DebugView:_session_lines(data)
+    local id    = data.session_id
+    local info  = data.session_info
+    local sess  = id and manager.get_session(id) or nil
+    local lines = {}
+
+    _kv(lines, "Name", data.name)
+    _kv(lines, "Id", tostring(id) .. (self._active_id == id and "  (active)" or ""))
+
+    local state = (sess and sess.state) or (info and info.state) or "unknown"
+    if sess and sess.state_reason then state = state .. "  (" .. sess.state_reason .. ")" end
+    _kv(lines, "State", state)
+
+    local cfg = sess and sess.config
+    if cfg then
+        _kv(lines, "Adapter", cfg.adapter or cfg.type)
+        _kv(lines, "Request", cfg.request)
+        local cmd = cfg.command
+        _kv(lines, "Command", type(cmd) == "table" and table.concat(cmd, " ") or cmd --[[@as string?]])
+        if cfg.port then _kv(lines, "Address", (cfg.host or "127.0.0.1") .. ":" .. cfg.port) end
+        _kv(lines, "Cwd", cfg.cwd and vim.fn.fnamemodify(cfg.cwd, ":~"))
+        local args = cfg.request_args or {}
+        _kv(lines, "Program", args.program)
+        _kv(lines, "Pid", args.processId or args.pid)
+    end
+
+    if not sess then
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "session is no longer running"
+        return lines
+    end
+
+    local threads = sess.threads or {}
+    local current = sess:current_thread()
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = ("Threads      %d total, %d paused"):format(#threads, #sess:stopped_threads())
+    for i, thread in ipairs(threads) do
+        if i > _HOVER_THREADS then
+            lines[#lines + 1] = ("  … %d more"):format(#threads - _HOVER_THREADS)
+            break
+        end
+        lines[#lines + 1] = ("  %s %-5s %-26s %s"):format(
+            (current and thread.id == current.id) and "▸" or " ",
+            thread.id,
+            str_util.crop_for_ui(thread.name or "?", 26),
+            thread.status or "?")
+    end
+
+    local frame = sess:current_stack_frame()
+    if frame then
+        local src = frame.source
+        local loc = src and (src.path and vim.fn.fnamemodify(src.path, ":~:.") or src.name)
+        lines[#lines + 1] = ""
+        _kv(lines, "Frame", frame.name)
+        _kv(lines, "Location", loc and (loc .. ":" .. (frame.line or "?")))
+    end
+
+    local bp_parts, n_src, n_verified, n_filters = {}, 0, 0, 0
+    for _, bp in ipairs(breakpoints.all()) do
+        n_src = n_src + 1
+        local st = sess:bp_status(bp.internal_id)
+        if st and st.verified then n_verified = n_verified + 1 end
+    end
+    for _, bp in ipairs(breakpoints.exception_breakpoints()) do
+        if not bp.disabled then n_filters = n_filters + 1 end
+    end
+    if n_src > 0 then
+        bp_parts[1] = ("%d source (%d verified)"):format(n_src, n_verified)
+    end
+    ---@param n integer
+    ---@param label string
+    local function count(n, label)
+        if n > 0 then bp_parts[#bp_parts + 1] = n .. " " .. label end
+    end
+    count(#breakpoints.function_breakpoints(), "function")
+    count(n_filters, "exception filter")
+    count(#breakpoints.exception_name_breakpoints(), "exception type")
+    count(#sess:data_breakpoints(), "data")
+    count(vim.tbl_count(sess:instruction_breakpoints()), "instruction")
+    if #bp_parts > 0 then
+        lines[#lines + 1] = ""
+        _kv(lines, "Breakpoints", table.concat(bp_parts, ", "))
+    end
+
+    if sess.exception_description then
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = "Exception"
+        for _, l in ipairs(vim.split(sess.exception_description, "\n", { plain = true })) do
+            lines[#lines + 1] = "  " .. l
+        end
+    end
+
+    local caps = _capability_names(sess)
+    if #caps > 0 then
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = ("Capabilities (%d)"):format(#caps)
+        _append_wrapped(lines, caps)
+    end
+
+    return lines
+end
+
 ---@param data ezdap.DebugView.ItemData
 function DebugView:_show_hover(data)
     local kind = data and data.kind
@@ -513,9 +669,7 @@ function DebugView:_show_hover(data)
     end
 
     if kind == "session" then
-        if sess and sess.exception_description then
-            _float(vim.split(sess.exception_description, "\n", { plain = true }), "Exception")
-        end
+        _float(self:_session_lines(data), "Session")
         return
     end
 
@@ -1406,7 +1560,7 @@ function DebugView:_setup_keymaps(bufnr)
     map("g?", "Show keymaps", function()
         floatwin.open(table.concat({
             "<CR>  Select session / switch frame / jump to breakpoint source",
-            "K     Show full value / frame details / exception info / breakpoint details",
+            "K     Show full value / session info / frame details / breakpoint details",
             "i     Add: watch expression (expressions) / function breakpoint (breakpoints) / data breakpoint (variable)",
             "d     Remove watch expression or breakpoint",
             "r     Rename expression",
