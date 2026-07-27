@@ -178,7 +178,7 @@ local function _register_user_commands()
         "stop", "stop_all",
         "session", "thread", "terminate_thread", "frame",
         "inspect", "disassemble",
-        "project", "clean", "report",
+        "project", "clean", "log",
     }
 
     ---@type ezdap.util.usercmd.run_fn
@@ -244,8 +244,8 @@ local function _register_user_commands()
             M.project_info()
         elseif sub == "clean" then
             M.clean()
-        elseif sub == "report" then
-            require("ezdap.runner").report_open()
+        elseif sub == "log" then
+            require("ezdap.runner").log_open()
         elseif sub == "breakpoint" then
             _bp_run({ unpack(args, 2) })
         else
@@ -277,12 +277,12 @@ local function _register_user_commands()
         local eq = arg_lead:find("=", 1, true)
         if eq then
             if not adapter or not profile_name then return {} end
-            local name = arg_lead:sub(1, eq - 1)
-            local pfx  = arg_lead:sub(1, eq)
-            local val  = arg_lead:sub(eq + 1)
+            local name   = arg_lead:sub(1, eq - 1)
+            local pfx    = arg_lead:sub(1, eq)
+            local val    = arg_lead:sub(eq + 1)
             -- Completing an input's value: whatever the input itself can offer —
             -- paths, true/false, a fixed set of values, nothing for the rest.
-            local input = schema.profile_inputs(adapter, profile_name)[name]
+            local input  = schema.profile_inputs(adapter, profile_name)[name]
             local values = require("ezdap.inputs").completion(input, val)
             return vim.tbl_map(function(v) return pfx .. v end, values)
         end
@@ -429,6 +429,7 @@ end
 ---@param path string a Lua file returning a single task, or a folder to pick one from
 function M.run_file(path)
     _require_setup("run_file")
+    M.clean()
     local runner = require("ezdap.runner")
     return runner.run_file(path)
 end
@@ -448,12 +449,14 @@ end
 ---@param assignments string[]  adapter, profile name, then "input=value" tokens
 function M.quick_run(assignments)
     _require_setup("quick_run")
+    M.clean()
     return require("ezdap.runner").quick_run(assignments)
 end
 
 ---@param task ezdap.Task
 function M.run(task)
     _require_setup("run")
+    M.clean()
     local runner = require("ezdap.runner")
     return runner.run(task)
 end
@@ -464,12 +467,14 @@ end
 ---@return fun() cancel function
 function M.start_task(task, callbacks)
     _require_setup("start_task")
+    M.clean()
     return require("ezdap.task").start(task, callbacks)
 end
 
 ---Re-run the most recently run task from scratch. Warns when nothing has run yet.
 function M.rerun()
     _require_setup("rerun")
+    M.clean()
     require("ezdap.runner").rerun()
 end
 
@@ -491,14 +496,14 @@ function M.project_info()
     local root  = store.root()
     if not root then
         vim.api.nvim_echo({
-            { "[ezdap] ",                        "Title" },
+            { "[ezdap] ",                          "Title" },
             { "not in a project (no root marker)", "WarningMsg" },
         }, false, {})
         return
     end
     local chunks = {
         { "[ezdap] project: ", "Title" },
-        { root,                  "Directory" },
+        { root,                "Directory" },
     }
     vim.api.nvim_echo(chunks, false, {})
 end

@@ -152,22 +152,41 @@ end
 ---@param opts? ezdap.AddBufOpts
 function M.add(bufnr, opts)
     if not vim.api.nvim_buf_is_valid(bufnr) then return end
-    opts                    = opts or {}
-    _seq                    = _seq + 1
-    _entries[#_entries + 1] = {
-        bufnr    = bufnr,
-        priority = opts.priority or 0,
-        seq      = _seq,
-    }
+    opts        = opts or {}
+    _seq        = _seq + 1
+    local entry = { bufnr = bufnr, priority = opts.priority or 0, seq = _seq }
 
-    vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
-        group    = _augroup,
-        buffer   = bufnr,
-        once     = true,
-        callback = function() M.refresh(bufnr) end,
-    })
+    -- Re-registering a buffer restates its rank rather than adding a second entry
+    -- (and a second deletion autocmd) for the same buffer.
+    local known = false
+    for i, e in ipairs(_entries) do
+        if e.bufnr == bufnr then
+            _entries[i], known = entry, true
+            break
+        end
+    end
+    if not known then
+        _entries[#_entries + 1] = entry
+        vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+            group    = _augroup,
+            buffer   = bufnr,
+            once     = true,
+            callback = function() M.refresh(bufnr) end,
+        })
+    end
 
     if config.panel_auto_open then M.open(false) else M.refresh() end
+end
+
+---Register `bufnr` and show it in the window now — opening the window when
+---closed — whatever the registry ranks highest. The window returns to the
+---ranked buffer at the next registration or refresh.
+---@param bufnr integer
+---@param opts? ezdap.AddBufOpts
+function M.show(bufnr, opts)
+    M.add(bufnr, opts)
+    M.open(true)
+    _display(bufnr)
 end
 
 ---@return integer? winid  the window, when open

@@ -46,48 +46,56 @@ local function _is_task(v)
     return type(v) == "table" and type(v.adapter) == "string"
 end
 
--- Run progress is appended to a scratch report buffer, reachable by name
--- (`:b ezdap://reports`) or via `:Debug report`. Pre-flight errors stay on
+-- Run progress is appended to a scratch log buffer, reachable by name
+-- (`:b ezdap://log`) or via `:Debug log`. Pre-flight errors stay on
 -- vim.notify, happening before the run exists.
 
-local _report_buf ---@type integer?
+local _log_buf ---@type integer?
 
----Cap on the report buffer's line count; `_report` trims oldest lines past this.
-local _MAX_REPORT_LINES = 10000
+---Cap on the log buffer's line count; `_log` trims oldest lines past this.
+local _MAX_LOG_LINES = 10000
 
 ---@return integer
-local function _report_bufnr()
-    if _report_buf and vim.api.nvim_buf_is_valid(_report_buf) then return _report_buf end
-    _report_buf                    = vim.api.nvim_create_buf(false, true)
-    vim.bo[_report_buf].buftype    = "nofile"
-    vim.bo[_report_buf].swapfile   = false
-    vim.bo[_report_buf].bufhidden  = "hide"
-    vim.bo[_report_buf].modifiable = false
+local function _log_bufnr()
+    if _log_buf and vim.api.nvim_buf_is_valid(_log_buf) then return _log_buf end
+    _log_buf                    = vim.api.nvim_create_buf(false, true)
+    vim.bo[_log_buf].buftype    = "nofile"
+    vim.bo[_log_buf].swapfile   = false
+    vim.bo[_log_buf].bufhidden  = "hide"
+    vim.bo[_log_buf].modifiable = false
 
-    local bufname                  = "ezdap://reports"
-    local oldbuf                   = vim.fn.bufnr(bufname)
+    local bufname               = "ezdap://log"
+    local oldbuf                = vim.fn.bufnr(bufname)
     if oldbuf > 0 then vim.api.nvim_buf_delete(oldbuf, {}) end
-    vim.api.nvim_buf_set_name(_report_buf, bufname)
-    return _report_buf
+    vim.api.nvim_buf_set_name(_log_buf, bufname)
+    return _log_buf
 end
 
----Append timestamped lines to the report buffer, which every run shares. Oldest
----lines are trimmed past `_MAX_REPORT_LINES` so the buffer never grows unbounded
+---A scratch buffer always holds at least one line, so emptiness is that single
+---line being blank.
+---@param buf integer
+---@return boolean
+local function _buf_empty(buf)
+    return vim.api.nvim_buf_line_count(buf) == 1
+        and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
+end
+
+---Append timestamped lines to the log buffer, which every run shares. Oldest
+---lines are trimmed past `_MAX_LOG_LINES` so the buffer never grows unbounded
 ---across a long session.
 ---@param msg string
-local function _report(msg)
+local function _log(msg)
     local stamp = os.date("%H:%M:%S")
     local lines = {}
     for _, l in ipairs(vim.split(msg, "\n", { plain = true })) do
         lines[#lines + 1] = ("[%s] %s"):format(stamp, l)
     end
 
-    local buf              = _report_bufnr()
-    local empty            = vim.api.nvim_buf_line_count(buf) == 1
-        and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
+    local buf              = _log_bufnr()
+    local empty            = _buf_empty(buf)
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, empty and 0 or -1, -1, false, lines)
-    local overflow = vim.api.nvim_buf_line_count(buf) - _MAX_REPORT_LINES
+    local overflow = vim.api.nvim_buf_line_count(buf) - _MAX_LOG_LINES
     if overflow > 0 then
         vim.api.nvim_buf_set_lines(buf, 0, overflow, false, {})
     end
@@ -120,17 +128,23 @@ local function _clear_finished(name)
     _runs = kept
 end
 
----Open the shared run report buffer in a split and park the cursor on its last
----line, so a run's progress messages are visible. Bound to `:Debug report`.
-function M.report_open()
-    local buf = _report_bufnr()
-    local win = vim.fn.bufwinid(buf)
-    if win ~= -1 then
-        vim.api.nvim_set_current_win(win)
-    else
-        vim.cmd("sbuffer " .. buf)
+---Show the shared run log in the window a run's own buffers use, parked on its
+---last line. Opens nothing when no run has logged anything yet. Bound to
+---`:Debug log`.
+function M.log_open()
+    if not _log_buf or not vim.api.nvim_buf_is_valid(_log_buf) or _buf_empty(_log_buf) then
+        _warn("log: nothing logged yet")
+        return
     end
-    vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(buf), 0 })
+    local buf        = _log_bufnr()
+    local output_win = require("ezdap.ui.output_win")
+    -- Ranked below every run buffer, so the window hands itself back to the run's
+    -- own output the next time one registers; `show` overrides that for now.
+    output_win.show(buf, { label = "Log", priority = -4 })
+    local win = output_win.winid()
+    if win then
+        vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
+    end
 end
 
 ---Drop every finished run and wipe their buffers, leaving live runs untouched.
@@ -178,7 +192,7 @@ function M.run(task)
     }
     _runs[#_runs + 1] = run
 
-    _report("▶ " .. task.name)
+    _log("▶ " .. task.name)
 
     local cancel = require("ezdap.task").start(task, {
         -- Shown in the shared bottom window, and tracked so `clean` can wipe them.
@@ -186,10 +200,10 @@ function M.run(task)
             run.bufnrs[#run.bufnrs + 1] = bufnr
             require("ezdap.ui.output_win").add(bufnr, opts)
         end,
-        report    = _report,
+        report    = _log,
         on_done   = function(ok)
             run.done = true
-            _report((ok and "✓ " or "✗ ") .. task.name .. (ok and " finished" or " failed"))
+            _log((ok and "✓ " or "✗ ") .. task.name .. (ok and " finished" or " failed"))
         end,
     })
 
