@@ -205,7 +205,6 @@ local function _register_session(sess, callbacks, progress)
     end)
 
     sess.report = function(_, msg) progress(msg) end
-    sess.conn.on_stderr = function(line) progress("[dap stderr] " .. line) end
 
     progress("session started (id " .. id .. ")")
     M.on_session_added:emit(id, sess, _session_info(id, sess))
@@ -275,7 +274,7 @@ function M._start_stdio(config, callbacks, progress)
 
     progress("starting adapter: " .. cmd[1])
     local ok, conn = pcall(connection.stdio, cmd, {
-        cwd = config.cwd or vim.fn.getcwd(),
+        cwd = (config.cwd ~= "" and config.cwd) or vim.fn.getcwd(),
         env = config.env,
     })
     if not ok or not conn then

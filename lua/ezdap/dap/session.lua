@@ -15,6 +15,7 @@
 
 local breakpoints = require("ezdap.dap.breakpoints")
 local ui_util     = require("ezdap.util.ui")
+local str_util    = require("ezdap.util.strutil")
 
 ---@class ezdap.dap.Thread
 ---@field id           integer
@@ -174,6 +175,10 @@ function M.new(conn, config)
     conn.on_event   = function(event, body) self:_handle_event(event, body) end
     conn.on_request = function(cmd, args, respond) self:_handle_adapter_request(cmd, args, respond) end
     conn.on_close   = function() self:_on_close() end
+
+    -- Adapter diagnostics are debugger messages, not debuggee output: they go to
+    -- the REPL console rather than the progress report.
+    conn.on_stderr  = function(line) self:_emit("output", "console", line .. "\n") end
 
     -- Keep the adapter in sync with the global breakpoint registry. The initial
     -- sync is handled by the _on_initialized handshake instead, so changes before
@@ -920,15 +925,25 @@ local function _spawn_env(env)
     return next(out) and out or nil
 end
 
+---The debuggee's working directory as a job wants it. Adapters may send an empty
+---or missing `cwd`, which a spawn rejects with ENOENT; nil means "inherit".
+---@param cwd string?
+---@return string?
+local function _spawn_cwd(cwd)
+    if not cwd or cwd == "" then return nil end
+    if vim.fn.isdirectory(cwd) == 0 then return nil end
+    return cwd
+end
+
 ---Run the debuggee in a terminal emulator of its own — `config.external_terminal`
----(command + args) with the debuggee's command line appended — detached, so it
----outlives Neovim rather than dying with it.
+---(command + args, either a command line or an argv list) with the debuggee's
+---command line appended — detached, so it outlives Neovim rather than dying with it.
 ---@param cmd  string[]  the debuggee's command line
 ---@param args ezdap.dap.proto.RunInTerminalRequestArguments
 ---@return integer? pid,string? error  the emulator's process id
 local function _spawn_external(cmd, args)
-    local emu = require("ezdap.config").external_terminal
-    if not (emu and emu[1] and emu[1] ~= "") then
+    local emu = str_util.cmd_to_string_array(require("ezdap.config").external_terminal)
+    if not (emu[1] and emu[1] ~= "") then
         return nil, "no terminal emulator configured (set `external_terminal` in setup)"
     end
     if vim.fn.executable(emu[1]) == 0 then
@@ -936,7 +951,7 @@ local function _spawn_external(cmd, args)
     end
 
     local ok, proc = pcall(vim.system, vim.list_extend(vim.deepcopy(emu), cmd), {
-        cwd    = args.cwd,
+        cwd    = _spawn_cwd(args.cwd),
         env    = _spawn_env(args.env),
         detach = true,
     })
@@ -973,7 +988,7 @@ function Session:_run_in_terminal(args, respond)
     local ok, err = pcall(function()
         handle = term.spawn(cmd, {
             bufname = ui_util.unique_buf_name("ezdap://" .. name .. "_run"),
-            cwd     = args.cwd,
+            cwd     = _spawn_cwd(args.cwd),
             env     = _spawn_env(args.env),
             on_exit = function() if handle then self:_emit("terminal_exit", handle.bufnr) end end,
         })
