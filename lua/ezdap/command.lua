@@ -907,8 +907,9 @@ end
 
 M.view = {}
 
+---Toggle the DebugView split: close it if visible, otherwise open and focus it.
 function M.view.toggle()
-    require("ezdap").open_debug_view()
+    require("ezdap").toggle_debug_view()
 end
 
 ---Toggle the bottom output window, which holds the run's highest-priority buffer.

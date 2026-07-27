@@ -1228,6 +1228,15 @@ function DebugView:show()
     self:_open(false)
 end
 
+---Close the DebugView if it is visible, otherwise open and focus it.
+function DebugView:toggle()
+    if self._tree:get_winid() > 0 then
+        self:close()
+    else
+        self:open()
+    end
+end
+
 -- Keymaps
 
 ---Toggle a data breakpoint (watchpoint) on a variable tree node, resolving its

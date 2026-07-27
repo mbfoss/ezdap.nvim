@@ -410,6 +410,12 @@ function M.open_debug_view()
     M.debug_view():open()
 end
 
+---Close the DebugView if it is visible, otherwise open and focus it.
+function M.toggle_debug_view()
+    _require_setup("toggle_debug_view")
+    M.debug_view():toggle()
+end
+
 ---Return the singleton DisassemblyView, creating it on first call.
 ---@return ezdap.DisassemblyView
 function M.disassembly_view()
