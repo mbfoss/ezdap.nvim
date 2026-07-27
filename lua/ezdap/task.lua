@@ -39,16 +39,16 @@ M.start            = function(task, callbacks)
 
     local sessions  = {} ---@type table<integer, ezdap.dap.Session>
 
-    _run_counter   = _run_counter + 1
-    local run_key  = (task.name or "debug") .. "#" .. _run_counter
+    _run_counter    = _run_counter + 1
+    local run_key   = (task.name or "debug") .. "#" .. _run_counter
 
-    local manager  = require("ezdap.manager")
-    local adapters = require("ezdap.adapters")
+    local manager   = require("ezdap.manager")
+    local adapters  = require("ezdap.adapters")
 
     -- The task is native DAP: `parameters` is the adapter's raw launch/attach body,
     -- sent verbatim and never inspected or translated here. Scaffolding it from an
     -- adapter schema is new_run_file's job. No `parameters` sends an empty body.
-    local base     = adapters[task.adapter]
+    local base      = adapters[task.adapter]
     if not base then
         report("unknown DAP adapter: " .. tostring(task.adapter))
         on_done(false)
@@ -158,7 +158,8 @@ M.start            = function(task, callbacks)
                 -- task buffer. The adapter-supplied title names it best.
                 sess:on("run_in_terminal", function(bufnr, title)
                     require("ezdap.util.term").rename(bufnr,
-                        ui_util.unique_buf_name("ezdap://" ..run_key .. '_' .. (title or "run")))
+                        ui_util.unique_buf_name("ezdap://" ..
+                        run_key .. '_' .. ((title and title ~= config.adapter) and title or "term")))
                     vim.bo[bufnr].buflisted = true
                     add_bufnr(bufnr, { label = "Terminal", priority = 10 })
                 end)
