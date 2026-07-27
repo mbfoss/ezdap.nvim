@@ -40,7 +40,7 @@ M.start            = function(task, callbacks)
     local sessions  = {} ---@type table<integer, ezdap.dap.Session>
 
     _run_counter    = _run_counter + 1
-    local run_key   = (task.name or "debug") .. "#" .. _run_counter
+    local run_key   = (task.name or "debug") .. "~" .. _run_counter
 
     local manager   = require("ezdap.manager")
     local adapters  = require("ezdap.adapters")
@@ -84,7 +84,7 @@ M.start            = function(task, callbacks)
 
     -- REPL buffer: interactive DAP expression evaluation.
     local repl = require("ezdap.ui.ReplBuffer").new({
-        name     = ui_util.unique_buf_name("ezdap://" .. run_key .. "_repl"),
+        name     = ui_util.unique_buf_name("ezdap://" .. run_key .. "-repl"),
         evaluate = function(expr, cb)
             manager.evaluate(expr, "repl", function(body, err)
                 cb(body and body.result, err)
@@ -105,7 +105,7 @@ M.start            = function(task, callbacks)
         if #lines == 0 then return end
         if not out_buf then
             out_buf = OutputBuffer.new({
-                name        = ui_util.unique_buf_name("ezdap://" .. run_key .. "_output"),
+                name        = ui_util.unique_buf_name("ezdap://" .. run_key .. "-output"),
                 max_lines   = _config.output_max_lines,
                 ansi_colors = true,
                 autoscroll  = true,
@@ -159,7 +159,7 @@ M.start            = function(task, callbacks)
                 sess:on("run_in_terminal", function(bufnr, title)
                     require("ezdap.util.term").rename(bufnr,
                         ui_util.unique_buf_name("ezdap://" ..
-                        run_key .. '_' .. ((title and title ~= config.adapter) and title or "term")))
+                        run_key .. '-' .. ((title and title ~= config.adapter) and title or "term")))
                     vim.bo[bufnr].buflisted = true
                     add_bufnr(bufnr, { label = "Terminal", priority = 10 })
                 end)
@@ -168,7 +168,7 @@ M.start            = function(task, callbacks)
                 if _config.raw_messages then
                     local out ---@type ezdap.OutputBuffer?
                     out = OutputBuffer.new({
-                        name        = ui_util.unique_buf_name("ezdap://" .. run_key .. "_dap-messages"),
+                        name        = ui_util.unique_buf_name("ezdap://" .. run_key .. "-dap-messages"),
                         max_lines   = _config.output_max_lines,
                         ansi_colors = true,
                         autoscroll  = true,
