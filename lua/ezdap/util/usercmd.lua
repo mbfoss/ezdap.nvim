@@ -2,19 +2,58 @@ local M = {}
 
 -- Quoting rules (shared with keystone.nvim's queryflags):
 --
---   Arguments are whitespace-separated. Only " quotes: a quoted span may
---   contain whitespace, and the delimiting quotes are stripped from the
---   argument. A single quote is an ordinary literal character.
+--   Arguments are whitespace-separated. Only " quotes, and only on a word
+--   boundary: quoting is in play for an argument solely when its very first
+--   character is a ". For such an argument, a " opens or closes a quoted span
+--   -- whitespace inside a span does not split the argument, the delimiting
+--   quotes are stripped, a literal double quote is written as \", and a
+--   backslash before anything else is literal. Text following a closing quote
+--   joins the same argument.
 --
---   Anywhere in the input -- inside a quoted span or outside one -- a literal
---   double quote is written as \": inside a span it does not close it, outside
---   one it does not open one. A backslash before anything else is literal.
+--   An argument that does not begin with a ", or one whose last span is left
+--   unterminated, has no quoting at all: it runs to the next whitespace and is
+--   taken literally, with no quote or backslash processing.
 --
---   An unterminated quote is not a real delimiter: its opening " is kept as a
---   literal character, and the span runs to the end of the input.
+--     "a b c"      -> a b c            a"b"c  -> a"b"c
+--     "a"c         -> ac               a\"c   -> a\"c
+--     "text"suffix -> textsuffix       "a b   -> "a  and  b
+--     "a\"c"       -> a"c
 --
 --   "" is an explicit empty argument and is kept as one.
 --
+--- Scan the quote-delimited argument starting at the opening quote at `start`.
+--- Returns its unescaped text and the index just past it, or nil if a span was
+--- left unterminated.
+---@param str string
+---@param start integer
+---@return string? arg
+---@return integer? next_i
+local function scan_quoted(str, start)
+    local len    = #str
+    local chars  = {}
+    local inside = false
+    local i      = start
+
+    while i <= len do
+        local c = str:sub(i, i)
+        if c == "\\" and str:sub(i + 1, i + 1) == '"' then
+            table.insert(chars, '"')
+            i = i + 2
+        elseif c == '"' then
+            inside = not inside
+            i      = i + 1
+        elseif c:match("%s") and not inside then
+            break
+        else
+            table.insert(chars, c)
+            i = i + 1
+        end
+    end
+
+    if inside then return nil end -- unterminated
+    return table.concat(chars), i
+end
+
 ---@param str string
 ---@return string[]
 function M.split_args(str)
@@ -26,47 +65,23 @@ function M.split_args(str)
         while i <= len and str:sub(i, i):match("%s") do i = i + 1 end
         if i > len then break end
 
-        local chars     = {}
-        local quote     = nil -- active quote char while inside a quoted span
-        local quote_idx = nil -- index in `chars` where the active quote opened
-
-        while i <= len do
-            local c = str:sub(i, i)
-            if quote then
-                if c == "\\" and str:sub(i + 1, i + 1) == quote then
-                    table.insert(chars, quote)
-                    i = i + 2
-                elseif c == quote then
-                    quote     = nil
-                    quote_idx = nil
-                    i         = i + 1
-                else
-                    table.insert(chars, c)
-                    i = i + 1
-                end
-            elseif c == "\\" and str:sub(i + 1, i + 1) == '"' then
-                table.insert(chars, '"')
-                i = i + 2
-            elseif c:match("%s") then
-                break
-            elseif c == '"' then
-                quote     = c
-                quote_idx = #chars + 1
-                i         = i + 1
-            else
-                table.insert(chars, c)
-                i = i + 1
+        local arg = nil
+        if str:sub(i, i) == '"' then
+            local content, next_i = scan_quoted(str, i)
+            if content then
+                arg = content
+                i   = next_i --[[@as integer]]
             end
         end
 
-        if quote and quote_idx then
-            table.insert(chars, quote_idx, quote)
+        if not arg then
+            -- Literal token: run to the next whitespace, verbatim.
+            local from = i
+            while i <= len and not str:sub(i, i):match("%s") do i = i + 1 end
+            arg = str:sub(from, i - 1)
         end
 
-        -- The inner loop always consumes at least one non-whitespace char, so
-        -- an empty `chars` means an explicitly quoted empty argument ("") --
-        -- keep it rather than dropping the argument.
-        table.insert(args, table.concat(chars))
+        table.insert(args, arg)
     end
 
     return args

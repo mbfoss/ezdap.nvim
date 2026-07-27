@@ -147,18 +147,31 @@ function M.smart_open_file(filepath, line, col, activate)
         vim.api.nvim_set_current_win(winid)
     end
 
-    -- Exact-path lookup/create, no glob or fuzzy fallback.
+    -- Exact-path lookup/create, no glob or fuzzy fallback. bufadd() only makes
+    -- the (unloaded) entry; `:buffer` below does the reading.
     local bufnr = vim.fn.bufadd(full_path)
-    vim.bo[bufnr].buflisted = true
-    if vim.fn.bufloaded(bufnr) == 0 then
-        vim.fn.bufload(bufnr)
-    end
+
     -- `:buffer <nr>` rather than nvim_win_set_buf(): it takes the buffer by
     -- number (no name matching), but unlike the API call it sets the alternate
     -- file and the jump mark, so <C-^> and <C-o> still work after a jump. Run it
     -- in the resolved regular window, not the current one, which may be a
     -- winfixbuf panel when activate == false.
-    vim.fn.win_execute(winid, "buffer " .. bufnr)
+    --
+    -- pcall is required here: the load can abort for reasons the caller cannot
+    -- check for up front -- an existing swap file the user answers "quit" to, an
+    -- unreadable file, E37 on a modified buffer under 'nohidden' -- and an
+    -- uncaught Vim error unwinds into the picker callback as a stack traceback.
+    local ok, err = pcall(vim.fn.win_execute, winid, "buffer " .. bufnr)
+    if not ok or not vim.api.nvim_win_is_valid(winid)
+        or vim.api.nvim_win_get_buf(winid) ~= bufnr then
+        -- Aborted: leave the window on whatever it was showing, and leave the
+        -- buffer unlisted so a failed open does not litter `:ls`.
+        if not ok and err and err ~= "" then
+            vim.notify("neotoolkit: " .. tostring(err), vim.log.levels.WARN)
+        end
+        return -1, -1
+    end
+    vim.bo[bufnr].buflisted = true
 
     _safe_set_cursor_pos(winid, line, col)
     return winid, bufnr
