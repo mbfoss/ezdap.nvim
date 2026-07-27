@@ -40,6 +40,7 @@ local _antiflicker_delay = 200
 ---@class ezdap.select.Opts
 ---@field prompt string?
 ---@field items (ezdap.select.Item|string)[]  -- a bare string == { label = s, data = s }
+---@field sort_by_score boolean? sort by score when searching (default is true)
 ---@field enable_preview boolean?
 ---@field previewer ezdap.select.Previewer?  -- defaults to the built-in file previewer
 ---@field initial integer?  -- 1-based index of the item to pre-select (cursor starts on it)
@@ -178,10 +179,17 @@ local function _match_label(text, query)
     }
 end
 
+---Best match first. `table.sort` is not stable, so equal scores fall back to the
+---items' source order — otherwise a keystroke that doesn't change any score
+---would still shuffle the list under the cursor.
 ---@param items ezdap.select.ListItem[]
 local function _sort_by_score(items)
+    local order = {}
+    for i, item in ipairs(items) do order[item] = i end
     table.sort(items, function(a, b)
-        return (a.score or 0) > (b.score or 0)
+        local sa, sb = a.score or 0, b.score or 0
+        if sa == sb then return order[a] < order[b] end
+        return sa > sb
     end)
 end
 
@@ -527,7 +535,9 @@ function Picker:run_filter()
                 })
             end
         end
-        _sort_by_score(self.list_items)
+        if self.opts.sort_by_score ~= false then
+            _sort_by_score(self.list_items)
+        end
     end
 
     self:render_list()

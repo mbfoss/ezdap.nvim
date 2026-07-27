@@ -442,7 +442,14 @@ function M.breakpoint.list()
     local cur_line = vim.api.nvim_win_get_cursor(0)[1]
     local initial ---@type integer?
     local items    = {}
-    for i, bp in ipairs(bps.all()) do
+    local all      = bps.all()
+    -- The registry keeps insertion order; the list reads as a file index.
+    table.sort(all, function(a, b)
+        if a.source ~= b.source then return a.source < b.source end
+        if a.line ~= b.line then return a.line < b.line end
+        return (a.column or 0) < (b.column or 0)
+    end)
+    for i, bp in ipairs(all) do
         ---@cast bp ezdap.dap.SourceBreakpoint
         local st            = manager.bp_status(bp.internal_id)
         local icon, icon_hl = format.breakpoint_sign({
@@ -875,6 +882,8 @@ function M.debug.frame()
         list_wrap      = false,
         items          = items,
         initial        = initial,
+        -- Call order is the frame list's meaning; keep it while filtering.
+        sort_by_score  = false,
     }, function(data)
         if not data then return end
         -- The thread may have resumed while the picker was open.
