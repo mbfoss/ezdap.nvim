@@ -969,15 +969,15 @@ function Session:_run_in_terminal(args, respond)
 
     -- An "external" kind wants the user's terminal emulator. Only the emulator's
     -- pid is knowable from here, and both response fields are optional anyway.
-    -- Without a usable emulator the run goes on in an integrated terminal.
+    -- An unusable emulator fails the request — an integrated terminal is not it.
     if args.kind == "external" then
         local pid, ext_err = _spawn_external(cmd, args)
         if pid then
             respond({ shellProcessId = pid })
-            return
+        else
+            respond(nil, "external terminal: " .. tostring(ext_err))
         end
-        self:_emit("output", "console",
-            "external terminal: " .. tostring(ext_err) .. "; using an integrated terminal\n")
+        return
     end
 
     local handle

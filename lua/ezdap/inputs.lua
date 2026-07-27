@@ -135,6 +135,22 @@ local function _paths(kind)
     return function(partial) return vim.fn.getcompletion(partial, kind) end
 end
 
+---Completion for a command line: paths, for the program and for every argument
+---after it. A debuggee is a binary the project built, not a name on `$PATH`, so
+---this is `file` completion applied to whichever token is being typed.
+---@param partial string
+---@return string[]
+local function _command(partial)
+    -- Vim's argument splitting means the line arrives with its spaces escaped
+    -- (`command=./a.out\ --flag`); tokens are found in the real line, and the head
+    -- goes back onto each candidate — escaped again, so it still extends what was typed.
+    local line = (partial:gsub("\\(%s)", "%1"))
+    local head = line:match("^.*%s") or ""
+    local tail = line:sub(#head + 1)
+    return vim.tbl_map(function(v) return vim.fn.escape(head .. v, " \t") end,
+        vim.fn.getcompletion(tail, "file"))
+end
+
 ---Completion over a fixed set of values, offering those that extend `partial`.
 ---@param values string[]
 ---@return fun(partial: string): string[]
@@ -145,16 +161,18 @@ local function _choices(values)
 end
 
 ---Every declared `ezdap.InputFormat`. `file`/`dir` differ only in the completion
----they drive, not in the value they produce.
+---they drive, not in the value they produce; `command` is a verbatim string too —
+---the `build` that wants it split is what splits it.
 ---@type table<string, ezdap.FormatDef>
 M.formats = {
-    file = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _paths("file") },
-    dir  = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _paths("dir") },
-    cwd  = { type = "string", schema = { type = "string" }, parse = _abspath, seed = "", complete = _paths("dir") },
-    host = { type = "string", schema = { type = "string" }, seed = "", complete = _choices({ "localhost", "127.0.0.1", "0.0.0.0" }) },
-    port = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
-    map  = { type = "table", item_type = "string", schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map, seed = {} },
-    list = { type = "table", item_type = "string", schema = { type = "array", items = { type = "string" } }, parse = _list, seed = {} },
+    file    = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _paths("file") },
+    dir     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _paths("dir") },
+    cwd     = { type = "string", schema = { type = "string" }, parse = _abspath, seed = "", complete = _paths("dir") },
+    command = { type = "string", schema = { type = "string" }, seed = "", complete = _command },
+    host    = { type = "string", schema = { type = "string" }, seed = "", complete = _choices({ "localhost", "127.0.0.1", "0.0.0.0" }) },
+    port    = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
+    map     = { type = "table", item_type = "string", schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map, seed = {} },
+    list    = { type = "table", item_type = "string", schema = { type = "array", items = { type = "string" } }, parse = _list, seed = {} },
 }
 
 -- Projections

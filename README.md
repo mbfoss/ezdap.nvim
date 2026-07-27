@@ -186,7 +186,8 @@ profile takes `command` (a full shell command line, split into the
 adapter's own program/args fields) plus `cwd` and `env`; an `attach_process`
 profile takes `pid`, and a `remote` one takes `host`/`port`. Each input
 declares a **type** that decides how the value is read: `file`/`dir`/`cwd`
-(path expansion), `map` (`A=1,B=2`), `list` (`a,b`) and
+(path expansion), `command` (a command line, completed path by path),
+`map` (`A=1,B=2`), `list` (`a,b`) and
 `integer`/`port`/`boolean`. An input left out is simply omitted from the
 request, unless the profile marks it required.
 
@@ -410,7 +411,8 @@ opens it in a regular window:
 Adapters that offer an external console (`console = externalTerminal`,
 codelldb's `terminal = external`) launch the debuggee in a terminal emulator of
 its own instead, chosen by the `external_terminal` option — see
-[Configuration](#configuration).
+[Configuration](#configuration). If that option is unset or the emulator can't be
+spawned, the request fails rather than falling back to an integrated terminal.
 
 ```vim
 :Debug clean            " drop finished runs and wipe their buffers
@@ -731,10 +733,10 @@ adapters.myadapter = {
       description = "debug an executable",
       request     = "launch",
       inputs = {
-        command       = { type = "string",  required = true, description = "command line to debug" },
-        cwd           = { type = "string",  format = "cwd",  description = "working directory" },
-        env           = { type = "table",   format = "map",  description = "environment variables" },
-        stop_on_entry = { type = "boolean",                  description = "break at program entry" },
+        command       = { type = "string",  format = "command", required = true, description = "command line to debug" },
+        cwd           = { type = "string",  format = "cwd",     description = "working directory" },
+        env           = { type = "table",   format = "map",     description = "environment variables" },
+        stop_on_entry = { type = "boolean",                      description = "break at program entry" },
       },
       build = function(params, connect, inputs)
         params.program, params.args = require("ezdap.shared").split_command(inputs.command)
@@ -760,8 +762,10 @@ How the pieces fit:
   command line or written in a run file's `parameters`. `type` is what `build`
   receives (`string`, `boolean`, `integer`, `number`, `table`); `format` says how
   the authored forms reach that type and drives completion — `file`/`dir`/`cwd`
-  (path expansion), `host`, `port` (range-checked), `map` (`A=1,B=2` → table),
-  `list` (`a,b` → table). Omit `format` and the value is read by `type` alone.
+  (path expansion), `command` (a command line, taken verbatim; the program and
+  each argument complete as paths), `host`, `port` (range-checked), `map`
+  (`A=1,B=2` → table), `list` (`a,b` → table). Omit `format` and the value is
+  read by `type` alone.
   The full vocabulary is one row per format in
   [inputs.lua](lua/ezdap/inputs.lua) — every consumer reads those rows, so a new
   format is a single addition there, never a `if format == …` anywhere else.

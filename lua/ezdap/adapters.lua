@@ -45,6 +45,7 @@
 ---| "file"        # → string: a path, expanded
 ---| "dir"         # → string: a path, expanded
 ---| "cwd"         # → string: a path, expanded and made absolute
+---| "command"     # → string: a command line, verbatim (each token completed as a path)
 ---| "host"        # → string: taken verbatim
 ---| "port"        # → integer: range-checked (0-65535)
 ---| "map"         # → table: "A=1,B=2" → { A = "1", B = "2" }

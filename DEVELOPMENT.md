@@ -127,7 +127,7 @@ Each `ezdap.Input` declares one input up front:
 | Field      | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
 | `type`     | what the input *is* — the Lua type `build` receives: one of `string`/`boolean`/`integer`/`number`/`table`. Defaults to `string` |
-| `format`   | which authored forms reach that type: one of `file`/`dir`/`cwd`/`host`/`port`/`map`/`list`, each a row in [inputs.lua](lua/ezdap/inputs.lua) that also says how the input is described, seeded and completed. Omit it and the string form is read by `type` alone — verbatim for a string, `tonumber` for a number/integer, true/1/yes or false/0/no for a boolean. A `table` input always needs one |
+| `format`   | which authored forms reach that type: one of `file`/`dir`/`cwd`/`command`/`host`/`port`/`map`/`list`, each a row in [inputs.lua](lua/ezdap/inputs.lua) that also says how the input is described, seeded and completed. Omit it and the string form is read by `type` alone — verbatim for a string, `tonumber` for a number/integer, true/1/yes or false/0/no for a boolean. A `table` input always needs one |
 | `required` | when `true`, the user must supply the value; leaving it unset is a resolve error. Any other unset input simply arrives at `build` as nil — which `build` may answer by omitting the field, or some other way: an attach `build` asks the user to pick a process for an unset `pid`, so no adapter marks that input `required` |
 | `description` | a few words on what the input means, e.g. `"process id to attach to"` |
 
