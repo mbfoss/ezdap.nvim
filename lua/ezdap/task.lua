@@ -154,9 +154,11 @@ M.start            = function(task, callbacks)
                     return
                 end
 
-                -- When the adapter spawns a terminal, register it as a task buffer.
-                -- The terminal buffer already has a term:// name; just make it listed.
-                sess:on("run_in_terminal", function(bufnr)
+                -- When the adapter spawns a terminal, name it and register it as a
+                -- task buffer. The adapter-supplied title names it best.
+                sess:on("run_in_terminal", function(bufnr, title)
+                    require("ezdap.util.term").rename(bufnr,
+                        ui_util.unique_buf_name("ezdap://" ..run_key .. '_' .. (title or "run")))
                     vim.bo[bufnr].buflisted = true
                     add_bufnr(bufnr, { label = "Terminal", priority = 10 })
                 end)

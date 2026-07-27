@@ -10,11 +10,10 @@
 ---  "thread_updated"    (session)                  — thread list changed
 ---  "breakpoint_updated"(bp, status)               — bp verified/message changed; status is { verified, message, hits }
 ---  "terminated"        (session)                  — session ended
----  "run_in_terminal"   (bufnr)                    — terminal buffer opened
+---  "run_in_terminal"   (bufnr, title)             — terminal buffer opened; title is the adapter's, may be nil
 ---  "start_debugging"   (child_config, parent_sess)— adapter requests child session
 
 local breakpoints = require("ezdap.dap.breakpoints")
-local ui_util     = require("ezdap.util.ui")
 local str_util    = require("ezdap.util.strutil")
 
 ---@class ezdap.dap.Thread
@@ -967,9 +966,6 @@ function Session:_run_in_terminal(args, respond)
     if args.argsCanBeInterpretedByShell then
         cmd = { vim.o.shell, "-c", table.concat(cmd, " ") }
     end
-    -- The adapter-supplied title names it best; otherwise fall back to the
-    -- session's config name (the display name used elsewhere for this session).
-    local name = args.title or self.config.name or self.config.adapter or "debug"
 
     -- An "external" kind wants the user's terminal emulator. Only the emulator's
     -- pid is knowable from here, and both response fields are optional anyway.
@@ -987,7 +983,6 @@ function Session:_run_in_terminal(args, respond)
     local handle
     local ok, err = pcall(function()
         handle = term.spawn(cmd, {
-            bufname = ui_util.unique_buf_name("ezdap://" .. name .. "_run"),
             cwd     = _spawn_cwd(args.cwd),
             env     = _spawn_env(args.env),
             on_exit = function() if handle then self:_emit("terminal_exit", handle.bufnr) end end,
@@ -997,7 +992,7 @@ function Session:_run_in_terminal(args, respond)
         respond(nil, "failed to spawn terminal" .. (not ok and (": " .. tostring(err)) or ""))
         return
     end
-    self:_emit("run_in_terminal", handle.bufnr)
+    self:_emit("run_in_terminal", handle.bufnr, args.title)
     respond({ processId = handle.pid })
 end
 
