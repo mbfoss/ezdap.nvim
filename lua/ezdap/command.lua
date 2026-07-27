@@ -462,17 +462,25 @@ function M.breakpoint.list()
         }, true)
         local label = vim.fn.fnamemodify(bp.source, ":~:.") .. ":" .. bp.line
         if bp.column then label = label .. ":" .. bp.column end
-        if bp.condition then label = label .. "  [" .. bp.condition .. "]" end
-        if bp.hit_condition then label = label .. "  [hits:" .. bp.hit_condition .. "]" end
-        if bp.log_message then label = label .. "  [log: " .. bp.log_message .. "]" end
+        -- Condition and log message are context, not something to match on: they
+        -- ride under the location so only the location takes part in filtering.
+        local detail = {}
+        ---@param text string
+        local function detail_chunk(text)
+            detail[#detail + 1] = { (#detail > 0 and "  " or "") .. text, "Comment" }
+        end
+        if bp.condition then detail_chunk("• if: " .. bp.condition) end
+        if bp.hit_condition then detail_chunk("• hit: " .. bp.hit_condition) end
+        if bp.log_message then detail_chunk("• log: " .. bp.log_message) end
         if not initial and bp.line == cur_line and vim.fn.fnamemodify(bp.source, ":p") == cur_path then
             initial = i
         end
         items[i] = {
-            label   = label,
-            icon    = icon,
-            icon_hl = icon_hl,
-            data    = { filepath = bp.source, lnum = bp.line, bp = bp },
+            label     = label,
+            icon      = icon,
+            icon_hl   = icon_hl,
+            virt_line = #detail > 0 and detail or nil,
+            data      = { filepath = bp.source, lnum = bp.line, bp = bp },
         }
     end
     if #items == 0 then
