@@ -403,6 +403,11 @@ opens it in a regular window:
 - **Output** — the debuggee's output
 - **Terminal** — when the adapter launches the debuggee in a terminal
 
+Adapters that offer an external console (`console = externalTerminal`,
+codelldb's `terminal = external`) launch the debuggee in a terminal emulator of
+its own instead, chosen by the `external_terminal` option — see
+[Configuration](#configuration).
+
 ```vim
 :Debug clean            " drop finished runs and wipe their buffers
 ```
@@ -481,6 +486,11 @@ require("ezdap").setup({
   -- Log every DAP message to a "DAP Messages" buffer. For debugging ezdap or an
   -- adapter; leave off otherwise.
   raw_messages        = false,
+
+  -- Terminal emulator (command + args) used when an adapter asks to run the
+  -- debuggee in an external terminal; its command line is appended. Unset, an
+  -- integrated terminal is used instead. E.g. { "alacritty", "-e" }.
+  -- external_terminal = { "wezterm", "start", "--" },
 
   -- Gutter sign glyphs.
   signs = {

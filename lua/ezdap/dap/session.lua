@@ -920,6 +920,30 @@ local function _spawn_env(env)
     return next(out) and out or nil
 end
 
+---Run the debuggee in a terminal emulator of its own — `config.external_terminal`
+---(command + args) with the debuggee's command line appended — detached, so it
+---outlives Neovim rather than dying with it.
+---@param cmd  string[]  the debuggee's command line
+---@param args ezdap.dap.proto.RunInTerminalRequestArguments
+---@return integer? pid,string? error  the emulator's process id
+local function _spawn_external(cmd, args)
+    local emu = require("ezdap.config").external_terminal
+    if not (emu and emu[1] and emu[1] ~= "") then
+        return nil, "no terminal emulator configured (set `external_terminal` in setup)"
+    end
+    if vim.fn.executable(emu[1]) == 0 then
+        return nil, ("terminal '%s' not found on PATH"):format(emu[1])
+    end
+
+    local ok, proc = pcall(vim.system, vim.list_extend(vim.deepcopy(emu), cmd), {
+        cwd    = args.cwd,
+        env    = _spawn_env(args.env),
+        detach = true,
+    })
+    if not ok then return nil, tostring(proc) end
+    return proc.pid
+end
+
 ---@param args    ezdap.dap.proto.RunInTerminalRequestArguments
 ---@param respond ezdap.dap.RespondFn
 function Session:_run_in_terminal(args, respond)
@@ -931,6 +955,20 @@ function Session:_run_in_terminal(args, respond)
     -- The adapter-supplied title names it best; otherwise fall back to the
     -- session's config name (the display name used elsewhere for this session).
     local name = args.title or self.config.name or self.config.adapter or "debug"
+
+    -- An "external" kind wants the user's terminal emulator. Only the emulator's
+    -- pid is knowable from here, and both response fields are optional anyway.
+    -- Without a usable emulator the run goes on in an integrated terminal.
+    if args.kind == "external" then
+        local pid, ext_err = _spawn_external(cmd, args)
+        if pid then
+            respond({ shellProcessId = pid })
+            return
+        end
+        self:_emit("output", "console",
+            "external terminal: " .. tostring(ext_err) .. "; using an integrated terminal\n")
+    end
+
     local handle
     local ok, err = pcall(function()
         handle = term.spawn(cmd, {

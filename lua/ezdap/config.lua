@@ -38,6 +38,7 @@
 ---@field debug_view_width_ratio number  width of the debug panel on first open, as a fraction of the editor's columns
 ---@field inline_vars          ezdap.InlineVarsMode  placement of inline variable values
 ---@field raw_messages         boolean   capture raw DAP protocol messages in a dedicated buffer; a debugging aid, off by default
+---@field external_terminal?   string[]  terminal emulator (command + args) a debuggee is launched in for an "external" runInTerminal, its command line appended; unset falls back to an integrated terminal
 ---@field signs ezdap.Signs
 
 ---@type ezdap.Config
