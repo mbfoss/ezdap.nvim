@@ -116,10 +116,10 @@ arguments:
 
 ```vim
 " Launch a native binary under codelldb
-:Debug quick_run codelldb launch command="./a.out --verbose"
+:Debug quick_run codelldb launch command=./a.out\ --verbose
 
 " Debug a Python file
-:Debug quick_run debugpy launch command="./main.py --verbose"
+:Debug quick_run debugpy launch command=./main.py\ --verbose
 
 " Attach to a running process
 :Debug quick_run debugpy attach pid=41234
@@ -189,6 +189,10 @@ declares a **type** that decides how the value is read: `file`/`dir`/`cwd`
 (path expansion), `map` (`A=1,B=2`), `list` (`a,b`) and
 `integer`/`port`/`boolean`. An input left out is simply omitted from the
 request, unless the profile marks it required.
+
+Arguments split on whitespace the way Vim's own commands do (`:h <f-args>`):
+quotes are *not* special, and a value containing a space is written with a
+backslash — `command=./a.out\ --verbose`, `cwd=/tmp/my\ project`.
 
 Tab-completion offers adapters, then profile names, then the inputs
 available for the chosen profile — and, once you type `=`, the values that

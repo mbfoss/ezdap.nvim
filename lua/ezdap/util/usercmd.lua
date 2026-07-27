@@ -1,92 +1,21 @@
 local M = {}
 
--- Quoting rules (shared with keystone.nvim's queryflags):
+-- This module does no argument parsing of its own. Dispatch passes Neovim's
+-- opts.fargs straight through, and completion runs the raw command line back
+-- through nvim_parse_cmd, so both paths split by Vim's native rules
+-- (:h <f-args>):
 --
---   Arguments are whitespace-separated. Only " quotes, and only on a word
---   boundary: quoting is in play for an argument solely when its very first
---   character is a ". For such an argument, a " opens or closes a quoted span
---   -- whitespace inside a span does not split the argument, the delimiting
---   quotes are stripped, a literal double quote is written as \", and a
---   backslash before anything else is literal. Text following a closing quote
---   joins the same argument.
+--   Arguments are separated by unescaped whitespace. A backslash escapes the
+--   character after it: \<space> (or \<tab>) is that literal whitespace and
+--   does not split the argument, \\ is a single backslash, and a backslash
+--   before anything else -- including a trailing backslash at end of line --
+--   is kept verbatim along with what follows it. Quotes are not special.
 --
---   An argument that does not begin with a ", or one whose last span is left
---   unterminated, has no quoting at all: it runs to the next whitespace and is
---   taken literally, with no quote or backslash processing.
+--     a\ b c   -> a b  and  c        a\\b     -> a\b
+--     a\\\ b   -> a\ b               a\nb     -> a\nb
+--     \ a      -> " a"               a\       -> a\
+--     "a b"    -> "a  and  b"        --p=x\ y -> --p=x y
 --
---     "a b c"      -> a b c            a"b"c  -> a"b"c
---     "a"c         -> ac               a\"c   -> a\"c
---     "text"suffix -> textsuffix       "a b   -> "a  and  b
---     "a\"c"       -> a"c
---
---   "" is an explicit empty argument and is kept as one.
---
---- Scan the quote-delimited argument starting at the opening quote at `start`.
---- Returns its unescaped text and the index just past it, or nil if a span was
---- left unterminated.
----@param str string
----@param start integer
----@return string? arg
----@return integer? next_i
-local function scan_quoted(str, start)
-    local len    = #str
-    local chars  = {}
-    local inside = false
-    local i      = start
-
-    while i <= len do
-        local c = str:sub(i, i)
-        if c == "\\" and str:sub(i + 1, i + 1) == '"' then
-            table.insert(chars, '"')
-            i = i + 2
-        elseif c == '"' then
-            inside = not inside
-            i      = i + 1
-        elseif c:match("%s") and not inside then
-            break
-        else
-            table.insert(chars, c)
-            i = i + 1
-        end
-    end
-
-    if inside then return nil end -- unterminated
-    return table.concat(chars), i
-end
-
----@param str string
----@return string[]
-function M.split_args(str)
-    local args = {}
-    local i    = 1
-    local len  = #str
-
-    while i <= len do
-        while i <= len and str:sub(i, i):match("%s") do i = i + 1 end
-        if i > len then break end
-
-        local arg = nil
-        if str:sub(i, i) == '"' then
-            local content, next_i = scan_quoted(str, i)
-            if content then
-                arg = content
-                i   = next_i --[[@as integer]]
-            end
-        end
-
-        if not arg then
-            -- Literal token: run to the next whitespace, verbatim.
-            local from = i
-            while i <= len and not str:sub(i, i):match("%s") do i = i + 1 end
-            arg = str:sub(from, i - 1)
-        end
-
-        table.insert(args, arg)
-    end
-
-    return args
-end
-
 ---@alias ezdap.util.usercmd.subcommand fun(cmd:string,rest:string[],arg_lead:string):string[]
 
 ---@alias ezdap.util.usercmd.run_fn
@@ -105,28 +34,28 @@ local function _complete(subcommand, arg_lead, cmd_line)
         return out
     end
 
-    local args = M.split_args(cmd_line)
-    if cmd_line:match("%s+$") then
-        table.insert(args, ' ')
+    -- nvim_parse_cmd splits exactly as <f-args> does, and strips any range or
+    -- command modifiers. It throws on a command line it cannot parse.
+    local ok, parsed = pcall(vim.api.nvim_parse_cmd, cmd_line, {})
+    if not ok then return {} end
+
+    -- Trailing whitespace means a new, still-empty argument has begun; without
+    -- it the last argument is the one being completed, not context for it.
+    local rest = parsed.args
+    if not cmd_line:match("%s$") then
+        rest[#rest] = nil
     end
 
-    local cmd = args[1]
-    if #args == 1 then
-        return filter(subcommand(cmd, {}, arg_lead))
-    elseif #args >= 2 then
-        local rest = { unpack(args, 2) }
-        rest[#rest] = nil
-        return filter(subcommand(cmd, rest, arg_lead))
-    end
-    return {}
+    return filter(subcommand(parsed.cmd, rest, arg_lead))
 end
 
 ---@param cmd string
 ---@param run_fn ezdap.util.usercmd.run_fn
 ---@param opts vim.api.keyset.create_user_command.command_args
 local function _dispatch(cmd, run_fn, opts)
-    local args = M.split_args(opts.args)
-    local ok, err = pcall(run_fn, cmd, args, opts)
+    -- nargs="*" always yields fargs; the fallback is only to satisfy its
+    -- optional type.
+    local ok, err = pcall(run_fn, cmd, opts.fargs or {}, opts)
     if not ok then
         vim.notify(
             "[ezdap.util.nvim] " .. cmd .. " command error\n" .. tostring(err),
