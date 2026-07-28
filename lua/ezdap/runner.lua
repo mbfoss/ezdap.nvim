@@ -61,6 +61,7 @@ local function _log_bufnr()
     _log_buf                    = vim.api.nvim_create_buf(false, true)
     vim.bo[_log_buf].buftype    = "nofile"
     vim.bo[_log_buf].swapfile   = false
+    vim.bo[_log_buf].buflisted  = true
     vim.bo[_log_buf].bufhidden  = "hide"
     vim.bo[_log_buf].modifiable = false
 
@@ -184,7 +185,7 @@ function M.run(task)
     _counter = _counter + 1
     ---@type ezdap.runner.Run
     local run = {
-        id     = task.name .. "#" .. _counter,
+        id     = task.name .. "-" .. _counter,
         name   = task.name,
         cancel = function() end,
         bufnrs = {},
@@ -192,18 +193,18 @@ function M.run(task)
     }
     _runs[#_runs + 1] = run
 
-    _log("▶ " .. task.name)
-
     local cancel = require("ezdap.task").start(task, {
         -- Shown in the shared bottom window, and tracked so `clean` can wipe them.
         add_bufnr = function(bufnr, opts)
             run.bufnrs[#run.bufnrs + 1] = bufnr
             require("ezdap.ui.output_win").add(bufnr, opts)
         end,
-        report    = _log,
+        report    = function (msg)
+            _log(task.name .. ": " .. msg)
+        end,
         on_done   = function(ok)
             run.done = true
-            _log((ok and "✓ " or "✗ ") .. task.name .. (ok and " finished" or " failed"))
+            _log(task.name .. (ok and " finished" or " failed"))
         end,
     })
 

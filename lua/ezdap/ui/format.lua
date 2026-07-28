@@ -138,7 +138,7 @@ end
 ---@return string
 function M.session_state(state)
     if state == "stopped" then return "paused" end
-    if M.session_finished(state) then return "stopped" end
+    if M.session_finished(state) then return "ended" end
     return state or "unknown"
 end
 
