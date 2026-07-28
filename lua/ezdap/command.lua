@@ -890,8 +890,6 @@ function M.debug.frame()
         list_wrap      = false,
         items          = items,
         initial        = initial,
-        -- Call order is the frame list's meaning; keep it while filtering.
-        sort_by_score  = false,
     }, function(data)
         if not data then return end
         -- The thread may have resumed while the picker was open.

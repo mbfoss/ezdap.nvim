@@ -40,7 +40,6 @@ local _antiflicker_delay = 200
 ---@class ezdap.select.Opts
 ---@field prompt string?
 ---@field items (ezdap.select.Item|string)[]  -- a bare string == { label = s, data = s }
----@field sort_by_score boolean? sort by score when searching (default is true)
 ---@field enable_preview boolean?
 ---@field previewer ezdap.select.Previewer?  -- defaults to the built-in file previewer
 ---@field initial integer?  -- 1-based index of the item to pre-select (cursor starts on it)
@@ -68,7 +67,6 @@ local _antiflicker_delay = 200
 ---@field icon_hl string?
 ---@field label_chunks {[1]:string,[2]:string?}[]?
 ---@field virt_line {[1]:string,[2]:string?}[]?
----@field score number?
 ---@field data any
 
 -- Helpers
@@ -161,10 +159,10 @@ end
 
 ---@param text string  what we match against
 ---@param query string  user input
----@return { score:number, chunks:{[1]:string,[2]:string?}[] }?
+---@return {[1]:string,[2]:string?}[]?  chunks, nil when the query doesn't match
 local function _match_label(text, query)
     if query == "" then
-        return { score = 0, chunks = _build_highlight_chunks(text, {}) }
+        return _build_highlight_chunks(text, {})
     end
     local result = vim.fn.matchfuzzypos({ text }, query)
     if #result[1] == 0 then return nil end
@@ -173,24 +171,7 @@ local function _match_label(text, query)
     for _, p in ipairs(raw_positions) do
         positions[#positions + 1] = p + 1 -- matchfuzzypos is 0-based; chunk builder is 1-based
     end
-    return {
-        score  = result[3][1],
-        chunks = _build_highlight_chunks(text, positions),
-    }
-end
-
----Best match first. `table.sort` is not stable, so equal scores fall back to the
----items' source order — otherwise a keystroke that doesn't change any score
----would still shuffle the list under the cursor.
----@param items ezdap.select.ListItem[]
-local function _sort_by_score(items)
-    local order = {}
-    for i, item in ipairs(items) do order[item] = i end
-    table.sort(items, function(a, b)
-        local sa, sb = a.score or 0, b.score or 0
-        if sa == sb then return order[a] < order[b] end
-        return sa > sb
-    end)
+    return _build_highlight_chunks(text, positions)
 end
 
 ---The built-in file previewer. Reads `data.filepath`/`data.lnum`/`data.col` and
@@ -508,43 +489,27 @@ function Picker:run_filter()
     local query     = self.query_text
     self.list_items = {}
 
-    if query == "" then
-        for _, src in ipairs(self._source_items) do
+    -- Matches keep the supplied order: the list only ever loses entries as the
+    -- query grows, so what sits under the cursor doesn't jump around.
+    for _, src in ipairs(self._source_items) do
+        local chunks = _match_label(src.label, query)
+        if chunks then
             table.insert(self.list_items, {
                 label        = src.label,
                 icon         = src.icon,
                 icon_hl      = src.icon_hl,
                 virt_line    = src.virt_line,
-                label_chunks = { { src.label } },
+                label_chunks = chunks,
                 data         = src.data,
-                score        = nil,
             })
-        end
-    else
-        for _, src in ipairs(self._source_items) do
-            local m = _match_label(src.label, query)
-            if m then
-                table.insert(self.list_items, {
-                    label        = src.label,
-                    icon         = src.icon,
-                    icon_hl      = src.icon_hl,
-                    virt_line    = src.virt_line,
-                    label_chunks = m.chunks,
-                    data         = src.data,
-                    score        = m.score,
-                })
-            end
-        end
-        if self.opts.sort_by_score ~= false then
-            _sort_by_score(self.list_items)
         end
     end
 
     self:render_list()
 
     -- `initial` pre-selects a row by index, honoured only on the first
-    -- (empty-query) render where the list order still matches the supplied
-    -- items; once the user types, the best fuzzy match leads at row 1.
+    -- (empty-query) render where every supplied item is still listed; once the
+    -- user types, the first surviving match leads at row 1.
     local target = 1
     if self._initial then
         if #self.list_items > 0 then
