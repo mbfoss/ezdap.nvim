@@ -17,9 +17,8 @@ local _init_done
 local _sign_group
 ---@type ezdap.ui.fileextmarks.GroupFunctions?
 local _line_group
----@type ezdap.ui.fileextmarks.GroupFunctions?
-local _ex_group
 local _sign_id     = 1 -- fixed id: we only ever show one debugline sign at a time
+local _ex_id       = 2 -- the exception annotation, the frameline group's other mark
 local _gen         = 0 -- generation counter to guard stale session callbacks
 ---@type function?  stop fn for the pending deferred clear, if any
 local _stop_clear_timer
@@ -52,9 +51,9 @@ local function _show_exception(sess, path, lnum)
     if sess.state_reason ~= "exception" then return end
     local gen = _gen
     exception_info.oneline(sess, function(text)
-        if not text or gen ~= _gen or not _ex_group then return end
+        if not text or gen ~= _gen or not _line_group then return end
         if not _still_stopped_at(sess, path, lnum) then return end
-        _ex_group.set_file_extmark(_sign_id, path, lnum, 0, {
+        _line_group.set_file_extmark(_ex_id, path, lnum, 0, {
             virt_text     = { { "  " .. config.signs.exception_breakpoint .. " " .. text, _EX_HL } },
             virt_text_pos = "eol",
             hl_mode       = "combine",
@@ -89,7 +88,6 @@ end
 local function _remove_marks()
     if _sign_group then _sign_group.remove_extmarks() end
     if _line_group then _line_group.remove_extmarks() end
-    if _ex_group then _ex_group.remove_extmarks() end
 end
 
 local function _cancel_clear_timer()
@@ -120,7 +118,6 @@ function M.init()
 
     _sign_group = fileextmarks.define_group("framesign")
     _line_group = fileextmarks.define_group("frameline")
-    _ex_group = fileextmarks.define_group("frameexception")
 
     manager.on_active_changed:subscribe(function(_, sess)
         _clear()
