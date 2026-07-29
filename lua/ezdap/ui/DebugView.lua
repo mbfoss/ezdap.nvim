@@ -119,11 +119,10 @@ local function _fmt_session(data, chunks)
     chunks[#chunks + 1] = { " ", nil }
     chunks[#chunks + 1] = { data.name, data.is_current and "Special" or nil }
     if info.state and info.state ~= "running" then
-        local label = format.session_state(info.state)
+        chunks[#chunks + 1] = { " [" .. format.session_state(info.state) .. "]", "Tag" }
         if info.is_paused and info.state_reason then
-            label = label .. " - " .. info.state_reason
+            chunks[#chunks + 1] = { " (" .. info.state_reason .. ")", "Comment" }
         end
-        chunks[#chunks + 1] = { " [" .. label .. "]", "Tag" }
     end
 end
 
