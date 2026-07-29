@@ -194,6 +194,7 @@ function M.resolve_task(spec, done)
         finish({
             name       = spec.name,
             adapter    = spec.adapter,
+            profile    = spec.profile,
             request    = profile.request,
             parameters = body,
             host       = has_connect and connect.host or nil,

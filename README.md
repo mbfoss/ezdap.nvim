@@ -695,7 +695,13 @@ progress with `ctx.report(msg)`, registers any terminal buffers it spawns with
 `ctx.add_bufnr(bufnr, opts)` so they are listed under the session, and must call
 `callback(err, state)` exactly once — an `err` string aborts the run. Whatever
 `state` it passes comes back as the second argument to `teardown`, which is
-where you stop what you started:
+where you stop what you started.
+
+`ctx.profile` is the name of the profile the run was resolved from — the config
+itself does not record it — so a `setup` can gate one profile rather than the
+whole adapter, e.g. refusing a profile whose feature the installed binary is too
+old for. A raw task (a run file's `configuration`, or `run()` called directly)
+names no profile, so treat `nil` as "none of mine" and let the run proceed.
 
 ```lua
 adapters.myserver = {

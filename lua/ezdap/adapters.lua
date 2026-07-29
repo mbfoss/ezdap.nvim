@@ -19,9 +19,16 @@
 
 ---Context passed to `config.setup()` so the adapter can report progress and
 ---register terminal buffers with the task runner.
+---
+---`profile` names the profile the run was resolved from, which the config itself
+---does not record — it is how a `setup` gates one profile rather than the whole
+---adapter (e.g. a feature only a newer binary supports). A raw task (a run file's
+---`configuration`, or `runner.run` called directly) names no profile, so a `setup`
+---must treat nil as "not one of mine" and let the run proceed.
 ---@class ezdap.AdapterSetupCtx
 ---@field add_bufnr fun(bufnr: integer, opts?: ezdap.AddBufOpts)
 ---@field report    fun(message: string)
+---@field profile?  string
 
 ---What an input *is* — the Lua type of the value `build` receives.
 ---@alias ezdap.InputType
