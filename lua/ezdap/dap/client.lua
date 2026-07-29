@@ -57,6 +57,7 @@ local M                 = {}
 ---@field id number
 ---@field name string
 ---@field state string
+---@field state_reason string?
 ---@field is_paused boolean
 ---@field nb_paused_threads integer
 
@@ -104,6 +105,7 @@ local function _session_info(id, sess)
         id                = id,
         name              = sess.config.name or sess.config.adapter or "debug",
         state             = sess.state,
+        state_reason      = sess.state_reason,
         is_paused         = sess.state == "stopped",
         nb_paused_threads = n,
     }

@@ -119,7 +119,11 @@ local function _fmt_session(data, chunks)
     chunks[#chunks + 1] = { " ", nil }
     chunks[#chunks + 1] = { data.name, data.is_current and "Special" or nil }
     if info.state and info.state ~= "running" then
-        chunks[#chunks + 1] = { " [" .. format.session_state(info.state) .. "]", "Tag" }
+        local label = format.session_state(info.state)
+        if info.is_paused and info.state_reason then
+            label = label .. " - " .. info.state_reason
+        end
+        chunks[#chunks + 1] = { " [" .. label .. "]", "Tag" }
     end
 end
 
@@ -389,8 +393,9 @@ function DebugView:_setup_subs()
         local item_id = _roots.sessions .. "/" .. id
         local item = self._tree:get_item(item_id)
         if item and item.data and item.data.session_info then
-            item.data.session_info.state     = "terminated"
-            item.data.session_info.is_paused = false
+            item.data.session_info.state        = "terminated"
+            item.data.session_info.state_reason = nil
+            item.data.session_info.is_paused    = false
             self._tree:set_item_data(item_id, item.data)
         end
         if self._active_id == id then
@@ -1172,6 +1177,7 @@ function DebugView:get_bufnr(on_deleted)
                 id                = id,
                 name              = sess.config.name or sess.config.adapter or "debug",
                 state             = sess.state,
+                state_reason      = sess.state_reason,
                 is_paused         = sess.state == "stopped",
                 nb_paused_threads = 0,
             }
