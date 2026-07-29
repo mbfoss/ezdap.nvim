@@ -3,12 +3,13 @@
 ---(active session + control primitives) and own all the command-level UI —
 ---pickers, prompts, notifications and cursor handling.
 
-local select   = require("ezdap.util.select")
-local inputwin = require("ezdap.util.inputwin")
-local manager  = require("ezdap.manager")
-local format   = require("ezdap.ui.format")
+local select        = require("ezdap.util.select")
+local inputwin      = require("ezdap.util.inputwin")
+local manager       = require("ezdap.manager")
+local format        = require("ezdap.ui.format")
+local exception_info = require("ezdap.ui.exception_info")
 
-local M        = {}
+local M             = {}
 
 -- Everything reaching the DAP layer goes through `manager` (the programmatic API);
 -- this module owns only the user interaction — cursor reads, prompts, pickers and
@@ -689,44 +690,7 @@ end
 
 ---Show detailed information about the exception at the current stop in a float.
 function M.debug.exception_info()
-    _with_capability("supportsExceptionInfoRequest", "exception info", function()
-        manager.exception_info(function(body, err)
-            if not body then
-                vim.notify("[dap] " .. (err or "no exception info available"), vim.log.levels.WARN)
-                return
-            end
-            local lines = { body.exceptionId or "Exception" }
-            local function append(text)
-                for _, l in ipairs(vim.split(text, "\n", { plain = true })) do
-                    lines[#lines + 1] = l
-                end
-            end
-            if body.description and body.description ~= "" then
-                lines[#lines + 1] = ""
-                append(body.description)
-            end
-            local d = body.details
-            if d then
-                if d.typeName and d.typeName ~= "" then
-                    lines[#lines + 1] = ""
-                    lines[#lines + 1] = "Type: " .. d.typeName
-                end
-                if d.message and d.message ~= "" and d.message ~= body.description then
-                    append(d.message)
-                end
-                if d.stackTrace and d.stackTrace ~= "" then
-                    lines[#lines + 1] = ""
-                    lines[#lines + 1] = "Stack trace:"
-                    append(d.stackTrace)
-                end
-            end
-            vim.lsp.util.open_floating_preview(lines, "plaintext", {
-                border   = "rounded",
-                title    = "Exception",
-                focus_id = "ezdap_exception",
-            })
-        end)
-    end)
+    exception_info.show()
 end
 
 ---Return the active visual selection as one string (lines joined with newlines), or

@@ -1,14 +1,15 @@
 ---@brief Singleton that shows the current execution position as a sign + line highlight.
 ---Tracks the active session; clears/moves the sign on stopped/continued/terminated.
 
-local fileextmarks = require("ezdap.ui.fileextmarks")
-local manager      = require("ezdap.manager")
-local ui_util      = require("ezdap.util.ui")
-local config       = require("ezdap.config")
-local format       = require("ezdap.ui.format")
-local timer        = require("ezdap.util.timer")
+local exception_info = require("ezdap.ui.exception_info")
+local fileextmarks   = require("ezdap.ui.fileextmarks")
+local manager        = require("ezdap.manager")
+local ui_util        = require("ezdap.util.ui")
+local config         = require("ezdap.config")
+local format         = require("ezdap.ui.format")
+local timer          = require("ezdap.util.timer")
 
-local M            = {}
+local M              = {}
 
 local _init_done
 
@@ -23,6 +24,19 @@ local _stop_clear_timer
 
 local _SIGN_HL     = format.hl.debug_frame
 local _LINE_HL     = format.hl.debug_frame_line
+
+---Is `sess` still the paused active session, on the same frame line? Guards a
+---deferred hover against the session having resumed, ended or moved on.
+---@param sess ezdap.dap.Session
+---@param path string
+---@param lnum integer
+---@return boolean
+local function _still_stopped_at(sess, path, lnum)
+    if sess ~= manager.session() or sess.state ~= "stopped" then return false end
+    local frame = sess:current_stack_frame()
+    if not frame or not frame.source or frame.source.path ~= path then return false end
+    return ((frame.line and frame.line > 0) and frame.line or 1) == lnum
+end
 
 local function _show_stopped(sess)
     if not _sign_group or not _line_group then return end
@@ -43,6 +57,16 @@ local function _show_stopped(sess)
     local activate = not vim.b.ezdap_disasm
     local col = frame.column and (frame.column - 1) or nil
     ui_util.smart_open_file(src.path, lnum, col, activate)
+    -- A stop on an exception carries its own explanation for the line we just
+    -- landed on; offer it right there, silently when the adapter has none. On a
+    -- later tick, so it opens over the window smart_open_file settled on.
+    if sess.state_reason == "exception" then
+        local gen = _gen
+        vim.schedule(function()
+            if gen ~= _gen or not _still_stopped_at(sess, src.path, lnum) then return end
+            exception_info.show({ silent = true })
+        end)
+    end
 end
 
 local function _remove_marks()
