@@ -177,7 +177,7 @@ local function _register_user_commands()
         "pause", "restart",
         "stop", "stop_all",
         "session", "thread", "terminate_thread", "frame",
-        "inspect", "disassemble",
+        "inspect", "value", "disassemble",
         "project", "clean", "log",
     }
 
@@ -230,6 +230,8 @@ local function _register_user_commands()
             -- A `'<,'>` range (e.g. `:'<,'>Debug inspect` from visual mode) sets
             -- opts.range > 0; inspect then reads the `'<`/`'>` marks.
             cmd.debug.inspect(args[2], opts.range and opts.range > 0)
+        elseif sub == "value" then
+            cmd.debug.value(args[2], opts.range and opts.range > 0)
         elseif sub == "disassemble" then
             cmd.debug.disassemble()
         elseif sub == "session" then

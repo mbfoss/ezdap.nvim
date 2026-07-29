@@ -755,21 +755,40 @@ end
 -- an oversized `evaluate` body just burdens the adapter for no useful result.
 local _MAX_INSPECT_LEN = 1000
 
----@param expr? string       defaults to the visual selection, else the word under cursor
----@param from_range? boolean true when invoked with a command range (`:'<,'>Debug inspect`)
-function M.debug.inspect(expr, from_range)
+---The expression the inspect commands act on, or nil (with a warning) when there
+---is nothing usable to evaluate.
+---@param expr? string
+---@param from_range? boolean
+---@return string?
+local function _inspect_target(expr, from_range)
     expr = expr or _visual_selection(from_range) or vim.fn.expand("<cword>")
     if not expr or expr == "" then
         vim.notify("[dap] nothing to inspect", vim.log.levels.WARN)
-        return
+        return nil
     end
     if #expr > _MAX_INSPECT_LEN then
         vim.notify(
             ("[dap] expression too long to inspect (%d > %d chars)"):format(#expr, _MAX_INSPECT_LEN),
             vim.log.levels.WARN)
-        return
+        return nil
     end
-    require("ezdap.ui.InspectView").open(expr)
+    return expr
+end
+
+---@param expr? string       defaults to the visual selection, else the word under cursor
+---@param from_range? boolean true when invoked with a command range (`:'<,'>Debug inspect`)
+function M.debug.inspect(expr, from_range)
+    expr = _inspect_target(expr, from_range)
+    if expr then require("ezdap.ui.InspectView").open(expr) end
+end
+
+---Like `inspect`, but shows the evaluated value in full right away instead of the
+---expandable tree — what `K` does on an inspect-tree node.
+---@param expr? string       defaults to the visual selection, else the word under cursor
+---@param from_range? boolean true when invoked with a command range (`:'<,'>Debug value`)
+function M.debug.value(expr, from_range)
+    expr = _inspect_target(expr, from_range)
+    if expr then require("ezdap.ui.InspectView").value(expr) end
 end
 
 ---Open the disassembly pane for the active session's current frame.

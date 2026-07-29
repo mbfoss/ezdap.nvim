@@ -51,6 +51,28 @@ local function _show_value(data)
     if win then vim.api.nvim_set_current_win(win) end
 end
 
+---Evaluate `expr` in the active session and show its full value hover directly —
+---the tree's `K`, without the tree. No-op with a warning when there is no
+---session, nothing to inspect, or the evaluation fails.
+---@param expr string
+function M.value(expr)
+    if not expr or expr == "" then
+        vim.notify("[dap] nothing to inspect", vim.log.levels.WARN)
+        return
+    end
+    if not manager.session() then
+        vim.notify("[dap] no active session", vim.log.levels.WARN)
+        return
+    end
+    manager.evaluate(expr, "hover", function(body, err)
+        if err or not body then
+            vim.notify("[dap] " .. expr .. ": " .. (err or "not available"), vim.log.levels.WARN)
+            return
+        end
+        _show_value({ name = expr, value = body.result, type = body.type })
+    end)
+end
+
 ---Open the inspect float for `expr`, evaluated in the active session. No-op with a
 ---warning when there is no session, nothing to inspect, or the evaluation fails.
 ---@param expr string

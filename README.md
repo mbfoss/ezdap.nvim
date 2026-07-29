@@ -422,6 +422,7 @@ spawned, the request fails rather than falling back to an integrated terminal.
 
 ```vim
 :Debug inspect          " hover the value of the word under the cursor (or selected expression in visual mode)
+:Debug value            " same target, but shows the full value straight away instead of the expandable tree
 :Debug disassemble      " open the disassembly view for the current frame
 :Debug exception_info   " details of the exception at the current stop
 ```
@@ -542,6 +543,7 @@ Everything is under the `:Debug` command, with completion for every subcommand.
 | `stop` / `stop_all`   | Stop the active / every session                   |
 | `session` / `thread` / `terminate_thread` / `frame` | Selection pickers   |
 | `inspect`             | Hover a value (word under cursor or selection)    |
+| `value`               | Same, showing the full value instead of the tree  |
 | `disassemble`         | Open the disassembly view                         |
 | `clean`               | Drop finished runs and wipe their buffers         |
 | `project`             | Report the resolved project root                  |
