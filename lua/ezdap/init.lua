@@ -383,6 +383,7 @@ local function _init()
     require("ezdap.ui.breakpoints_ui").init()
     require("ezdap.ui.debugline_ui").init()
     require("ezdap.ui.inlinevars").enable()
+    require("ezdap.ui.popup_menu").init()
 
     local client = require("ezdap.dap.client")
     client.on_session_added:subscribe(function()

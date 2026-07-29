@@ -38,6 +38,7 @@
 ---@field debug_view_width_ratio number  width of the debug panel on first open, as a fraction of the editor's columns
 ---@field inline_vars          ezdap.InlineVarsMode  placement of inline variable values
 ---@field raw_messages         boolean   capture raw DAP protocol messages in a dedicated buffer; a debugging aid, off by default
+---@field popup_menu           boolean   add a "Debug Inspect" entry to the right-click menu while a session is live
 ---@field external_terminal?   string|string[]  terminal emulator (command + args) a debuggee is launched in for an "external" runInTerminal, its command line appended; unset fails such a request
 ---@field signs ezdap.Signs
 
@@ -54,6 +55,7 @@ local M = {
 	debug_view_width_ratio = 0.3,
 	inline_vars         = "eol",
 	raw_messages        = false,
+	popup_menu          = true,
 	signs = {
 		debug_frame              = "▶",
 		active_breakpoint        = "●",
