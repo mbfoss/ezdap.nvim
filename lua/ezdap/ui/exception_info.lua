@@ -31,6 +31,38 @@ local function _render(body)
     block:show("Exception")
 end
 
+---One line naming the exception: its type or id, plus the first line of its
+---description. Empty when the body says nothing.
+---@param body ezdap.dap.proto.ExceptionInfoResponseBody
+---@return string?
+local function _oneline(body)
+    local d = body.details or {}
+    local name = (d.typeName ~= "" and d.typeName) or body.exceptionId
+    local text = (d.message ~= "" and d.message) or body.description
+    local first = text and vim.split(text, "\n", { plain = true })[1] or nil
+    first = first and vim.trim(first)
+    if name and first and first ~= "" and first ~= name then return name .. ": " .. first end
+    local out = (first ~= "" and first) or name
+    return (out and out ~= "") and out or nil
+end
+
+---Resolve a one-line summary of what `sess` stopped on: the adapter's
+---exceptionInfo when it offers one, else the text the stopped event carried.
+---`cb` gets nil when neither says anything.
+---@param sess ezdap.dap.Session
+---@param cb   fun(text: string?)
+function M.oneline(sess, cb)
+    local carried = sess.exception_description
+    carried = carried and vim.trim(vim.split(carried, "\n", { plain = true })[1])
+    local fallback = (carried ~= "") and carried or nil
+    if not sess:capable("supportsExceptionInfoRequest") then
+        cb(fallback); return
+    end
+    manager.exception_info(function(body)
+        cb((body and _oneline(body)) or fallback)
+    end)
+end
+
 ---Show the active session's exception info. `silent` suppresses the "no active
 ---session"/"not supported"/"nothing to show" notifications, for callers that
 ---offer the hover rather than being asked for it.

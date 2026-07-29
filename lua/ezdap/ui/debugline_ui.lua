@@ -17,6 +17,8 @@ local _init_done
 local _sign_group
 ---@type ezdap.ui.fileextmarks.GroupFunctions?
 local _line_group
+---@type ezdap.ui.fileextmarks.GroupFunctions?
+local _ex_group
 local _sign_id     = 1 -- fixed id: we only ever show one debugline sign at a time
 local _gen         = 0 -- generation counter to guard stale session callbacks
 ---@type function?  stop fn for the pending deferred clear, if any
@@ -24,9 +26,11 @@ local _stop_clear_timer
 
 local _SIGN_HL     = format.hl.debug_frame
 local _LINE_HL     = format.hl.debug_frame_line
+local _EX_HL       = format.hl.exception
 
----Is `sess` still the paused active session, on the same frame line? Guards a
----deferred hover against the session having resumed, ended or moved on.
+---Is `sess` still the paused active session at that frame line? Guards the
+---annotation against the session having resumed, ended or moved on while the
+---adapter answered.
 ---@param sess ezdap.dap.Session
 ---@param path string
 ---@param lnum integer
@@ -38,6 +42,28 @@ local function _still_stopped_at(sess, path, lnum)
     return ((frame.line and frame.line > 0) and frame.line or 1) == lnum
 end
 
+---Annotate the frame line with what the session stopped on, once the adapter
+---has told us. Nothing is placed for a stop that is not an exception, or one no
+---adapter text describes.
+---@param sess ezdap.dap.Session
+---@param path string
+---@param lnum integer
+local function _show_exception(sess, path, lnum)
+    if sess.state_reason ~= "exception" then return end
+    local gen = _gen
+    exception_info.oneline(sess, function(text)
+        if not text or gen ~= _gen or not _ex_group then return end
+        if not _still_stopped_at(sess, path, lnum) then return end
+        _ex_group.set_file_extmark(_sign_id, path, lnum, 0, {
+            virt_text     = { { "  " .. config.signs.exception_breakpoint .. " " .. text, _EX_HL } },
+            virt_text_pos = "eol",
+            hl_mode       = "combine",
+            priority      = 100,
+        }, nil)
+    end)
+end
+
+---@param sess ezdap.dap.Session
 local function _show_stopped(sess)
     if not _sign_group or not _line_group then return end
     local frame = sess:current_stack_frame()
@@ -57,21 +83,13 @@ local function _show_stopped(sess)
     local activate = not vim.b.ezdap_disasm
     local col = frame.column and (frame.column - 1) or nil
     ui_util.smart_open_file(src.path, lnum, col, activate)
-    -- A stop on an exception carries its own explanation for the line we just
-    -- landed on; offer it right there, silently when the adapter has none. On a
-    -- later tick, so it opens over the window smart_open_file settled on.
-    if sess.state_reason == "exception" then
-        local gen = _gen
-        vim.schedule(function()
-            if gen ~= _gen or not _still_stopped_at(sess, src.path, lnum) then return end
-            exception_info.show({ silent = true })
-        end)
-    end
+    _show_exception(sess, src.path, lnum)
 end
 
 local function _remove_marks()
     if _sign_group then _sign_group.remove_extmarks() end
     if _line_group then _line_group.remove_extmarks() end
+    if _ex_group then _ex_group.remove_extmarks() end
 end
 
 local function _cancel_clear_timer()
@@ -102,6 +120,7 @@ function M.init()
 
     _sign_group = fileextmarks.define_group("framesign")
     _line_group = fileextmarks.define_group("frameline")
+    _ex_group = fileextmarks.define_group("frameexception")
 
     manager.on_active_changed:subscribe(function(_, sess)
         _clear()
