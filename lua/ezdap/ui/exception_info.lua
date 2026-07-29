@@ -4,10 +4,14 @@
 
 local DetailBlock = require("ezdap.ui.DetailBlock")
 local manager     = require("ezdap.manager")
+local str_util    = require("ezdap.util.strutil")
 
 local M           = {}
 
 local _FOCUS_ID   = "ezdap_exception"
+---Budget for the one-line summary; it annotates a source line, so it has to
+---stay short.
+local _MAX_LEN    = 50
 
 ---@param body ezdap.dap.proto.ExceptionInfoResponseBody
 local function _render(body)
@@ -31,35 +35,46 @@ local function _render(body)
     block:show("Exception")
 end
 
----One line naming the exception: its type or id, plus the first line of its
----description. Empty when the body says nothing.
+---Merge a possibly multi-line message into one line, collapsing every run of
+---whitespace (the line breaks included) into a single space.
+---@param text string?
+---@return string?
+local function _flatten(text)
+    if not text then return nil end
+    local out = vim.trim((text:gsub("%s+", " ")))
+    return out ~= "" and out or nil
+end
+
+---One line naming the exception: its type or id, plus its description merged
+---onto the same line. Empty when the body says nothing.
 ---@param body ezdap.dap.proto.ExceptionInfoResponseBody
 ---@return string?
 local function _oneline(body)
     local d = body.details or {}
     local name = (d.typeName ~= "" and d.typeName) or body.exceptionId
-    local text = (d.message ~= "" and d.message) or body.description
-    local first = text and vim.split(text, "\n", { plain = true })[1] or nil
-    first = first and vim.trim(first)
-    if name and first and first ~= "" and first ~= name then return name .. ": " .. first end
-    local out = (first ~= "" and first) or name
+    local text = _flatten((d.message ~= "" and d.message) or body.description)
+    if name and text and text ~= name then return name .. ": " .. text end
+    local out = text or name
     return (out and out ~= "") and out or nil
 end
 
 ---Resolve a one-line summary of what `sess` stopped on: the adapter's
 ---exceptionInfo when it offers one, else the text the stopped event carried.
----`cb` gets nil when neither says anything.
+---Merged onto one line and cropped to `_MAX_LEN`. `cb` gets nil when neither
+---says anything.
 ---@param sess ezdap.dap.Session
 ---@param cb   fun(text: string?)
 function M.oneline(sess, cb)
-    local carried = sess.exception_description
-    carried = carried and vim.trim(vim.split(carried, "\n", { plain = true })[1])
-    local fallback = (carried ~= "") and carried or nil
+    local fallback = _flatten(sess.exception_description)
+    ---@param text string?
+    local function done(text)
+        cb(text and (str_util.crop_for_ui(text, _MAX_LEN)) or nil)
+    end
     if not sess:capable("supportsExceptionInfoRequest") then
-        cb(fallback); return
+        done(fallback); return
     end
     manager.exception_info(function(body)
-        cb((body and _oneline(body)) or fallback)
+        done((body and _oneline(body)) or fallback)
     end)
 end
 
