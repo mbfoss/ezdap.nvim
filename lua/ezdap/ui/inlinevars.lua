@@ -3,8 +3,10 @@ local M              = {}
 local str_util       = require("ezdap.util.strutil")
 local manager        = require("ezdap.manager")
 local config         = require("ezdap.config")
-local fileextmarks   = require("ezdap.ui.fileextmarks")
+local fileextmarks   = require("ezdap.util.fileextmarks")
 local themed_hl      = require("ezdap.util.themed_hl")
+
+fileextmarks.init("ezdap")
 
 local _group         = fileextmarks.define_group("inlinevars")
 local _PRIORITY      = 100

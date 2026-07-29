@@ -13,6 +13,7 @@ FILES=(
     Signal
     Tree
     TreeBuffer
+    fileextmarks
     fixedwin
     floatwin
     fsutil

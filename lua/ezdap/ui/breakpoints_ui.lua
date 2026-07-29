@@ -5,14 +5,14 @@
 ---right before their column instead. Both drive the fileextmarks module directly
 ---(the signs module only ever places marks in the gutter at column 0).
 
-local fileextmarks = require("ezdap.ui.fileextmarks")
+local fileextmarks = require("ezdap.util.fileextmarks")
 local breakpoints  = require("ezdap.dap.breakpoints")
 local format       = require("ezdap.ui.format")
 local manager      = require("ezdap.manager")
 
 local M            = {}
 
----@type ezdap.ui.fileextmarks.GroupFunctions?
+---@type ezdap.util.fileextmarks.GroupFunctions?
 local _group
 local _init_done
 
@@ -56,9 +56,29 @@ local function _refresh()
     end
 end
 
+---Feed the marks' current buffer positions back into the registry, so a
+---breakpoint follows the edits that moved its line. Read live (the buffer is
+---still loaded during BufUnload), which is independent of the module's own sync.
+---@param bufnr integer
+local function _relocate_from_buffer(bufnr)
+    if not _group then return end
+    local file = vim.api.nvim_buf_get_name(bufnr)
+    if file == "" then return end
+
+    local marks = _group.get_file_extmarks(file, true)
+    if #marks == 0 then return end
+
+    local positions = {}
+    for _, mark in ipairs(marks) do
+        positions[mark.id] = { lnum = mark.lnum, col = mark.col }
+    end
+    breakpoints.relocate_batch(positions)
+end
+
 function M.init()
     if _init_done then return end
     _init_done = true
+    fileextmarks.init("ezdap")
     _group     = fileextmarks.define_group("breakpoints")
 
     breakpoints.on_change:subscribe(_refresh)
@@ -66,15 +86,12 @@ function M.init()
     manager.on_breakpoint_updated:subscribe(function() _refresh() end)
     manager.on_active_changed:subscribe(function() _refresh() end)
 
-    fileextmarks.on_synced:subscribe(function(file)
-        local marks = _group.get_file_extmarks(file, false)
-        if #marks == 0 then return end
-        local positions = {}
-        for _, mark in ipairs(marks) do
-            positions[mark.id] = { lnum = mark.lnum, col = mark.col }
-        end
-        breakpoints.relocate_batch(positions)
-    end)
+    local augroup = vim.api.nvim_create_augroup("ezdap.breakpoints_ui", { clear = true })
+    vim.api.nvim_create_autocmd({ "BufWritePost", "BufUnload" }, {
+        group = augroup,
+        callback = function(ev) _relocate_from_buffer(ev.buf) end,
+        desc = "ezdap: follow breakpoint marks moved by edits",
+    })
 
     _refresh()
 end

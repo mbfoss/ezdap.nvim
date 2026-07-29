@@ -2,7 +2,7 @@
 ---Tracks the active session; clears/moves the sign on stopped/continued/terminated.
 
 local exception_info = require("ezdap.ui.exception_info")
-local fileextmarks   = require("ezdap.ui.fileextmarks")
+local fileextmarks   = require("ezdap.util.fileextmarks")
 local manager        = require("ezdap.manager")
 local ui_util        = require("ezdap.util.ui")
 local config         = require("ezdap.config")
@@ -13,9 +13,9 @@ local M              = {}
 
 local _init_done
 
----@type ezdap.ui.fileextmarks.GroupFunctions?
+---@type ezdap.util.fileextmarks.GroupFunctions?
 local _sign_group
----@type ezdap.ui.fileextmarks.GroupFunctions?
+---@type ezdap.util.fileextmarks.GroupFunctions?
 local _line_group
 local _sign_id     = 1 -- fixed id: we only ever show one debugline sign at a time
 local _ex_id       = 2 -- the exception annotation, the frameline group's other mark
@@ -116,6 +116,7 @@ function M.init()
     if _init_done then return end
     _init_done = true
 
+    fileextmarks.init("ezdap")
     _sign_group = fileextmarks.define_group("framesign")
     _line_group = fileextmarks.define_group("frameline")
 

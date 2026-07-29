@@ -175,6 +175,11 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   DebugView builds both callbacks, which is why its helpers
   (`_bp_present_fn`, `_bp_enabled_fn`) take the state to establish rather than
   assuming a direction.
+- `fileextmarks.lua` — file-keyed extmarks that outlive a buffer: a caller
+  claims a prefix once (`init("ezdap")`), then `define_group(name)` returns the
+  set/remove/query functions for that group's namespace. Marks are stored per
+  file and re-applied when the file is loaded; the UI modules place their gutter
+  signs, frame line and inline values through it.
 - `Tree.lua`, `select.lua`, `inputwin.lua`, `usercmd.lua` (subcommand
   registration/completion), plus `fsutil`, `strutil`, `table`, `term`,
   `throttle`, `timer`, `ui`.
