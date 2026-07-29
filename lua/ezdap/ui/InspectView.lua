@@ -14,6 +14,7 @@ local M = {}
 ---@class ezdap.ui.InspectView.NodeData
 ---@field name string
 ---@field value string?
+---@field type string?
 ---@field variablesReference number?
 ---@field is_root boolean?
 
@@ -30,13 +31,24 @@ local function _format_node(data)
     return chunks, {}
 end
 
----@type integer?  the value float currently open over an inspect tree
-local _value_win = nil
+---Show a node's full value as a hover float, exactly like the DebugView's `K`:
+---the type line (when known) above the untruncated value. Call it once the
+---inspect float is gone: it hovers over whatever window is current.
+---@param data ezdap.ui.InspectView.NodeData?
+local function _show_value(data)
+    if not data then return end
 
----@param data      ezdap.ui.InspectView.NodeData?
----@param owner_buf integer  the inspect buffer this float belongs to
-local function _show_value(data, owner_buf)
+    local block = DetailBlock.new({ focus_id = "ezdap_inspect_value" })
+    if data.type and data.type ~= "" then
+        block:line(data.type):blank()
+    end
+    block:text(data.value or "")
+    if block:is_empty() then block:line("not available") end
 
+    -- open_floating_preview opens the float unfocused; its close autocmds ignore
+    -- its own buffer, so entering it doesn't dismiss it.
+    local win = select(2, block:show(data.name))
+    if win then vim.api.nvim_set_current_win(win) end
 end
 
 ---Open the inspect float for `expr`, evaluated in the active session. No-op with a
@@ -107,6 +119,7 @@ function M.open(expr)
                         data       = {
                             name               = var.name or "?",
                             value              = var.value,
+                            type               = var.type,
                             variablesReference = var.variablesReference,
                         },
                     }
@@ -138,6 +151,7 @@ function M.open(expr)
             data       = {
                 name               = expr,
                 value              = body.result,
+                type               = body.type,
                 variablesReference = body.variablesReference,
                 is_root            = true,
             },
@@ -178,9 +192,14 @@ function M.open(expr)
         vim.wo[win].winfixbuf = true
         vim.wo[win].winhighlight = "NormalFloat:NormalFloat,FloatBorder:FloatBorder,FloatTitle:FloatTitle"
 
+        -- The inspect float is a hover itself: dismiss it and put the value hover
+        -- in its place, rather than stacking the two.
         vim.keymap.set("n", "K", function()
             local cur = tree:get_cursor_item()
-            if cur then _show_value(cur.data, buf) end
+            if not cur then return end
+            local data = cur.data
+            close()
+            vim.schedule(function() _show_value(data) end)
         end, { buffer = buf, silent = true, desc = "Show full value" })
 
         vim.keymap.set("n", "q", close, { buffer = buf, silent = true })
