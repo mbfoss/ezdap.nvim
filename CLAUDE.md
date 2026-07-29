@@ -140,6 +140,15 @@ The code is layered; higher layers depend on lower ones, not the reverse.
 **UI** — [lua/ezdap/ui/](lua/ezdap/ui/)
 - `DebugView.lua` — the main debug panel (tree of sessions/frames/scopes/
   variables/expressions/breakpoints), built on `TreeBuffer`.
+- `value_hover.lua` — the full-value float: an evaluated expression's type above
+  its untruncated value. View-independent, so the DebugView's and InspectView's
+  `K` and `:Debug value` all render through it — `show` for a value already in
+  hand, `evaluate` to fetch one from the active session first.
+- `node_details.lua` — what a DebugView row expands into under `K`: frame
+  location, session state, breakpoint status, or a value via `value_hover`. Pure
+  presentation of an `ezdap.DebugView.ItemData`; it owns no state and never
+  touches the tree, which is why it takes the row's data and the session as
+  arguments rather than living on the view.
 - `output_win.lua` — the one bottom split a run's buffers share. `ezdap.runner`
   registers each buffer it spawns with a priority; the window holds the
   highest-priority live one and closes with the run's last buffer.

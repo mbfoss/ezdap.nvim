@@ -788,7 +788,7 @@ end
 ---@param from_range? boolean true when invoked with a command range (`:'<,'>Debug value`)
 function M.debug.value(expr, from_range)
     expr = _inspect_target(expr, from_range)
-    if expr then require("ezdap.ui.InspectView").value(expr) end
+    if expr then require("ezdap.ui.value_hover").evaluate(expr) end
 end
 
 ---Open the disassembly pane for the active session's current frame.

@@ -4,17 +4,15 @@
 ---soon as the float is left or dismissed.
 
 local TreeBuffer  = require("ezdap.util.TreeBuffer")
-local DetailBlock = require("ezdap.ui.DetailBlock")
+local value_hover = require("ezdap.ui.value_hover")
 local manager     = require("ezdap.manager")
 local format      = require("ezdap.ui.format")
 local ui_util     = require("ezdap.util.ui")
 
 local M = {}
 
----@class ezdap.ui.InspectView.NodeData
----@field name string
----@field value string?
----@field type string?
+---A tree node: the value hover's fields plus what the tree needs to expand it.
+---@class ezdap.ui.InspectView.NodeData : ezdap.ui.value_hover.Value
 ---@field variablesReference number?
 ---@field is_root boolean?
 
@@ -31,46 +29,12 @@ local function _format_node(data)
     return chunks, {}
 end
 
----Show a node's full value as a hover float, exactly like the DebugView's `K`:
----the type line (when known) above the untruncated value. Call it once the
----inspect float is gone: it hovers over whatever window is current.
+---Show a tree node's full value, once the inspect float is gone: the hover takes
+---its place over whatever window is current, rather than stacking on it.
 ---@param data ezdap.ui.InspectView.NodeData?
 local function _show_value(data)
     if not data then return end
-
-    local block = DetailBlock.new({ focus_id = "ezdap_inspect_value" })
-    if data.type and data.type ~= "" then
-        block:line(data.type):blank()
-    end
-    block:text(data.value or "")
-    if block:is_empty() then block:line("not available") end
-
-    -- open_floating_preview opens the float unfocused; its close autocmds ignore
-    -- its own buffer, so entering it doesn't dismiss it.
-    local win = select(2, block:show(data.name))
-    if win then vim.api.nvim_set_current_win(win) end
-end
-
----Evaluate `expr` in the active session and show its full value hover directly —
----the tree's `K`, without the tree. No-op with a warning when there is no
----session, nothing to inspect, or the evaluation fails.
----@param expr string
-function M.value(expr)
-    if not expr or expr == "" then
-        vim.notify("[dap] nothing to inspect", vim.log.levels.WARN)
-        return
-    end
-    if not manager.session() then
-        vim.notify("[dap] no active session", vim.log.levels.WARN)
-        return
-    end
-    manager.evaluate(expr, "hover", function(body, err)
-        if err or not body then
-            vim.notify("[dap] " .. expr .. ": " .. (err or "not available"), vim.log.levels.WARN)
-            return
-        end
-        _show_value({ name = expr, value = body.result, type = body.type })
-    end)
+    value_hover.show(data, { focus_id = "ezdap_inspect_value", focus = true })
 end
 
 ---Open the inspect float for `expr`, evaluated in the active session. No-op with a

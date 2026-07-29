@@ -1,19 +1,19 @@
-local TreeBuffer  = require("ezdap.util.TreeBuffer")
-local DetailBlock = require("ezdap.ui.DetailBlock")
-local manager     = require("ezdap.manager")
-local config      = require("ezdap.config")
-local expressions = require("ezdap.ui.expressions")
-local breakpoints = require("ezdap.dap.breakpoints")
-local format      = require("ezdap.ui.format")
-local str_util    = require("ezdap.util.strutil")
-local inputwin    = require("ezdap.util.inputwin")
-local select      = require("ezdap.util.select")
-local timer       = require("ezdap.util.timer")
-local floatwin    = require("ezdap.util.floatwin")
-local fixedwin    = require("ezdap.util.fixedwin")
-local ui          = require("ezdap.util.ui")
-local UndoStack   = require("ezdap.util.UndoStack")
-local throttle    = require("ezdap.util.throttle")
+local TreeBuffer    = require("ezdap.util.TreeBuffer")
+local node_details  = require("ezdap.ui.node_details")
+local manager       = require("ezdap.manager")
+local config        = require("ezdap.config")
+local expressions   = require("ezdap.ui.expressions")
+local breakpoints   = require("ezdap.dap.breakpoints")
+local format        = require("ezdap.ui.format")
+local str_util      = require("ezdap.util.strutil")
+local inputwin      = require("ezdap.util.inputwin")
+local select        = require("ezdap.util.select")
+local timer         = require("ezdap.util.timer")
+local floatwin      = require("ezdap.util.floatwin")
+local fixedwin      = require("ezdap.util.fixedwin")
+local ui            = require("ezdap.util.ui")
+local UndoStack     = require("ezdap.util.UndoStack")
+local throttle      = require("ezdap.util.throttle")
 
 ---@alias ezdap.DebugView.ItemKind
 ---| "root"
@@ -504,165 +504,6 @@ function DebugView:_ungreyout_items()
                 self._tree:set_item_data(item.id, item.data)
             end
         end
-    end
-end
-
--- Hover
-
----Fill `block` with the session hover: identity, adapter/connection config, live
----thread and frame state, breakpoint counts, pending exception and capabilities.
----A row whose session ended keeps only what its stored `session_info` knows.
----@private
----@param block ezdap.ui.DetailBlock
----@param data  ezdap.DebugView.ItemData
-function DebugView:_session_details(block, data)
-    local id   = data.session_id
-    local info = data.session_info
-    local sess = id and manager.get_session(id) or nil
-
-    block:kv("Name", data.name)
-    local state = format.session_state((sess and sess.state) or (info and info.state))
-    if sess and sess.state_reason then state = state .. "  (" .. sess.state_reason .. ")" end
-    block:kv("State", state)
-
-    if not sess then
-        block:blank():line("session is no longer running")
-        return
-    end
-
-    local threads_info
-    do
-        local threads, running, paused = sess.threads or {}, 0, 0
-        for _, thread in ipairs(threads) do
-            if thread.status == "stopped" then
-                paused = paused + 1
-            elseif thread.status == "running" then
-                running = running + 1
-            end
-        end
-        local out = ("%d total, %d running, %s paused"):format(
-            #threads, running, paused)
-        local exited = #threads - running - paused
-        if exited > 0 then out = out .. (", %d exited"):format(exited) end
-        threads_info = out
-    end
-    block:blank():kv("Threads", threads_info)
-
-    local frame = sess:current_stack_frame()
-    if frame then
-        local src = frame.source
-        local loc = src and (src.path and vim.fn.fnamemodify(src.path, ":~:.") or src.name)
-        block:blank()
-        block:kv("Frame", frame.name)
-        block:kv("Location", loc and (loc .. ":" .. (frame.line or "?")))
-    end
-
-    if sess.exception_description then
-        block:section("Exception"):text(sess.exception_description, "  ")
-    end
-end
-
----@param data ezdap.DebugView.ItemData
-function DebugView:_show_hover(data)
-    local kind = data and data.kind
-    if not kind then return end
-    local sess = self._active_sess
-    local block = DetailBlock.new({ focus_id = "ezdap_view" })
-
-    if kind == "stackframe" then
-        local frame
-        if sess then
-            local thread = sess:current_thread()
-            for _, f in ipairs(thread and thread.stack_frames or {}) do
-                if f.id == data.frame_id then
-                    frame = f; break
-                end
-            end
-        end
-        if not frame then return end
-        block:line(frame.name or data.name)
-        local src = frame.source
-        if src then
-            block:line(src.path and src.path ~= "" and vim.fn.fnamemodify(src.path, ":~:.") or src.name)
-        end
-        if frame.line then block:line("line " .. frame.line) end
-        block:line(frame.instructionPointerReference)
-        block:show("Stack Frame")
-        return
-    end
-
-    if kind == "session" then
-        self:_session_details(block, data)
-        block:show("Session")
-        return
-    end
-
-    if (kind == "variable" or kind == "expression") and data.is_na then
-        block:text(data.error or "not available"):show(data.name)
-        return
-    end
-
-    if kind == "variable" or kind == "expression" then
-        if not sess or not sess:current_stack_frame() then return end
-        local expr = (kind == "variable") and (data.evaluateName or data.name) or data.name
-        sess:evaluate({ expression = expr, context = "hover" }, function(body, err)
-            if err or not body then
-                block:line(err or "not available"):show(data.name)
-                return
-            end
-            if body.type and body.type ~= "" then
-                block:line(body.type):blank()
-            end
-            block:text(body.result or ""):show(data.name)
-        end)
-        return
-    end
-
-    if kind == "breakpoint" then
-        if data.bp_kind == "source" then
-            if data.bp_source and data.bp_source ~= "" then
-                block:line(vim.fn.fnamemodify(data.bp_source, ":~:."))
-            end
-            if data.bp_line then block:line("line " .. data.bp_line) end
-        elseif data.bp_kind == "function" then
-            block:line("function: " .. (data.name or "?"))
-        elseif data.bp_kind == "exception_filter" then
-            block:line("filter: " .. (data.bp_filter or data.name or "?"))
-        elseif data.bp_kind == "exception_type" then
-            block:line("exception: " .. (data.bp_ex_name or data.name or "?"))
-            if data.break_mode then block:line("break mode: " .. data.break_mode) end
-            if data.unsupported then block:line("(not supported by adapter)") end
-        elseif data.bp_kind == "data" then
-            block:line("data: " .. (data.name or "?"))
-            if data.access_type then block:line("access: " .. data.access_type) end
-        end
-        if data.condition and data.condition ~= "" then
-            block:line("condition: " .. data.condition)
-        end
-        if data.hit_condition and data.hit_condition ~= "" then
-            block:line("hit: " .. data.hit_condition)
-        end
-        if data.log_message and data.log_message ~= "" then
-            block:line("log: " .. data.log_message)
-        end
-        local st = data.bp_id and sess and sess:bp_status(data.bp_id)
-        if st then
-            if st.message and st.message ~= "" then
-                block:blank():line(st.message)
-            end
-            if st.hits and st.hits > 0 then
-                block:line("hit count: " .. st.hits)
-            end
-        end
-        if data.disabled then
-            block:line("disabled")
-        elseif data.verified == false then
-            block:line("not verified")
-        elseif data.verified then
-            block:line("verified")
-        end
-        block:show("Breakpoint")
-        return
     end
 end
 
@@ -1625,7 +1466,7 @@ function DebugView:_setup_keymaps(bufnr)
 
     map("K", "Show details / full value", function()
         local cur = self._tree:get_cursor_item()
-        if cur and cur.data then self:_show_hover(cur.data) end
+        if cur then node_details.show(cur.data, self._active_sess) end
     end)
 
     map("g?", "Show keymaps", function()
