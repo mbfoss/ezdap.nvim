@@ -52,6 +52,19 @@ function OutputBuffer:_init(opts)
     end)
     vim.api.nvim_buf_set_name(buf, opts.name)
     self._bufnr = buf
+
+    -- A buffer appended to while hidden has no window to pin, and a window
+    -- entering it lands on line 1 — never pinned again. Catch it up on entry,
+    -- unless the window already holds a position the user scrolled to.
+    if self._autoscroll then
+        vim.api.nvim_create_autocmd("BufWinEnter", {
+            buffer   = buf,
+            callback = function()
+                if vim.api.nvim_win_get_cursor(0)[1] ~= 1 then return end
+                vim.api.nvim_win_set_cursor(0, { vim.api.nvim_buf_line_count(buf), 0 })
+            end,
+        })
+    end
 end
 
 ---@return integer?
