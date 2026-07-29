@@ -3,10 +3,11 @@
 ---TreeBuffer as the DebugView, but throwaway — the buffer/window are wiped as
 ---soon as the float is left or dismissed.
 
-local TreeBuffer = require("ezdap.util.TreeBuffer")
-local manager    = require("ezdap.manager")
-local format     = require("ezdap.ui.format")
-local ui_util    = require("ezdap.util.ui")
+local TreeBuffer  = require("ezdap.util.TreeBuffer")
+local DetailBlock = require("ezdap.ui.DetailBlock")
+local manager     = require("ezdap.manager")
+local format      = require("ezdap.ui.format")
+local ui_util     = require("ezdap.util.ui")
 
 local M = {}
 
@@ -27,6 +28,15 @@ local function _format_node(data)
     chunks[#chunks + 1] = { data.is_root and " = " or ": ", "NonText" }
     chunks[#chunks + 1] = { format.oneline(data.value), "@string" }
     return chunks, {}
+end
+
+---@type integer?  the value float currently open over an inspect tree
+local _value_win = nil
+
+---@param data      ezdap.ui.InspectView.NodeData?
+---@param owner_buf integer  the inspect buffer this float belongs to
+local function _show_value(data, owner_buf)
+
 end
 
 ---Open the inspect float for `expr`, evaluated in the active session. No-op with a
@@ -167,6 +177,11 @@ function M.open(expr)
         vim.wo[win].wrap = false
         vim.wo[win].winfixbuf = true
         vim.wo[win].winhighlight = "NormalFloat:NormalFloat,FloatBorder:FloatBorder,FloatTitle:FloatTitle"
+
+        vim.keymap.set("n", "K", function()
+            local cur = tree:get_cursor_item()
+            if cur then _show_value(cur.data, buf) end
+        end, { buffer = buf, silent = true, desc = "Show full value" })
 
         vim.keymap.set("n", "q", close, { buffer = buf, silent = true })
         vim.keymap.set("n", "<Esc>", close, { buffer = buf, silent = true })
