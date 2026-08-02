@@ -190,12 +190,15 @@ M.start            = function(task, callbacks)
                     end)
                 end
 
-                sess:on("terminated", function()
+                -- `reason` is set only when the adapter died on its own, which
+                -- makes this run a failure rather than a finished one. Teardown
+                -- runs either way — the adapter's own processes still need reaping.
+                sess:on("terminated", function(_, reason)
                     sessions[id] = nil
                     if unsub then unsub() end
                     if unsub_progress then unsub_progress() end
                     if _teardown then pcall(_teardown, config, setup_result) end
-                    on_done(true)
+                    on_done(reason == nil)
                 end)
             end,
             on_fail = function()

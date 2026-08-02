@@ -9,7 +9,7 @@
 ---  "continued"         (session)                  — execution resumed
 ---  "thread_updated"    (session)                  — thread list changed
 ---  "breakpoint_updated"(bp, status)               — bp verified/message changed; status is { verified, message, hits }
----  "terminated"        (session)                  — session ended
+---  "terminated"        (session, reason)          — session ended; reason is set only when the adapter died unexpectedly
 ---  "run_in_terminal"   (bufnr, title)             — terminal buffer opened; title is the adapter's, may be nil
 ---  "start_debugging"   (child_config, parent_sess)— adapter requests child session
 
@@ -131,11 +131,15 @@ local str_util    = require("ezdap.util.strutil")
 ---@field _handle_event            fun(self: ezdap.dap.Session, event: string, body: table)
 ---@field _handle_adapter_request  fun(self: ezdap.dap.Session, command: string, args: table, respond: ezdap.dap.RespondFn)
 ---@field _on_continued            fun(self: ezdap.dap.Session, body: ezdap.dap.proto.ContinuedEventBody)
----@field _on_close                fun(self: ezdap.dap.Session)
+---@field _on_close                fun(self: ezdap.dap.Session, reason: string?)
+---@field _stop_timer              uv.uv_timer_t?                 force-close fallback while a disconnect is in flight
 ---@field _bp_unsub                (fun())?                       unsubscribe from breakpoints.on_change
 ---@field _on_breakpoints_changed  fun(self: ezdap.dap.Session, kind: ezdap.dap.BreakpointChangeKind, path: string?)
 
 local M           = {}
+
+---How long to wait for the adapter's `disconnect` response before force-closing.
+local _DISCONNECT_TIMEOUT_MS = 3000
 
 local Session     = {}
 Session.__index   = Session
@@ -167,13 +171,14 @@ function M.new(conn, config)
         _listeners            = {},
         _stop_cb              = nil,
         _stopping             = false,
+        _stop_timer           = nil,
         _bp_unsub             = nil,
         report                = function(_, msg) vim.notify(msg, vim.log.levels.WARN) end,
     }, Session)
 
     conn.on_event   = function(event, body) self:_handle_event(event, body) end
     conn.on_request = function(cmd, args, respond) self:_handle_adapter_request(cmd, args, respond) end
-    conn.on_close   = function() self:_on_close() end
+    conn.on_close   = function(reason) self:_on_close(reason) end
 
     -- Adapter diagnostics are debugger messages, not debuggee output: they go to
     -- the REPL console rather than the progress report.
@@ -352,7 +357,7 @@ function Session:_do_initialize()
     }, function(body, err)
         if err then
             self:report("[dap] initialize failed: " .. err)
-            self:_shutdown()
+            self:_shutdown("initialize failed: " .. err)
             return
         end
         self.capabilities = body or {}
@@ -370,7 +375,7 @@ function Session:_do_launch_or_attach(cb)
     self:request(req_type, self:_protocol_args(), function(_, err)
         if err then
             self:report(("[dap] %s failed: %s"):format(req_type, err))
-            self:_shutdown()
+            self:_shutdown(("%s failed: %s"):format(req_type, err))
         elseif cb then
             cb()
         end
@@ -877,16 +882,35 @@ function Session:_on_progress(body, phase)
     self:_emit("progress", phase, body)
 end
 
+---The one place a session ends, whatever ended it: a graceful stop, the adapter's
+---own "terminated" event, or the adapter dying mid-protocol. The state change
+---comes first, so anything failing after it still leaves the session ended.
+---@param reason string?  why the connection ended, for an unexpected loss
 ---@return nil
-function Session:_on_close()
+function Session:_on_close(reason)
+    self:_clear_stop_timer()
     if self._bp_unsub then
         self._bp_unsub(); self._bp_unsub = nil
     end
     local cb = self._stop_cb
     self._stop_cb = nil
+
+    -- The adapter went away on its own: neither the user nor the protocol asked
+    -- for this, which makes it a crash to report rather than an expected end.
+    local unexpected = not self._stopping
+        and self.state ~= "terminated"
+        and self.state ~= "exited"
+
     if self.state ~= "terminated" then
-        self:_set_state("terminated")
-        self:_emit("terminated", self)
+        self:_set_state("terminated", unexpected and reason or nil)
+        self:_emit("terminated", self, unexpected and (reason or "connection closed") or nil)
+    end
+    if unexpected then
+        -- Notified as well as reported, as client.lua does for a failed start:
+        -- the session is about to vanish from the UI with nothing else said.
+        local msg = "[dap] session ended: " .. (reason or "connection closed")
+        vim.notify(msg, vim.log.levels.WARN)
+        self:report(msg)
     end
     if cb then cb() end
 end
@@ -1005,40 +1029,58 @@ function Session:start()
     self:_do_initialize()
 end
 
+---@param reason string?
 ---@return nil
-function Session:_shutdown()
-    self.conn:close()
+function Session:_shutdown(reason)
+    self.conn:close(reason)
+end
+
+---Drop the pending force-close fallback. Timers are one-shot but must still be
+---closed, or an adapter dying mid-disconnect leaks the handle.
+---@return nil
+function Session:_clear_stop_timer()
+    local timer = self._stop_timer
+    self._stop_timer = nil
+    if timer and not timer:is_closing() then timer:close() end
+end
+
+---Ask the adapter to disconnect, then tear the transport down. `_stopping` marks
+---the close as our own doing so it is not reported as a crash; the fallback timer
+---force-closes an adapter that never answers. `_on_close` delivers `cb`, once.
+---@param terminate_debuggee boolean
+---@param cb fun()?
+function Session:_disconnect(terminate_debuggee, cb)
+    self._stopping   = true
+    self._stop_cb    = cb
+    self:_clear_stop_timer()
+    self._stop_timer = vim.defer_fn(function()
+        self._stop_timer = nil
+        if self.state ~= "terminated" then
+            self:_shutdown("adapter did not answer disconnect")
+        end
+    end, _DISCONNECT_TIMEOUT_MS)
+    self:request("disconnect", { restart = false, terminateDebuggee = terminate_debuggee }, function()
+        self:_clear_stop_timer()
+        self:_shutdown()
+    end)
 end
 
 ---Gracefully terminate the debug session. `cb` is always called exactly once,
----even if the adapter closes the connection before responding (the _on_close
----path). A 3-second timeout forces _shutdown() for adapters that never reply.
+---even if the adapter crashes before responding (the _on_close path).
 ---@param cb fun()?
 function Session:stop(cb)
     if self.state == "terminated" or self._stopping then
         if cb then cb() end
         return
     end
-    self._stopping = true
-    -- Store cb so _on_close delivers it regardless of how termination happens.
-    self._stop_cb = cb
     -- Not yet initialized — skip protocol, just kill the transport.
     if self.state == "starting" then
+        self._stopping = true
+        self._stop_cb  = cb
         self:_shutdown()
         return
     end
-    local terminate_debuggee = (self.config.request or "launch") ~= "attach"
-    -- Fallback: force-close if the adapter ignores the protocol request.
-    local timer = vim.defer_fn(function()
-        if self.state ~= "terminated" then self:_shutdown() end
-    end, 3000)
-    local function done()
-        if not timer:is_closing() then timer:close() end
-        self:_shutdown()
-    end
-    self:request("disconnect", { restart = false, terminateDebuggee = terminate_debuggee }, function()
-        done()
-    end)
+    self:_disconnect((self.config.request or "launch") ~= "attach", cb)
 end
 
 ---Ask the adapter to terminate the debuggee (requires supportsTerminateRequest).
@@ -1070,10 +1112,11 @@ end
 ---Disconnect without terminating the debuggee.
 ---@param cb fun()?
 function Session:disconnect(cb)
-    self:request("disconnect", { restart = false, terminateDebuggee = false }, function()
-        self:_shutdown()
+    if self.state == "terminated" or self._stopping then
         if cb then cb() end
-    end)
+        return
+    end
+    self:_disconnect(false, cb)
 end
 
 -- Control flow

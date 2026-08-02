@@ -11,7 +11,7 @@ local M = {}
 ---@alias ezdap.dap.RespondFn  fun(result: table?, err: string?)
 
 ---@class ezdap.dap.ConnOpts
----@field on_close? fun()
+---@field on_close? fun(reason: string?)
 
 ---@class ezdap.dap.StdioOpts : ezdap.dap.ConnOpts
 ---@field cwd? string
@@ -23,17 +23,18 @@ local M = {}
 ---@field _seq           integer                     monotonic request counter
 ---@field _pending       table<integer, ezdap.dap.ResponseCb>
 ---@field _closed        boolean
----@field _write         fun(data: string)
+---@field _close_reason  string?                     why the connection ended
+---@field _write         fun(data: string)           raises when the adapter is gone
 ---@field _close         fun()
 ---@field on_event       fun(event: string, body: table)
 ---@field on_request     fun(command: string, args: table, respond: ezdap.dap.RespondFn)
----@field on_close       fun()
+---@field on_close       fun(reason: string?)
 ---@field on_stderr      fun(line: string)
 ---@field on_raw_message fun(direction: "in"|"out", msg: ezdap.dap.Message)
 ---@field _next_seq      fun(self: ezdap.dap.Connection): integer
 ---@field _dispatch      fun(self: ezdap.dap.Connection, msg: ezdap.dap.Message)
 ---@field request        fun(self: ezdap.dap.Connection, command: string, args: table?, cb: ezdap.dap.ResponseCb?)
----@field close          fun(self: ezdap.dap.Connection)
+---@field close          fun(self: ezdap.dap.Connection, reason: string?)
 
 local Connection = {}
 Connection.__index = Connection
@@ -71,6 +72,7 @@ function Connection:_dispatch(msg)
         local req_seq = tonumber(msg.seq)
         local command = msg.command or ""
         local function respond(result, err_msg)
+            if self._closed then return end
             ---@type ezdap.dap.Message
             local response = {
                 type        = "response",
@@ -85,17 +87,33 @@ function Connection:_dispatch(msg)
                 response.body = result
             end
             self.on_raw_message("out", response)
-            self._write(transport.encode(response))
+            self:_send(response)
         end
         pcall(self.on_request, command, msg.arguments or {}, respond)
     end
 end
 
----Send a DAP request.
+---Write an encoded message to the adapter. Writing to a dead pipe or a closed
+---socket raises — the one signal that the adapter is gone on a path with no
+---response to wait for — so catch it and close instead of letting it escape.
+---@param msg ezdap.dap.Message
+function Connection:_send(msg)
+    local ok, err = pcall(self._write, transport.encode(msg))
+    if not ok then
+        self:close("adapter is gone (write failed: " .. tostring(err) .. ")")
+    end
+end
+
+---Send a DAP request. Requests made on a closed connection fail their callback
+---immediately rather than being queued for a response that will never come.
 ---@param command string
 ---@param args    table?
 ---@param cb      ezdap.dap.ResponseCb?   called on response (or nil for fire-and-forget)
 function Connection:request(command, args, cb)
+    if self._closed then
+        if cb then cb(nil, self._close_reason or "connection closed") end
+        return
+    end
     local seq = self:_next_seq()
     local msg = { type = "request", seq = seq, command = command }
     if args and next(args) ~= nil then
@@ -105,22 +123,27 @@ function Connection:request(command, args, cb)
         self._pending[seq] = cb
     end
     self.on_raw_message("out", msg)
-    self._write(transport.encode(msg))
+    -- A failed write closes the connection, which drains `cb` from _pending.
+    self:_send(msg)
 end
 
 ---Tear down the underlying transport. Idempotent: safe from both the explicit
----stop path and the transport's remote-close path. Pending callbacks drain with
----an error so they never hang; on_close is always scheduled exactly once.
-function Connection:close()
+---stop path and every adapter-death path. on_close is scheduled *first* — a
+---draining callback that raises must not take the session's end down with it.
+---@param reason string?  why the connection ended; defaults to a plain close
+function Connection:close(reason)
     if self._closed then return end
     self._closed = true
+    self._close_reason = reason or "connection closed"
+    vim.schedule(function() self.on_close(self._close_reason) end)
     local pending = self._pending
     self._pending = {}
     self._close()
+    -- Drain so in-flight requests fail instead of hanging. This runs before the
+    -- scheduled on_close either way, so the order above is only about safety.
     for _, cb in pairs(pending) do
-        cb(nil, "connection closed")
+        cb(nil, self._close_reason)
     end
-    vim.schedule(function() self.on_close() end)
 end
 
 -- Internal constructor
@@ -133,6 +156,11 @@ local function _new_conn(opts)
         _seq           = 0,
         _pending       = {},
         _closed        = false,
+        _close_reason  = nil,
+        -- Replaced once the transport is up; until then (and after a transport
+        -- failure) a write raises, which _send turns into a clean close.
+        _write         = function() error("connection not established") end,
+        _close         = function() end,
         on_event       = function() end,
         on_request     = function(_, _, respond) respond(nil, "unsupported request") end,
         on_close       = (opts and opts.on_close) or function() end,
@@ -183,8 +211,13 @@ function M.stdio(cmd, opts)
                 end
             end
         end,
-        on_exit   = function()
-            vim.schedule(function() conn:close() end)
+        -- The adapter process is gone: close with its exit status so the session
+        -- terminates and the user is told why, whether it crashed or was stopped.
+        on_exit   = function(_, code)
+            local reason = (code == 0)
+                and "adapter process exited"
+                or ("adapter process exited with code " .. tostring(code))
+            vim.schedule(function() conn:close(reason) end)
         end,
     })
 
@@ -192,7 +225,12 @@ function M.stdio(cmd, opts)
         error("[dap] failed to start adapter: " .. table.concat(cmd, " "))
     end
 
-    conn._write = function(data) vim.fn.chansend(job_id, data) end
+    -- chansend returns 0 when the channel is gone; raising lets _send close down.
+    conn._write = function(data)
+        if vim.fn.chansend(job_id, data) == 0 then
+            error("adapter stdin is closed")
+        end
+    end
     conn._close = function() vim.fn.jobstop(job_id) end
 
     return conn
@@ -218,42 +256,58 @@ function M.try_tcp(host, port, opts, cb)
     parser.on_message = function(msg)
         vim.schedule(function() conn:_dispatch(msg) end)
     end
+    -- A conn closed before the socket is up (never connected, or a crash during
+    -- the attempt) must not try to touch the handle twice.
+    conn._close = function()
+        if not tcp:is_closing() then tcp:close() end
+    end
+
+    ---A failed attempt must not leak the handle it never used.
+    ---@param err_msg string
+    local function fail(err_msg)
+        if not tcp:is_closing() then tcp:close() end
+        vim.schedule(function() cb(nil, err_msg) end)
+    end
 
     vim.uv.getaddrinfo(host, nil, { socktype = "stream" }, function(err, res)
         if err then
-            vim.schedule(function()
-                cb(nil, ("DNS lookup failed: %s"):format(err))
-            end)
+            fail(("DNS lookup failed: %s"):format(err))
             return
         end
 
         if not res or #res == 0 then
-            vim.schedule(function()
-                cb(nil, "No addresses found")
-            end)
+            fail("No addresses found")
             return
         end
 
         local ip = res[1].addr
         tcp:connect(ip, port, function(err)
             if err then
-                tcp:close()
-                vim.schedule(function() cb(nil, err) end)
+                fail(err)
                 return
             end
 
+            -- EOF (nil chunk) is how a crashed adapter reaches us over TCP: the
+            -- kernel closes its socket. Either way the session must end.
             tcp:read_start(function(read_err, chunk)
                 if read_err or not chunk then
-                    vim.schedule(function() conn:close() end)
+                    local reason = read_err
+                        and ("adapter connection error: " .. tostring(read_err))
+                        or "adapter closed the connection"
+                    vim.schedule(function() conn:close(reason) end)
                     return
                 end
                 parser:feed(chunk)
             end)
 
-            conn._write = function(data) tcp:write(data) end
+            conn._write = function(data)
+                if tcp:is_closing() then error("adapter socket is closed") end
+                assert(tcp:write(data))
+            end
             conn._close = function()
+                if tcp:is_closing() then return end
                 tcp:read_stop()
-                if not tcp:is_closing() then tcp:close() end
+                tcp:close()
             end
             conn.on_close = opts.on_close or function() end
 
