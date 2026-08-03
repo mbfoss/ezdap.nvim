@@ -10,7 +10,7 @@
 ---@field disabled_cond_breakpoint string  conditional breakpoint, disabled
 ---@field disabled_logpoint        string  logpoint, disabled
 ---@field exception_breakpoint     string  exception filter/type breakpoint, enabled
----@field exception_breakpoint_unsupported string  exception type breakpoint the adapter does not support
+---@field unsupported_breakpoint   string  exception type breakpoint the adapter does not support
 ---@field data_breakpoint          string  data breakpoint (watchpoint), verified
 ---@field inactive_data_breakpoint string  data breakpoint, not yet verified
 ---@field session_running          string  session running
@@ -68,7 +68,7 @@ local M = {
 		disabled_cond_breakpoint = "ø",
 		disabled_logpoint        = "ø",
 		exception_breakpoint     = "↯",
-		exception_breakpoint_unsupported = "✗",
+		unsupported_breakpoint   = "✗",
 		data_breakpoint          = "◉",
 		inactive_data_breakpoint = "◌",
 		session_running          = "▶",

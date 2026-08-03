@@ -512,7 +512,7 @@ require("ezdap").setup({
     disabled_cond_breakpoint = "ø",
     disabled_logpoint        = "ø",
     exception_breakpoint     = "↯",
-    exception_breakpoint_unsupported = "✗",
+    unsupported_breakpoint   = "✗",
   },
 })
 ```

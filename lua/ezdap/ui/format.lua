@@ -94,7 +94,7 @@ function M.breakpoint_sign_name(spec)
         return "disabled_breakpoint"
     end
     if kind == "exception_type" and spec.unsupported then
-        return "exception_breakpoint_unsupported"
+        return "unsupported_breakpoint"
     end
     if kind == "exception_filter" or kind == "exception_type" then
         return "exception_breakpoint"
