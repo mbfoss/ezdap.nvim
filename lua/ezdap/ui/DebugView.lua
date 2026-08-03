@@ -1181,8 +1181,8 @@ end
 ---@return fun()?
 function DebugView:_bp_enabled_fn(d, enabled)
     if d.bp_kind == "source" and d.bp_source and d.bp_line then
-        local source, line = assert(d.bp_source), assert(d.bp_line)
-        return function() breakpoints.patch(source, line, { disabled = not enabled }) end
+        local source, line, column = assert(d.bp_source), assert(d.bp_line), d.bp_column
+        return function() breakpoints.patch(source, line, { column = column, disabled = not enabled }) end
     elseif d.bp_kind == "function" and d.name then
         local name = assert(d.name)
         return function() breakpoints.add_function(name, { disabled = not enabled }) end
@@ -1326,7 +1326,7 @@ function DebugView:_setup_keymaps(bufnr)
         local restore, apply = self:_bp_enabled_fn(d, not was_disabled), self:_bp_enabled_fn(d, was_disabled)
         if restore and apply then self._undo:push(restore, apply) end
         if d.bp_kind == "source" and d.bp_source and d.bp_line then
-            breakpoints.patch(d.bp_source, d.bp_line, { disabled = not d.disabled })
+            breakpoints.patch(d.bp_source, d.bp_line, { column = d.bp_column, disabled = not d.disabled })
         elseif d.bp_kind == "function" then
             breakpoints.add_function(d.name, { disabled = not d.disabled })
         elseif d.bp_kind == "exception_filter" and d.bp_filter then
@@ -1376,14 +1376,15 @@ function DebugView:_setup_keymaps(bufnr)
                     inputwin.open({ prompt = "Hit condition (empty to clear): ", default = d.hit_condition or "" },
                         function(hit)
                             if hit == nil then return end
-                            local source, line = d.bp_source, d.bp_line
+                            local source, line, column = d.bp_source, d.bp_line, d.bp_column
                             local old_cond, old_hit = d.condition or "", d.hit_condition or ""
                             if cond == old_cond and hit == old_hit then return end
                             ---@param c string
                             ---@param h string
                             local function set(c, h)
                                 return function()
-                                    breakpoints.patch(source, line, { condition = c, hit_condition = h })
+                                    breakpoints.patch(source, line,
+                                        { column = column, condition = c, hit_condition = h })
                                 end
                             end
                             set(cond, hit)()
