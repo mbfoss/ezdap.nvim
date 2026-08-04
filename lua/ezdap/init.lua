@@ -168,7 +168,7 @@ local function _register_user_commands()
     end
 
     local _debug_subs = {
-        "run_file", "quick_run", "new_run_file", "rerun",
+        "run", "run_file", "new_run_file", "rerun",
         "breakpoint",
         "view", "output", "continue", "continue_all",
         "step_over", "next", "step_in", "step_out", "step_back",
@@ -186,8 +186,8 @@ local function _register_user_commands()
         local sub = args[1]
         if sub == "run_file" then
             M.run_file(args[2])
-        elseif sub == "quick_run" then
-            M.quick_run({ unpack(args, 2) })
+        elseif sub == "run" then
+            M.run_profile({ unpack(args, 2) })
         elseif sub == "new_run_file" then
             M.new_run_file({ unpack(args, 2) })
         elseif sub == "rerun" then
@@ -255,14 +255,14 @@ local function _register_user_commands()
         end
     end
 
-    ---Completion for `:Debug quick_run …` tokens: the adapter (1st bare positional),
+    ---Completion for `:Debug run …` tokens: the adapter (1st bare positional),
     ---then the profile name (2nd), then input names not yet supplied (as `name=`),
     ---or a value once `=` has been typed (file paths for a path-like input).
     ---@param schema table
     ---@param used string[]     already-typed tokens preceding the one being completed
     ---@param arg_lead string   the token being completed
     ---@return string[]
-    local function _quick_run_complete(schema, used, arg_lead)
+    local function _run_complete(schema, used, arg_lead)
         local adapter, profile_name
         local supplied = {}
         for _, tok in ipairs(used) do
@@ -312,10 +312,10 @@ local function _register_user_commands()
         if rest[1] == "run_file" and #rest == 1 then
             return vim.fn.getcompletion(arg_lead, "file")
         end
-        if rest[1] == "quick_run" then
+        if rest[1] == "run" then
             -- <adapter> <profile> <input>=<value>…
             local schema = require("ezdap.schema")
-            return _quick_run_complete(schema, { unpack(rest, 2) }, arg_lead)
+            return _run_complete(schema, { unpack(rest, 2) }, arg_lead)
         end
         if rest[1] == "new_run_file" then
             -- Positional: <adapter> [profile] [path]. The path names a new file to
@@ -454,12 +454,12 @@ end
 
 ---Launch or attach under an adapter using one of its declared `profiles`, assembling
 ---the request body from `input=value` assignments — the entry point behind `:Debug
----quick_run`. `assignments` leads with the adapter and profile as bare positionals.
+---run`. `assignments` leads with the adapter and profile as bare positionals.
 ---@param assignments string[]  adapter, profile name, then "input=value" tokens
-function M.quick_run(assignments)
-    _require_setup("quick_run")
+function M.run_profile(assignments)
+    _require_setup("run_profile")
     M.clean()
-    return require("ezdap.runner").quick_run(assignments)
+    return require("ezdap.runner").run_profile(assignments)
 end
 
 ---@param task ezdap.Task

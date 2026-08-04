@@ -1,9 +1,9 @@
----@brief Schema engine behind `:Debug new_run_file` and `:Debug quick_run`.
+---@brief Schema engine behind `:Debug new_run_file` and `:Debug run`.
 ---
 ---Adapters carry no launch/attach schema of their own — each adapter's
 ---`profiles` (named `ezdap.Profile` entries, in `ezdap.adapters`)
 ---are wholly self-describing. A profile declares its inputs up front in an
----`inputs` table — `name -> ezdap.Input` — which both `:Debug quick_run` and a
+---`inputs` table — `name -> ezdap.Input` — which both `:Debug run` and a
 ---scaffolded run file read, then resolve the same way: `resolve_task` runs the
 ---profile's `build` over the supplied values to assemble a runnable task.
 ---
@@ -52,7 +52,7 @@ function M.profile_inputs(adapter, profile_name)
 end
 
 ---The input names a profile declares, sorted. These are the `name=value`
----tokens `quick_run` accepts, and the `parameters` keys a tasks file may set.
+---tokens `:Debug run` accepts, and the `parameters` keys a tasks file may set.
 ---@param adapter string
 ---@param profile_name string
 ---@return string[]

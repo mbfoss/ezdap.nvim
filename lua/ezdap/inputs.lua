@@ -1,7 +1,7 @@
 ---@brief The input-format registry: one row per `ezdap.InputFormat`.
 ---
 ---A profile's `inputs` declares a *value space*, and each consumer wants a
----different projection of it — `quick_run` parses a command-line string into it,
+---different projection of it — `:Debug run` parses a command-line string into it,
 ---a tasks-file LSP describes it as JSON Schema, the scaffolders seed a starting
 ---document with it, and `:Debug` completion offers the values it can enumerate.
 ---Each projection used to be its own switch over the format enum, spread across
@@ -11,7 +11,7 @@
 ---A value space has two authoring forms, and a format row describes both:
 ---
 --- * the **string form** — a command line, where everything is text. `parse` reads
----   it. This is what `:Debug quick_run`'s `name=value` arguments are.
+---   it. This is what `:Debug run`'s `name=value` arguments are.
 --- * the **typed form** — a structured file that already has types (easytasks'
 ---   `tasks.toml`). `schema` describes it.
 ---

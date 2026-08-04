@@ -110,19 +110,19 @@ First tell ezdap about an adapter — one small file per adapter under
 `lua/ezdap-adapters/` on your runtimepath (see [Adapters](#adapters)). With,
 say, `codelldb` and `debugpy` files in place, start debugging.
 
-The fastest path is `:Debug quick_run`, which launches (or attaches to) an
+The fastest path is `:Debug run`, which launches (or attaches to) an
 adapter using one of its named profiles, filled in with a few `input=value`
 arguments:
 
 ```vim
 " Launch a native binary under codelldb
-:Debug quick_run codelldb launch command=./a.out\ --verbose
+:Debug run codelldb launch command=./a.out\ --verbose
 
 " Debug a Python file
-:Debug quick_run debugpy launch command=./main.py\ --verbose
+:Debug run debugpy launch command=./main.py\ --verbose
 
 " Attach to a running process
-:Debug quick_run debugpy attach pid=41234
+:Debug run debugpy attach pid=41234
 ```
 
 Set a breakpoint on the current line and step through the program:
@@ -159,7 +159,7 @@ straight from your config (`require("ezdap.adapters").foo = { … }`).
 An adapter file is small and self-describing: native process/connection config
 plus named **profiles** that declare their inputs. From that one description,
 ezdap wires completion, scaffolding (`:Debug new_run_file`), and the resolve
-path for `quick_run` and run files — no per-adapter glue. Writing one is the
+path for `:Debug run` and run files — no per-adapter glue. Writing one is the
 subject of [Adding a custom adapter](#adding-a-custom-adapter).
 
 Run `:checkhealth ezdap` to see which registered adapters have their tooling
@@ -170,7 +170,7 @@ available on the current machine.
 ezdap gives you several ways to launch or attach, from one-liners to
 version-controlled run files.
 
-### `:Debug quick_run` — one-shot launch/attach
+### `:Debug run` — one-shot launch/attach
 
 Each adapter declares one or more named **profiles** (`launch_program`,
 `attach_process`, `remote`, …), each declaring the **inputs** it accepts. Supply them as
@@ -178,7 +178,7 @@ Each adapter declares one or more named **profiles** (`launch_program`,
 words:
 
 ```vim
-:Debug quick_run <adapter> <profile> [input=value ...]
+:Debug run <adapter> <profile> [input=value ...]
 ```
 
 Inputs are specific to each adapter/profile — e.g. every `launch_program`
@@ -207,7 +207,7 @@ project and run it on demand. Two shapes are accepted, told apart by
 whether a `profile` or a `configuration` field is present.
 
 **Profile-based** — names a `profile` and answers its declared inputs under
-`parameters`. It resolves exactly like `:Debug quick_run`, so a required input
+`parameters`. It resolves exactly like `:Debug run`, so a required input
 left unset is an error and an attach with no `pid` pops a process picker:
 
 ```lua
@@ -268,7 +268,7 @@ right thing to *send* and the wrong thing to *type*.
 A declared input fixes that by adding the one thing the raw body lacks — a
 description of itself:
 
-- **Completion knows what to offer.** `:Debug quick_run lldb launch_program <Tab>`
+- **Completion knows what to offer.** `:Debug run lldb launch_program <Tab>`
   lists that profile's inputs, and `command=<Tab>` completes paths, because the
   input said it was path-like. A raw table can only be completed by guessing.
 - **Errors arrive before the adapter starts.** A required input left unset, a
@@ -280,7 +280,7 @@ description of itself:
   template to drift out of sync with what the adapter accepts.
 - **One value, two places to write it.** An input can be answered on a command
   line or in a typed run file, and both land at the same `build` (`env` is
-  `A=1,B=2` in one and a table in the other). That is why `quick_run` and a run
+  `A=1,B=2` in one and a table in the other). That is why `:Debug run` and a run
   file can't disagree: they resolve through the same declaration.
 - **A profile can answer for you.** Inputs are declarations, so a profile can do
   something smarter than "omit the field" when one is missing — every attach
@@ -307,7 +307,7 @@ commented out with its description, so you uncomment just what you need:
 ```
 
 Fill in the `parameters`, then `:Debug run_file` it. It resolves through the same
-path as `:Debug quick_run`. (Prefer the raw shape above instead? Just drop the
+path as `:Debug run`. (Prefer the raw shape above instead? Just drop the
 `profile`/`parameters` keys and write a `configuration` table by hand.)
 
 ### From Lua
@@ -320,8 +320,8 @@ local ezdap = require("ezdap")
 -- Run a task table directly
 ezdap.run({ adapter = "delve", request = "launch", parameters = { mode = "test" } })
 
--- The quick_run / run_file / new_run_file / rerun entry points, too
-ezdap.quick_run({ "debugpy", "launch", "command=./main.py" })
+-- The run_profile / run_file / new_run_file / rerun entry points, too
+ezdap.run_profile({ "debugpy", "launch", "command=./main.py" })
 ezdap.run_file("debug.lua")
 ezdap.rerun()
 ```
@@ -526,8 +526,8 @@ Everything is under the `:Debug` command, with completion for every subcommand.
 
 | Subcommand            | Description                                        |
 | --------------------- | ------------------------------------------------- |
+| `run …`               | Launch/attach from `input=value` tokens           |
 | `run_file [path]`     | Run a Lua task file, or pick from a directory     |
-| `quick_run …`         | Launch/attach from `input=value` tokens           |
 | `new_run_file …`      | Scaffold a run file from a profile's inputs        |
 | `rerun`               | Re-launch the most recently run task              |
 | `view`                | Open/focus the debug panel                        |
@@ -760,7 +760,7 @@ adapters.myadapter = {
 The profile is now everywhere it should be, with no further wiring:
 
 ```vim
-:Debug quick_run myadapter launch_program command=./a.out cwd=/src stop_on_entry=true
+:Debug run myadapter launch_program command=./a.out cwd=/src stop_on_entry=true
 :Debug new_run_file myadapter launch_program
 ```
 
@@ -798,7 +798,7 @@ How the pieces fit:
   then return err end`. It must always resume — return a value or an error
   string — so the caller waiting on it hears back.
 
-Because `quick_run`, `new_run_file` and profile-based run files all resolve
+Because `:Debug run`, `:Debug new_run_file` and profile-based run files all resolve
 through the same `inputs` → `build` path, a profile is described in exactly one
 place and the three cannot drift apart. The shipped `remote` adapter in
 [adapters.lua](lua/ezdap/adapters.lua) is a compact reference for a profile that

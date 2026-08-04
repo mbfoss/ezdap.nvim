@@ -57,7 +57,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   table declaring what it accepts (`name -> ezdap.Input`, each with a `type` and
   `description`, plus an optional `format`, `choices` and `required`) and a
   `build(params, connect, inputs)` that assembles the native request body — and any
-  task-level `host`/`port` — in place. Both `quick_run` and a scaffolded run file
+  task-level `host`/`port` — in place. Both `:Debug run` and a scaffolded run file
   resolve the same way (`values -> build -> task`), so `inputs` is the single
   description of a profile. Users add/override keys directly. The DAP core
   never reads the profiles — only `ezdap.schema` does.
@@ -88,7 +88,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   is such a case — a transformation into a different shape, not a second spelling —
   and it lived here as a `shell_args` format until it moved to the launch `build`s
   that wanted it (`shared.split_command`, which takes a command line or a list).
-- [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug quick_run`, the
+- [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug run`, the
   profile reader for `new_run_file`, and the seam easytasks' `debug` task type
   runs on. `resolve_task(spec, done)` is that seam: it reads a profile's
   declared inputs from `spec.values` (each in either authoring form, parsed via
@@ -112,9 +112,9 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   new_run_file`: writes a runnable Lua run_file that names the `adapter` and
   `profile` and lists its declared inputs under `parameters`, each seeded (via
   `ezdap.inputs`' `seed`) and commented with its `description`, then opens it. The
-  scaffolded file is profile-based, exactly like `quick_run`: `:Debug run_file`
+  scaffolded file is profile-based, exactly like `:Debug run`: `:Debug run_file`
   resolves it through `resolve_task`/`build` (`parameters -> build -> task`), so a run
-  file and `quick_run` share one description of a profile — its `inputs` — and
+  file and `:Debug run` share one description of a profile — its `inputs` — and
   cannot drift. `run_file` accepts two run-file shapes, told apart by whether a
   `profile` or a `configuration` field is present: the profile-based one above
   (`adapter` + `profile` + `parameters`, the answers to the profile's declared

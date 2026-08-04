@@ -3,7 +3,7 @@
 ---The module is a plain table: each key is an adapter name, each value is an
 ---AdapterDef — native DAP process/connection config (command, host/port,
 ---setup/teardown, …) plus a `profiles` table of named `ezdap.Profile`
----launch/attach descriptions. Profiles are what `:Debug new_run_file`/`quick_run`
+---launch/attach descriptions. Profiles are what `:Debug new_run_file`/`:Debug run`
 ---read (via `ezdap.schema`) to scaffold a run file / assemble a
 ---native request body; the DAP core never touches them.
 ---
@@ -58,7 +58,7 @@
 ---| "map"         # → table: "A=1,B=2" → { A = "1", B = "2" }
 ---| "list"        # → table: "a,b" → { "a", "b" }
 
----One declared input of a profile — a `name=value` argument to `quick_run`, a
+---One declared input of a profile — a `name=value` argument to `:Debug run`, a
 ---`parameters` key in an easytasks tasks file. `type` is what `build` receives;
 ---`format` says which authored forms reach it (and drives path-aware value
 ---completion). Omit both for an input taken verbatim as a string. An input with
@@ -82,7 +82,7 @@
 ---task, and what `new_run_file` scaffolds.
 ---
 ---`inputs` declares what the profile accepts (name → `ezdap.Input`), and
----`build` turns supplied values into a runnable request. Both `quick_run` and a
+---`build` turns supplied values into a runnable request. Both `:Debug run` and a
 ---scaffolded run file resolve the same way — through `resolve_task`/`build` — so a
 ---profile is described in exactly one place: its `inputs`. `new_run_file`
 ---seeds a run file's `inputs` from those declarations (each input's `seed`, described
@@ -127,7 +127,7 @@
 ---`request_args` here — that is a per-run value carried by the resolved config.
 ---`setup`/`teardown` receive that resolved config (setup may mutate host/port).
 ---`profiles` are consumed only by `ezdap.schema` (for
----new_run_file/quick_run), never by the DAP core.
+---new_run_file/run), never by the DAP core.
 ---@class ezdap.AdapterDef
 ---@field command?               string|string[]
 ---@field cwd?                   string

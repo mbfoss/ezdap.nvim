@@ -22,7 +22,7 @@ for the UI and commands — prefer it over importing `dap/client` or
 `dap/breakpoints` directly.
 
 **Public API** — [lua/ezdap/init.lua](lua/ezdap/init.lua)
-`setup`, the run entry points (`run`, `run_file`, `quick_run`, `new_run_file`,
+`setup`, the run entry points (`run`, `run_profile`, `run_file`, `new_run_file`,
 `rerun`), the debug/disassembly view accessors, and registration of the `:Debug`
 user command (dispatching to the command surface).
 
@@ -63,12 +63,12 @@ its only path to the DAP layer.
   task (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`) and
   sends `parameters` as the DAP request body verbatim.
 - [runner.lua](lua/ezdap/runner.lua) — the standalone run frontend: run files,
-  `quick_run`, `rerun`, and the run panel.
+  `run_profile`, `rerun`, and the run panel.
 - [inputs.lua](lua/ezdap/inputs.lua) — the input-format registry: one row per
   format, stating every way it is read (parsed from a command line, described as
   JSON Schema for a typed file, seeded into a scaffolded document, completed).
   Nothing else switches on a format name, so adding one is a single row.
-- [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug quick_run`, the
+- [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug run`, the
   reader for `new_run_file`, and the seam easytasks' `debug` task type runs on.
   `resolve_task` reads a profile's declared `inputs` from a table of values
   and calls its `build`, delivering a complete `ezdap.Task` to a `done` callback —
@@ -135,7 +135,7 @@ Each `ezdap.Input` declares one input up front:
 
 An input declares a *value space*, and there are two ways to write into it:
 
-- the **string form** — a command line, where everything is text. `:Debug quick_run
+- the **string form** — a command line, where everything is text. `:Debug run
   codelldb launch command='./a.out --verbose'` is this.
 - the **typed form** — a structured file that already has types, e.g. an easytasks
   `tasks.toml` writing `env = { A = "1" }` rather than `env=A=1`.
@@ -163,8 +163,8 @@ argument list).
 They serve different commands and never meet:
 
 ```
-quick_run     inputs ─→ build ─→ body ─→ task
-new_run_file  template ─→ Lua source ─→ (you edit it) ─→ task
+:Debug run     inputs ─→ build ─→ body ─→ task
+new_run_file   template ─→ Lua source ─→ (you edit it) ─→ task
 ```
 
 Keeping them apart is the point of the format — each answers one question honestly
@@ -217,12 +217,12 @@ never produces anything the scaffolder reads.
 
 Two prices are worth naming. The field list appears in both `build` and `template`,
 and nothing checks they agree — drift costs scaffold quality (a field the run file
-doesn't seed), never `quick_run` correctness. And the template is unvalidated text:
+doesn't seed), never `:Debug run` correctness. And the template is unvalidated text:
 a typo in it surfaces only when someone scaffolds that profile, so scaffold
 one after editing (`:Debug new_run_file <adapter> <profile> /tmp/x.lua`).
 
 Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are ezdap's
-own user-facing vocabulary — the `name=value` tokens typed at `quick_run` — not
+own user-facing vocabulary — the `name=value` tokens typed at `:Debug run` — not
 the adapter's. The `params` keys they fill keep whatever casing the adapter's
 wire protocol uses, so pairings like `params.stopOnEntry = inputs.stop_on_entry`
 are normal and correct.

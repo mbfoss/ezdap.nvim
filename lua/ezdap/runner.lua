@@ -294,7 +294,7 @@ function M.run_file(path)
     end
 
     -- A profile-based run file names a profile and answers its inputs under
-    -- `parameters`; resolve it through the profile's `build`, as `quick_run` does.
+    -- `parameters`; resolve it through the profile's `build`, as `:Debug run` does.
     -- It may open a picker, so the run starts from the callback.
     if type(spec.profile) == "string" then
         local name = vim.fn.fnamemodify(resolved, ":t")
@@ -340,24 +340,24 @@ end
 ---Returns nil when `build` stops to ask the user something — the run starts on answer.
 ---@param assignments string[]  adapter, profile name, then "input=value" tokens, e.g. { "codelldb", "launch", "command=./a.out" }
 ---@return ezdap.runner.Run?
-function M.quick_run(assignments)
+function M.run_profile(assignments)
     local schema = require("ezdap.schema")
 
     -- The adapter and profile name are strictly the first two positional
-    -- arguments (`quick_run codelldb launch …`); every argument from the
+    -- arguments (`:Debug run codelldb launch …`); every argument from the
     -- third on is an `input=value` assignment.
     local adapter, profile_name = assignments[1], assignments[2]
     if not adapter or adapter == "" or adapter:find("=", 1, true) then
-        _warn("quick_run: usage: quick_run <adapter> <profile> [input=value]…")
+        _warn("run: usage: :Debug run <adapter> <profile> [input=value]…")
         return
     end
     if not require("ezdap.adapters")[adapter] then
-        _err("quick_run: unknown adapter: " .. adapter ..
+        _err("run: unknown adapter: " .. adapter ..
             " (available: " .. table.concat(schema.profiled_adapters(), ", ") .. ")")
         return
     end
     if not profile_name or profile_name == "" or profile_name:find("=", 1, true) then
-        _warn("quick_run: usage: quick_run " .. adapter .. " <profile> [input=value]…"
+        _warn("run: usage: :Debug run " .. adapter .. " <profile> [input=value]…"
             .. " (profiles: " .. table.concat(schema.profile_names(adapter), ", ") .. ")")
         return
     end
@@ -367,7 +367,7 @@ function M.quick_run(assignments)
         local tok = assignments[i]
         local eq = tok:find("=", 1, true)
         if not eq then
-            _warn("quick_run: expected input=value, got '" .. tok .. "'")
+            _warn("run: expected input=value, got '" .. tok .. "'")
             return
         end
         values[tok:sub(1, eq - 1)] = tok:sub(eq + 1)
@@ -384,7 +384,7 @@ function M.quick_run(assignments)
         values  = values,
     }, function(task, err)
         if not task then
-            _err("quick_run: " .. tostring(err))
+            _err("run: " .. tostring(err))
             return
         end
         run = M.run(task)

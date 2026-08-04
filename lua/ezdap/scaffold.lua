@@ -1,11 +1,11 @@
 ---@brief run_file scaffolding for `:Debug new_run_file`.
 ---
 ---Writes a runnable Lua run_file for an adapter + one of its `profiles`. The
----generated file is profile-based, exactly like `:Debug quick_run`: it names the
+---generated file is profile-based, exactly like `:Debug run`: it names the
 ---`adapter` and `profile` and lists that profile's declared inputs under
 ---`parameters`, each seeded with a starting value (`ezdap.inputs`' `seed`) and
 ---annotated with its `description`. `:Debug run_file` resolves it through the
----profile's `build` (see `ezdap.schema`), so a run file and `quick_run`
+---profile's `build` (see `ezdap.schema`), so a run file and `:Debug run`
 ---share one description of a profile — its `inputs` — and never drift.
 
 local schema = require("ezdap.schema")
