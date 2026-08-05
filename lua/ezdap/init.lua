@@ -79,305 +79,319 @@ local function _warn_if_unpersisted()
         vim.log.levels.WARN)
 end
 
-local function _register_user_commands()
-    local cmd      = require("ezdap.command")
-    local usercmd  = require("ezdap.util.usercmd")
+-- The `:Debug` surface. `plugin/ezdap.lua` registers the command at startup and
+-- routes it here through `M.command`/`M.complete`, so nothing below is read
+-- until the command is first run or completed.
 
-    local _bp_subs = {
-        "toggle", "add", "remove", "column",
-        "clear_file", "clear_all", "clear_fn",
-        "enable", "disable", "toggle_enabled", "enable_all", "disable_all",
-        "condition", "logpoint",
-        "fn", "exception_filter", "exception_type",
-        "data", "data_clear", "data_list",
-        "list",
-    }
+---@type table?
+local _command_mod
 
-    ---Run the `breakpoint` subcommand. Also reachable via `:Debug breakpoint …`.
-    ---@param args string[]
-    local function _bp_run(args)
-        local sub = args[1]
-        if sub == nil or sub == "" or sub == "toggle" then
-            if vim.b.ezdap_disasm and _disassembly_view then
-                _disassembly_view:toggle_bp_at_cursor()
-            else
-                cmd.breakpoint.toggle()
-            end
-        elseif sub == "add" then
-            cmd.breakpoint.add(args[2])
-        elseif sub == "remove" then
-            cmd.breakpoint.remove()
-        elseif sub == "column" then
-            cmd.breakpoint.column()
-        elseif sub == "clear_file" then
-            cmd.breakpoint.clear_file()
-        elseif sub == "clear_all" then
-            cmd.breakpoint.clear_all()
-        elseif sub == "clear_fn" then
-            cmd.breakpoint.clear_fn()
-        elseif sub == "enable" then
-            cmd.breakpoint.enable()
-        elseif sub == "disable" then
-            cmd.breakpoint.disable()
-        elseif sub == "toggle_enabled" then
-            cmd.breakpoint.toggle_enabled()
-        elseif sub == "enable_all" then
-            cmd.breakpoint.enable_all()
-        elseif sub == "disable_all" then
-            cmd.breakpoint.disable_all()
-        elseif sub == "condition" then
-            cmd.breakpoint.condition()
-        elseif sub == "logpoint" then
-            cmd.breakpoint.logpoint()
-        elseif sub == "fn" then
-            cmd.breakpoint.fn(args[2])
-        elseif sub == "exception_filter" then
-            cmd.breakpoint.exception_filter()
-        elseif sub == "exception_type" then
-            cmd.breakpoint.exception_type(args[2], args[3])
-        elseif sub == "data" then
-            cmd.breakpoint.data(args[2])
-        elseif sub == "data_clear" then
-            cmd.breakpoint.data_clear()
-        elseif sub == "data_list" then
-            cmd.breakpoint.data_list()
-        elseif sub == "list" then
-            cmd.breakpoint.list()
+---@return table
+local function _cmd()
+    _command_mod = _command_mod or require("ezdap.command")
+    return _command_mod
+end
+
+local _bp_subs = {
+    "toggle", "add", "remove", "column",
+    "clear_file", "clear_all", "clear_fn",
+    "enable", "disable", "toggle_enabled", "enable_all", "disable_all",
+    "condition", "logpoint",
+    "fn", "exception_filter", "exception_type",
+    "data", "data_clear", "data_list",
+    "list",
+}
+
+---Run the `breakpoint` subcommand. Also reachable via `:Debug breakpoint …`.
+---@param args string[]
+local function _bp_run(args)
+    local cmd = _cmd()
+    local sub = args[1]
+    if sub == nil or sub == "" or sub == "toggle" then
+        if vim.b.ezdap_disasm and _disassembly_view then
+            _disassembly_view:toggle_bp_at_cursor()
         else
-            vim.notify("[dap] unknown subcommand: " .. tostring(sub), vim.log.levels.WARN)
+            cmd.breakpoint.toggle()
         end
+    elseif sub == "add" then
+        cmd.breakpoint.add(args[2])
+    elseif sub == "remove" then
+        cmd.breakpoint.remove()
+    elseif sub == "column" then
+        cmd.breakpoint.column()
+    elseif sub == "clear_file" then
+        cmd.breakpoint.clear_file()
+    elseif sub == "clear_all" then
+        cmd.breakpoint.clear_all()
+    elseif sub == "clear_fn" then
+        cmd.breakpoint.clear_fn()
+    elseif sub == "enable" then
+        cmd.breakpoint.enable()
+    elseif sub == "disable" then
+        cmd.breakpoint.disable()
+    elseif sub == "toggle_enabled" then
+        cmd.breakpoint.toggle_enabled()
+    elseif sub == "enable_all" then
+        cmd.breakpoint.enable_all()
+    elseif sub == "disable_all" then
+        cmd.breakpoint.disable_all()
+    elseif sub == "condition" then
+        cmd.breakpoint.condition()
+    elseif sub == "logpoint" then
+        cmd.breakpoint.logpoint()
+    elseif sub == "fn" then
+        cmd.breakpoint.fn(args[2])
+    elseif sub == "exception_filter" then
+        cmd.breakpoint.exception_filter()
+    elseif sub == "exception_type" then
+        cmd.breakpoint.exception_type(args[2], args[3])
+    elseif sub == "data" then
+        cmd.breakpoint.data(args[2])
+    elseif sub == "data_clear" then
+        cmd.breakpoint.data_clear()
+    elseif sub == "data_list" then
+        cmd.breakpoint.data_list()
+    elseif sub == "list" then
+        cmd.breakpoint.list()
+    else
+        vim.notify("[dap] unknown subcommand: " .. tostring(sub), vim.log.levels.WARN)
     end
+end
 
-    ---Completion for the `breakpoint` subcommand.
-    ---@param rest string[]
-    ---@return string[]
-    local function _bp_complete(rest)
-        if #rest == 0 then return _bp_subs end
-        if rest[1] == "fn" and #rest == 1 then
-            return vim.tbl_map(function(bp) return bp.name end,
-                require("ezdap.dap.breakpoints").function_breakpoints())
-        end
-        if rest[1] == "exception_type" and #rest == 1 then
-            return vim.tbl_map(function(bp) return bp.name end,
-                require("ezdap.dap.breakpoints").exception_name_breakpoints())
-        end
-        if rest[1] == "exception_type" and #rest == 2 then
-            return { "always", "unhandled", "userUnhandled", "never" }
-        end
-        return {}
+---Completion for the `breakpoint` subcommand.
+---@param rest string[]
+---@return string[]
+local function _bp_complete(rest)
+    if #rest == 0 then return _bp_subs end
+    if rest[1] == "fn" and #rest == 1 then
+        return vim.tbl_map(function(bp) return bp.name end,
+            require("ezdap.dap.breakpoints").function_breakpoints())
     end
-
-    local _debug_subs = {
-        "run", "run_file", "new_run_file", "rerun",
-        "breakpoint",
-        "view", "output", "continue", "continue_all",
-        "step_over", "next", "step_in", "step_out", "step_back",
-        "step_into_targets", "reverse_continue",
-        "jump_to_cursor", "restart_frame", "exception_info",
-        "pause", "restart",
-        "stop", "stop_all",
-        "session", "thread", "terminate_thread", "frame",
-        "inspect", "value", "disassemble",
-        "project", "clean", "log",
-    }
-
-    ---@type ezdap.util.usercmd.run_fn
-    local function _debug_run(_, args, opts)
-        local sub = args[1]
-        if sub == "run_file" then
-            M.run_file(args[2])
-        elseif sub == "run" then
-            M.run_profile({ unpack(args, 2) })
-        elseif sub == "new_run_file" then
-            M.new_run_file({ unpack(args, 2) })
-        elseif sub == "rerun" then
-            M.rerun()
-        elseif sub == "view" then
-            cmd.view.toggle()
-        elseif sub == "output" then
-            cmd.view.output_toggle()
-        elseif sub == "continue" then
-            cmd.debug.continue()
-        elseif sub == "continue_all" then
-            cmd.debug.continue_all()
-        elseif sub == "step_over" or sub == "next" then
-            cmd.debug.step_over()
-        elseif sub == "step_in" then
-            cmd.debug.step_in()
-        elseif sub == "step_out" then
-            cmd.debug.step_out()
-        elseif sub == "step_back" then
-            cmd.debug.step_back()
-        elseif sub == "step_into_targets" then
-            cmd.debug.step_into_targets()
-        elseif sub == "reverse_continue" then
-            cmd.debug.reverse_continue()
-        elseif sub == "jump_to_cursor" then
-            cmd.debug.jump_to_cursor()
-        elseif sub == "restart_frame" then
-            cmd.debug.restart_frame()
-        elseif sub == "exception_info" then
-            cmd.debug.exception_info()
-        elseif sub == "pause" then
-            cmd.debug.pause()
-        elseif sub == "restart" then
-            cmd.debug.restart()
-        elseif sub == "stop" then
-            cmd.debug.stop()
-        elseif sub == "stop_all" then
-            cmd.debug.stop_all()
-        elseif sub == "inspect" then
-            -- A `'<,'>` range (e.g. `:'<,'>Debug inspect` from visual mode) sets
-            -- opts.range > 0; inspect then reads the `'<`/`'>` marks.
-            cmd.debug.inspect(args[2], opts.range and opts.range > 0)
-        elseif sub == "value" then
-            cmd.debug.value(args[2], opts.range and opts.range > 0)
-        elseif sub == "disassemble" then
-            cmd.debug.disassemble()
-        elseif sub == "session" then
-            cmd.debug.session()
-        elseif sub == "thread" then
-            cmd.debug.thread()
-        elseif sub == "terminate_thread" then
-            cmd.debug.terminate_thread()
-        elseif sub == "frame" then
-            cmd.debug.frame()
-        elseif sub == "project" then
-            M.project_info()
-        elseif sub == "clean" then
-            M.clean()
-        elseif sub == "log" then
-            require("ezdap.runner").log_open()
-        elseif sub == "breakpoint" then
-            _bp_run({ unpack(args, 2) })
-        else
-            vim.notify("[ezdap] unknown command: " .. tostring(sub), vim.log.levels.WARN)
-        end
+    if rest[1] == "exception_type" and #rest == 1 then
+        return vim.tbl_map(function(bp) return bp.name end,
+            require("ezdap.dap.breakpoints").exception_name_breakpoints())
     end
+    if rest[1] == "exception_type" and #rest == 2 then
+        return { "always", "unhandled", "userUnhandled", "never" }
+    end
+    return {}
+end
 
-    ---Completion for `:Debug run …` tokens: the adapter (1st bare positional),
-    ---then the profile name (2nd), then input names not yet supplied (as `name=`),
-    ---or a value once `=` has been typed (file paths for a path-like input).
-    ---@param schema table
-    ---@param used string[]     already-typed tokens preceding the one being completed
-    ---@param arg_lead string   the token being completed
-    ---@return string[]
-    local function _run_complete(schema, used, arg_lead)
-        local adapter, profile_name
-        local supplied = {}
-        for _, tok in ipairs(used) do
-            local e = tok:find("=", 1, true)
-            if e then
-                supplied[tok:sub(1, e - 1)] = true
-            elseif not adapter then
-                adapter = tok
-            elseif not profile_name then
-                profile_name = tok
-            end
-        end
+local _debug_subs = {
+    "run", "run_file", "new_run_file", "rerun",
+    "breakpoint",
+    "view", "output", "continue", "continue_all",
+    "step_over", "next", "step_in", "step_out", "step_back",
+    "step_into_targets", "reverse_continue",
+    "jump_to_cursor", "restart_frame", "exception_info",
+    "pause", "restart",
+    "stop", "stop_all",
+    "session", "thread", "terminate_thread", "frame",
+    "inspect", "value", "disassemble",
+    "project", "clean", "log",
+}
 
-        local eq = arg_lead:find("=", 1, true)
-        if eq then
-            if not adapter or not profile_name then return {} end
-            local name   = arg_lead:sub(1, eq - 1)
-            local pfx    = arg_lead:sub(1, eq)
-            local val    = arg_lead:sub(eq + 1)
-            -- Completing an input's value: whatever the input itself can offer —
-            -- paths, true/false, a fixed set of values, nothing for the rest.
-            local input  = schema.profile_inputs(adapter, profile_name)[name]
-            local values = require("ezdap.inputs").completion(input, val)
-            return vim.tbl_map(function(v) return pfx .. v end, values)
-        end
+---@type ezdap.util.usercmd.run_fn
+local function _debug_run(_, args, opts)
+    local cmd = _cmd()
+    local sub = args[1]
+    if sub == "run_file" then
+        M.run_file(args[2])
+    elseif sub == "run" then
+        M.run_profile({ unpack(args, 2) })
+    elseif sub == "new_run_file" then
+        M.new_run_file({ unpack(args, 2) })
+    elseif sub == "rerun" then
+        M.rerun()
+    elseif sub == "view" then
+        cmd.view.toggle()
+    elseif sub == "output" then
+        cmd.view.output_toggle()
+    elseif sub == "continue" then
+        cmd.debug.continue()
+    elseif sub == "continue_all" then
+        cmd.debug.continue_all()
+    elseif sub == "step_over" or sub == "next" then
+        cmd.debug.step_over()
+    elseif sub == "step_in" then
+        cmd.debug.step_in()
+    elseif sub == "step_out" then
+        cmd.debug.step_out()
+    elseif sub == "step_back" then
+        cmd.debug.step_back()
+    elseif sub == "step_into_targets" then
+        cmd.debug.step_into_targets()
+    elseif sub == "reverse_continue" then
+        cmd.debug.reverse_continue()
+    elseif sub == "jump_to_cursor" then
+        cmd.debug.jump_to_cursor()
+    elseif sub == "restart_frame" then
+        cmd.debug.restart_frame()
+    elseif sub == "exception_info" then
+        cmd.debug.exception_info()
+    elseif sub == "pause" then
+        cmd.debug.pause()
+    elseif sub == "restart" then
+        cmd.debug.restart()
+    elseif sub == "stop" then
+        cmd.debug.stop()
+    elseif sub == "stop_all" then
+        cmd.debug.stop_all()
+    elseif sub == "inspect" then
+        -- A `'<,'>` range (e.g. `:'<,'>Debug inspect` from visual mode) sets
+        -- opts.range > 0; inspect then reads the `'<`/`'>` marks.
+        cmd.debug.inspect(args[2], opts.range and opts.range > 0)
+    elseif sub == "value" then
+        cmd.debug.value(args[2], opts.range and opts.range > 0)
+    elseif sub == "disassemble" then
+        cmd.debug.disassemble()
+    elseif sub == "session" then
+        cmd.debug.session()
+    elseif sub == "thread" then
+        cmd.debug.thread()
+    elseif sub == "terminate_thread" then
+        cmd.debug.terminate_thread()
+    elseif sub == "frame" then
+        cmd.debug.frame()
+    elseif sub == "project" then
+        M.project_info()
+    elseif sub == "clean" then
+        M.clean()
+    elseif sub == "log" then
+        require("ezdap.runner").log_open()
+    elseif sub == "breakpoint" then
+        _bp_run({ unpack(args, 2) })
+    else
+        vim.notify("[ezdap] unknown command: " .. tostring(sub), vim.log.levels.WARN)
+    end
+end
 
-        -- No `=` yet: complete the adapter, then the profile, then input names.
-        if not adapter then
-            return schema.profiled_adapters()
+---Completion for `:Debug run …` tokens: the adapter (1st bare positional),
+---then the profile name (2nd), then input names not yet supplied (as `name=`),
+---or a value once `=` has been typed (file paths for a path-like input).
+---@param schema table
+---@param used string[]     already-typed tokens preceding the one being completed
+---@param arg_lead string   the token being completed
+---@return string[]
+local function _run_complete(schema, used, arg_lead)
+    local adapter, profile_name
+    local supplied = {}
+    for _, tok in ipairs(used) do
+        local e = tok:find("=", 1, true)
+        if e then
+            supplied[tok:sub(1, e - 1)] = true
+        elseif not adapter then
+            adapter = tok
         elseif not profile_name then
-            return schema.profile_names(adapter)
+            profile_name = tok
         end
-        local out = {}
-        for _, name in ipairs(schema.profile_input_names(adapter, profile_name)) do
-            if not supplied[name] then out[#out + 1] = name .. "=" end
-        end
-        return out
     end
 
-    ---Completion for `:Debug …`.
-    ---@type ezdap.util.usercmd.subcommand
-    local function _debug_complete_subs(_, rest, arg_lead)
-        if #rest == 0 then return _debug_subs end
-        if rest[1] == "breakpoint" then
-            return _bp_complete({ unpack(rest, 2) })
-        end
-        if rest[1] == "run_file" and #rest == 1 then
-            return vim.fn.getcompletion(arg_lead, "file")
-        end
-        if rest[1] == "run" then
-            -- <adapter> <profile> <input>=<value>…
-            local schema = require("ezdap.schema")
-            return _run_complete(schema, { unpack(rest, 2) }, arg_lead)
-        end
-        if rest[1] == "new_run_file" then
-            -- Positional: <adapter> [profile] [path]. The path names a new file to
-            -- create, so it has no completion.
-            local schema = require("ezdap.schema")
-            local used   = { unpack(rest, 2) }
-            local pos    = #used + 1 -- 1-based position of the token being completed
-            if pos == 1 then
-                return schema.profiled_adapters()
-            elseif pos == 2 then
-                return schema.profile_names(used[1])
-            end
-            return {}
+    local eq = arg_lead:find("=", 1, true)
+    if eq then
+        if not adapter or not profile_name then return {} end
+        local name   = arg_lead:sub(1, eq - 1)
+        local pfx    = arg_lead:sub(1, eq)
+        local val    = arg_lead:sub(eq + 1)
+        -- Completing an input's value: whatever the input itself can offer —
+        -- paths, true/false, a fixed set of values, nothing for the rest.
+        local input  = schema.profile_inputs(adapter, profile_name)[name]
+        local values = require("ezdap.inputs").completion(input, val)
+        return vim.tbl_map(function(v) return pfx .. v end, values)
+    end
+
+    -- No `=` yet: complete the adapter, then the profile, then input names.
+    if not adapter then
+        return schema.profiled_adapters()
+    elseif not profile_name then
+        return schema.profile_names(adapter)
+    end
+    local out = {}
+    for _, name in ipairs(schema.profile_input_names(adapter, profile_name)) do
+        if not supplied[name] then out[#out + 1] = name .. "=" end
+    end
+    return out
+end
+
+---Completion for `:Debug …`.
+---@type ezdap.util.usercmd.subcommand
+local function _debug_complete_subs(_, rest, arg_lead)
+    if #rest == 0 then return _debug_subs end
+    if rest[1] == "breakpoint" then
+        return _bp_complete({ unpack(rest, 2) })
+    end
+    if rest[1] == "run_file" and #rest == 1 then
+        return vim.fn.getcompletion(arg_lead, "file")
+    end
+    if rest[1] == "run" then
+        -- <adapter> <profile> <input>=<value>…
+        local schema = require("ezdap.schema")
+        return _run_complete(schema, { unpack(rest, 2) }, arg_lead)
+    end
+    if rest[1] == "new_run_file" then
+        -- Positional: <adapter> [profile] [path]. The path names a new file to
+        -- create, so it has no completion.
+        local schema = require("ezdap.schema")
+        local used   = { unpack(rest, 2) }
+        local pos    = #used + 1 -- 1-based position of the token being completed
+        if pos == 1 then
+            return schema.profiled_adapters()
+        elseif pos == 2 then
+            return schema.profile_names(used[1])
         end
         return {}
     end
+    return {}
+end
 
-    usercmd.register_user_cmd("Debug", _debug_run, {
-        desc = "ezdap commands",
-        range = true,
-        subcommand = _debug_complete_subs,
-    })
+---Run a `:Debug …` invocation. `plugin/ezdap.lua` registers the command at
+---startup, so this may be the first thing to touch the plugin -- `setup()` with
+---defaults stands in when the user never called it.
+---@type ezdap.util.usercmd.run_fn
+function M.command(cmd, args, opts)
+    if not _setup_done then M.setup() end
+    _debug_run(cmd, args, opts)
+end
+
+---Completion for `:Debug …`.
+---@type ezdap.util.usercmd.subcommand
+function M.complete(cmd, rest, arg_lead)
+    return _debug_complete_subs(cmd, rest, arg_lead)
+end
+
+-- Autocmd handlers. The autocmds themselves are created at startup in
+-- `plugin/ezdap.lua`, which only calls in here once something has loaded this
+-- module — a session that never touched ezdap has no state to keep.
+
+---Persist the current project's breakpoints and expressions.
+function M.save_state()
+    _save()
+end
+
+---Re-resolve the project root after a cwd change and restore that project's
+---state (or clear it, when the new cwd is not inside a project).
+function M.reload_state()
+    require("ezdap.store").invalidate()
+    _warned_rootless = false
+    _load()
+    -- The reloaded state belongs to another project; undoing into it would
+    -- resurrect the old one's breakpoints.
+    if _debug_view then _debug_view:clear_undo() end
+end
+
+---Disconnect every live session on exit: an adapter killed without a completed
+---`disconnect` orphans its debuggee, and nvim SIGKILLs adapter jobs as it exits.
+---vim.wait pumps the loop for the responses; the timeout caps a hung adapter.
+function M.shutdown()
+    local client = require("ezdap.dap.client")
+    local done = false
+    client.quit(function() done = true end)
+    vim.wait(10000, function() return done end, 20)
 end
 
 local function _init()
     if _initialized then return end
     _initialized = true
-
-    local store = require("ezdap.store")
-
-    -- Persist before leaving the current project (cwd change) and on exit.
-    vim.api.nvim_create_autocmd({ "DirChangedPre", "VimLeavePre" }, {
-        callback = _save,
-        desc     = "ezdap: persist breakpoints and expressions",
-    })
-
-    -- Gracefully stop active sessions on exit: an adapter killed without a completed
-    -- `disconnect` orphans its debuggee, and nvim SIGKILLs adapter jobs as it exits.
-    -- vim.wait pumps the loop for the responses; the timeout caps a hung adapter.
-    vim.api.nvim_create_autocmd("VimLeavePre", {
-        callback = function()
-            local client = require("ezdap.dap.client")
-            local done = false
-            client.quit(function() done = true end)
-            vim.wait(10000, function() return done end, 20)
-        end,
-        desc = "ezdap: disconnect sessions so debuggees are terminated on exit",
-    })
-
-    -- After a cwd change, re-resolve the project root and restore its state
-    -- (or clear it, when the new cwd is not inside a project).
-    vim.api.nvim_create_autocmd("DirChanged", {
-        callback = function()
-            store.invalidate()
-            _warned_rootless = false
-            _load()
-            -- The reloaded state belongs to another project; undoing into it
-            -- would resurrect the old one's breakpoints.
-            if _debug_view then _debug_view:clear_undo() end
-        end,
-        desc = "ezdap: restore project state after cwd change",
-    })
 
     require("ezdap.dap.breakpoints").on_change:subscribe(_warn_if_unpersisted)
     require("ezdap.ui.expressions").on_change:subscribe(_warn_if_unpersisted)
@@ -525,10 +539,11 @@ function M.setup(opts)
         config[k] = v
     end
 
+    -- Set first: the wiring below reaches guarded entry points (a session added
+    -- during `_init` opens the debug view), and `:Debug` may be what called in here.
+    _setup_done = true
     _init()
     _load()
-    _register_user_commands()
-    _setup_done = true
 end
 
 return M

@@ -8,8 +8,13 @@ tracks debug sessions/breakpoints, and renders a tree-based debug UI. Requires
 Neovim >= 0.10 (guarded in [plugin/ezdap.lua](plugin/ezdap.lua)).
 
 Entry point is [lua/ezdap/init.lua](lua/ezdap/init.lua): `setup(opts)` merges
-config, wires autocmds/signals, and registers the `:Debug` user command (with a
-`breakpoint` subcommand surface).
+config and wires signals/UI. The `:Debug` user command (with a `breakpoint`
+subcommand surface) and the project-state autocmds are created at startup in
+[plugin/ezdap.lua](plugin/ezdap.lua) without requiring any Lua; each callback
+requires what it needs on first use and routes to `command`/`complete` (which
+run `setup()` with defaults if the user never called it) or to
+`save_state`/`reload_state`/`shutdown` — and only when `ezdap` is already
+loaded, so a session that never used the plugin stays untouched.
 
 ## Architecture
 
@@ -132,10 +137,11 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   `absolutize` (portable project-relative paths), and `read`/`write` (write
   removes the file when the payload is empty). The store knows nothing about
   *what* is stored.
-- The lifecycle lives in [init.lua](lua/ezdap/init.lua): it owns the autocmds
-  (`DirChangedPre`/`VimLeavePre` save, `DirChanged` re-resolves the root and
-  reloads/clears) and the breakpoint/expression payloads, converting source
-  paths at the persistence seam.
+- The lifecycle lives in [init.lua](lua/ezdap/init.lua): it owns the handlers
+  ([plugin/ezdap.lua](plugin/ezdap.lua) creates the autocmds that call them —
+  `DirChangedPre`/`VimLeavePre` → `save_state`, `DirChanged` → `reload_state`,
+  which re-resolves the root and reloads/clears) and the breakpoint/expression
+  payloads, converting source paths at the persistence seam.
 
 **UI** — [lua/ezdap/ui/](lua/ezdap/ui/)
 - `DebugView.lua` — the main debug panel (tree of sessions/frames/scopes/
