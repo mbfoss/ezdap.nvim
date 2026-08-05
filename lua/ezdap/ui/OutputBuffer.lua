@@ -108,9 +108,14 @@ function OutputBuffer:append(lines)
         lines = clean
     end
 
+    -- A scratch buffer starts out holding one blank line, which appending would
+    -- keep as an empty first line forever; the first append overwrites it.
+    local empty = vim.api.nvim_buf_line_count(buf) == 1
+        and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
+
     vim.bo[buf].modifiable = true
-    local start_row = vim.api.nvim_buf_line_count(buf)
-    vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
+    local start_row = empty and 0 or vim.api.nvim_buf_line_count(buf)
+    vim.api.nvim_buf_set_lines(buf, empty and 0 or -1, -1, false, lines)
 
     -- Apply highlights before trimming; extmarks shift/drop with the lines.
     if spans_by_line then

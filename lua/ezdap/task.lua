@@ -162,7 +162,7 @@ M.start            = function(task, callbacks)
                         ui_util.unique_buf_name("ezdap://" ..
                         run_key .. '-' .. ((title and title ~= config.adapter) and title or "term")))
                     vim.bo[bufnr].buflisted = true
-                    add_bufnr(bufnr, { label = "Terminal", priority = 10 })
+                    add_bufnr(bufnr, { label = "term", priority = 10 })
                 end)
 
                 local unsub

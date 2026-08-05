@@ -14,7 +14,11 @@
 ---  -- debug.lua
 ---  return { name = "debug app", adapter = "lldb", configuration = { request = "launch", program = "a.out" } }
 
-local M        = {}
+local OutputBuffer = require "ezdap.ui.OutputBuffer"
+local ui_util      = require "ezdap.util.ui"
+local _config      = require "ezdap.config"
+
+local M            = {}
 
 ---A run: a unique id, the task name, a cancel function, the buffers it spawned
 ---(REPL, Output, Terminal, DAP messages), the panel channel showing them, and
@@ -26,6 +30,7 @@ local M        = {}
 ---@field bufnrs  integer[]
 ---@field done    boolean
 ---@field channel ezdap.ui.Channel
+---@field log     ezdap.OutputBuffer  this run's own progress log; its buffer is one of `bufnrs`
 
 ---@type ezdap.runner.Run[]
 local _runs    = {}
@@ -47,61 +52,39 @@ local function _is_task(v)
     return type(v) == "table" and type(v.adapter) == "string"
 end
 
--- Run progress is appended to a scratch log buffer, reachable by name
--- (`:b ezdap://log`) or via `:Debug log`. Pre-flight errors stay on
--- vim.notify, happening before the run exists.
+-- A run's progress is appended to a scratch log buffer of its own, one page of
+-- its channel alongside the Output and REPL, reachable by name (`:b
+-- ezdap://<run>-log`) or via `:Debug log`. Pre-flight errors stay on vim.notify,
+-- happening before the run exists.
 
-local _log_buf ---@type integer?
+---Create a run's log — an `OutputBuffer` like the run's Output, so the line cap
+---and autoscroll are the same ones — and register it as the lowest-ranked page
+---of its channel, so it never displaces that Output.
+---@param run ezdap.runner.Run
+---@return ezdap.OutputBuffer
+local function _make_log(run)
+    local log = OutputBuffer.new({
+        name       = ui_util.unique_buf_name("ezdap://" .. run.id .. "-log"),
+        max_lines  = _config.output_max_lines,
+        autoscroll = true,
+    })
 
----Cap on the log buffer's line count; `_log` trims oldest lines past this.
-local _MAX_LOG_LINES = 10000
-
----@return integer
-local function _log_bufnr()
-    if _log_buf and vim.api.nvim_buf_is_valid(_log_buf) then return _log_buf end
-    _log_buf                    = vim.api.nvim_create_buf(false, true)
-    vim.bo[_log_buf].buftype    = "nofile"
-    vim.bo[_log_buf].swapfile   = false
-    vim.bo[_log_buf].buflisted  = true
-    vim.bo[_log_buf].bufhidden  = "hide"
-    vim.bo[_log_buf].modifiable = false
-
-    local bufname               = "ezdap://log"
-    local oldbuf                = vim.fn.bufnr(bufname)
-    if oldbuf > 0 then vim.api.nvim_buf_delete(oldbuf, {}) end
-    vim.api.nvim_buf_set_name(_log_buf, bufname)
-    return _log_buf
+    local buf                   = assert(log:bufnr())
+    run.bufnrs[#run.bufnrs + 1] = buf
+    run.channel:add(buf, { label = "log", priority = -4 })
+    return log
 end
 
----A scratch buffer always holds at least one line, so emptiness is that single
----line being blank.
----@param buf integer
----@return boolean
-local function _buf_empty(buf)
-    return vim.api.nvim_buf_line_count(buf) == 1
-        and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
-end
-
----Append timestamped lines to the log buffer, which every run shares. Oldest
----lines are trimmed past `_MAX_LOG_LINES` so the buffer never grows unbounded
----across a long session.
+---Append timestamped lines to a run's log.
+---@param run ezdap.runner.Run
 ---@param msg string
-local function _log(msg)
+local function _log(run, msg)
     local stamp = os.date("%H:%M:%S")
     local lines = {}
     for _, l in ipairs(vim.split(msg, "\n", { plain = true })) do
         lines[#lines + 1] = ("[%s] %s"):format(stamp, l)
     end
-
-    local buf              = _log_bufnr()
-    local empty            = _buf_empty(buf)
-    vim.bo[buf].modifiable = true
-    vim.api.nvim_buf_set_lines(buf, empty and 0 or -1, -1, false, lines)
-    local overflow = vim.api.nvim_buf_line_count(buf) - _MAX_LOG_LINES
-    if overflow > 0 then
-        vim.api.nvim_buf_set_lines(buf, 0, overflow, false, {})
-    end
-    vim.bo[buf].modifiable = false
+    run.log:append(lines)
 end
 
 ---Drop a run's channel and wipe the buffers it spawned. The channel goes first,
@@ -132,21 +115,19 @@ local function _clear_finished(name)
     _runs = kept
 end
 
----Show the shared run log in the panel, parked on its last line. Opens nothing
----when no run has logged anything yet. Bound to `:Debug log`.
-function M.log_open()
-    if not _log_buf or not vim.api.nvim_buf_is_valid(_log_buf) or _buf_empty(_log_buf) then
+---Show a run's log in the panel, parked on its last line — the newest live run's
+---by default, else the most recent one's. Warns when no run has logged anything
+---yet. Bound to `:Debug log`.
+---@param run? ezdap.runner.Run  defaults to the newest live run, else the latest
+function M.log_open(run)
+    run = run or M.active() or _runs[#_runs]
+    if not run or not run.log:is_valid() then
         _warn("log: nothing logged yet")
         return
     end
-    local buf   = _log_bufnr()
-    local panel = require("ezdap.ui.panel")
-    -- The log outlives every run, so it gets a channel of its own, reached by a
-    -- fixed id. Ranked below every run buffer, so a single-window panel hands itself
-    -- back to the run's own output the next time one registers; `show` overrides that.
-    local channel = panel.channel({ id = "ezdap-log", label = "Log" })
-    channel:show(buf, { label = "Log", priority = -4 })
-    local win = panel.winid()
+    local buf = assert(run.log:bufnr())
+    run.channel:show(buf, { label = "log", priority = -4 })
+    local win = require("ezdap.ui.panel").winid()
     if win then
         vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
     end
@@ -201,13 +182,13 @@ function M.run(task)
 
     _counter = _counter + 1
     ---@type ezdap.runner.Run
+    ---@diagnostic disable-next-line: missing-fields -- channel and log_buf are set right below, once `run` exists for the clean callback
     local run = {
         id      = task.name .. "-" .. _counter,
         name    = task.name,
         cancel  = function() end,
         bufnrs  = {},
         done    = false,
-        channel = nil, ---@diagnostic disable-line: assign-type-mismatch -- set right below, once `run` exists for the clean callback
     }
     _runs[#_runs + 1] = run
 
@@ -222,6 +203,8 @@ function M.run(task)
             if run.done then M.remove(run) end
         end,
     })
+    -- The log is this run's own buffer, so its lines need no task-name prefix.
+    run.log      = _make_log(run)
 
     local cancel = require("ezdap.task").start(task, {
         -- Shown in the run's panel channel, and tracked so `clean` can wipe them.
@@ -230,12 +213,12 @@ function M.run(task)
             run.channel:add(bufnr, opts)
         end,
         report    = function (msg)
-            _log(task.name .. ": " .. msg)
+            _log(run, msg)
         end,
         on_done   = function(ok)
             run.done = true
             run.channel:set_state(ok and "done" or "failed")
-            _log(task.name .. (ok and " finished" or " failed"))
+            _log(run, ok and "finished" or "failed")
         end,
     })
 

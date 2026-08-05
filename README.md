@@ -386,12 +386,17 @@ Inside the panel:
 
 ### Output window (`:Debug output`)
 
-A run spawns several buffers — Terminal, Output, REPL, adapter log, DAP messages.
-They share one bottom split, which holds whichever of them has the highest
-priority (the Terminal outranks the Output, which outranks the REPL). It opens on
-the run's first buffer, follows along as higher-priority buffers appear or the
-shown one is deleted, and closes with the run's last buffer. `:Debug output`
-toggles it; `panel_auto_open` and `panel_height_ratio` tune it.
+A run spawns several buffers — Terminal, Output, REPL, its progress Log, DAP
+messages. They share one bottom split, which holds whichever of them has the
+highest priority (the Terminal outranks the Output, which outranks the REPL,
+which outranks the Log). It opens on the run's first buffer, follows along as
+higher-priority buffers appear or the shown one is deleted, and closes with the
+run's last buffer. `:Debug output` toggles it; `panel_auto_open` and
+`panel_height_ratio` tune it.
+
+Each run keeps its own log — `ezdap://<run>-log`, wiped with the run — rather
+than appending to a shared one, so parallel runs never interleave. `:Debug log`
+shows the newest live run's, falling back to the most recent run's.
 
 With [dock.nvim](https://github.com/mbfoss/dock.nvim) installed, ezdap uses it
 instead — no configuration needed. Each run becomes a tab in dock's shared panel,
