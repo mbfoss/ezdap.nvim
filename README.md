@@ -393,6 +393,13 @@ the run's first buffer, follows along as higher-priority buffers appear or the
 shown one is deleted, and closes with the run's last buffer. `:Debug output`
 toggles it; `panel_auto_open` and `panel_height_ratio` tune it.
 
+With [dock.nvim](https://github.com/mbfoss/dock.nvim) installed, ezdap uses it
+instead — no configuration needed. Each run becomes a tab in dock's shared panel,
+one page per buffer, badged with the run's state; parallel runs get a tab each
+rather than competing for one window, and `:Dock clean` sheds the finished ones.
+dock's own options (`auto_open`, `size`, position) govern the window there, so
+`panel_auto_open`/`panel_height_ratio` do not apply.
+
 ### Inline variable values
 
 While stopped, ezdap renders variable values inline in the source. Choose the

@@ -898,9 +898,10 @@ function M.view.toggle()
     require("ezdap").toggle_debug_view()
 end
 
----Toggle the bottom output window, which holds the run's highest-priority buffer.
+---Toggle the panel a run's buffers are shown in — a dock.nvim panel when that is
+---installed, ezdap's own bottom window otherwise.
 function M.view.output_toggle()
-    require("ezdap.ui.output_win").toggle()
+    require("ezdap.ui.panel").toggle()
 end
 
 return M

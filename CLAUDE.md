@@ -149,9 +149,21 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   presentation of an `ezdap.DebugView.ItemData`; it owns no state and never
   touches the tree, which is why it takes the row's data and the session as
   arguments rather than living on the view.
-- `output_win.lua` — the one bottom split a run's buffers share. `ezdap.runner`
-  registers each buffer it spawns with a priority; the window holds the
-  highest-priority live one and closes with the run's last buffer.
+- `panel.lua` — where a run's buffers are shown, and the only thing `runner`
+  knows about it. A run gets a **channel** (`panel.channel`) it registers its
+  buffers on (`add`/`show`), reports its state to (`set_state`) and drops when it
+  is forgotten (`remove`); the backend behind that API is `dock_panel` when
+  dock.nvim is installed and `output_win` otherwise, chosen once on first use.
+- `dock_panel.lua` — the dock.nvim backend: one dock group (tab) per run under
+  the `ezdap` source, one page per buffer, the run's state as the tab's badge and
+  busy flag. dock owns the window, tab bar and focus rules; ezdap keeps owning
+  its buffers, which is why `on_clean` drops a finished run rather than dock
+  deleting anything.
+- `output_win.lua` — the fallback backend: the one bottom split a run's buffers
+  share. `ezdap.runner` registers each buffer it spawns with a priority; the
+  window holds the highest-priority live one and closes with the run's last
+  buffer. Every run's channel is that same window, so a channel holds no state
+  and a run's label and state have nowhere to show.
 - `format.lua` — shared presentation, pure and stateless: how debug state becomes
   glyphs, highlights and display strings. A breakpoint or session state maps to a
   `config.signs` name and from there to a glyph + highlight

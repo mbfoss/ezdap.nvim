@@ -5,9 +5,9 @@
 ---supplies its own callbacks via its backend; this module is the standalone
 ---equivalent (progress, run lifecycle).
 ---
----A run's buffers are shown in the shared bottom window (`ezdap.ui.output_win`),
----which holds whichever of them has the highest priority; they are tracked here
----as well so a finished run's buffers can be wiped.
+---A run's buffers are shown through `ezdap.ui.panel`, which gives each run a
+---channel — a dock.nvim tab, or the shared bottom window when dock is not
+---installed. They are tracked here as well so a finished run's buffers can be wiped.
 ---
 ---One task per file: a run file returns a single task (or a function
 ---returning one):
@@ -17,14 +17,15 @@
 local M        = {}
 
 ---A run: a unique id, the task name, a cancel function, the buffers it spawned
----(REPL, Output, Terminal, DAP messages), and whether it has finished. Runs are
----tracked together so tasks can run in parallel.
+---(REPL, Output, Terminal, DAP messages), the panel channel showing them, and
+---whether it has finished. Runs are tracked together so tasks can run in parallel.
 ---@class ezdap.runner.Run
----@field id     string
----@field name   string
----@field cancel fun()
----@field bufnrs integer[]
----@field done   boolean
+---@field id      string
+---@field name    string
+---@field cancel  fun()
+---@field bufnrs  integer[]
+---@field done    boolean
+---@field channel ezdap.ui.Channel
 
 ---@type ezdap.runner.Run[]
 local _runs    = {}
@@ -103,9 +104,11 @@ local function _log(msg)
     vim.bo[buf].modifiable = false
 end
 
----Wipe the buffers a run spawned.
+---Drop a run's channel and wipe the buffers it spawned. The channel goes first,
+---so the panel is off those buffers before they are deleted.
 ---@param run ezdap.runner.Run
 local function _remove_run(run)
+    run.channel:remove()
     for _, b in ipairs(run.bufnrs) do
         if vim.api.nvim_buf_is_valid(b) then
             pcall(vim.api.nvim_buf_delete, b, { force = true })
@@ -129,23 +132,37 @@ local function _clear_finished(name)
     _runs = kept
 end
 
----Show the shared run log in the window a run's own buffers use, parked on its
----last line. Opens nothing when no run has logged anything yet. Bound to
----`:Debug log`.
+---Show the shared run log in the panel, parked on its last line. Opens nothing
+---when no run has logged anything yet. Bound to `:Debug log`.
 function M.log_open()
     if not _log_buf or not vim.api.nvim_buf_is_valid(_log_buf) or _buf_empty(_log_buf) then
         _warn("log: nothing logged yet")
         return
     end
-    local buf        = _log_bufnr()
-    local output_win = require("ezdap.ui.output_win")
-    -- Ranked below every run buffer, so the window hands itself back to the run's
-    -- own output the next time one registers; `show` overrides that for now.
-    output_win.show(buf, { label = "Log", priority = -4 })
-    local win = output_win.winid()
+    local buf   = _log_bufnr()
+    local panel = require("ezdap.ui.panel")
+    -- The log outlives every run, so it gets a channel of its own, reached by a
+    -- fixed id. Ranked below every run buffer, so a single-window panel hands itself
+    -- back to the run's own output the next time one registers; `show` overrides that.
+    local channel = panel.channel({ id = "ezdap-log", label = "Log" })
+    channel:show(buf, { label = "Log", priority = -4 })
+    local win = panel.winid()
     if win then
         vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
     end
+end
+
+---Forget a single run, wiping its buffers and dropping its channel. A live run
+---is not stopped first — cancel it before removing it.
+---@param run ezdap.runner.Run
+function M.remove(run)
+    for i, r in ipairs(_runs) do
+        if r == run then
+            table.remove(_runs, i)
+            break
+        end
+    end
+    _remove_run(run)
 end
 
 ---Drop every finished run and wipe their buffers, leaving live runs untouched.
@@ -185,25 +202,39 @@ function M.run(task)
     _counter = _counter + 1
     ---@type ezdap.runner.Run
     local run = {
-        id     = task.name .. "-" .. _counter,
-        name   = task.name,
-        cancel = function() end,
-        bufnrs = {},
-        done   = false,
+        id      = task.name .. "-" .. _counter,
+        name    = task.name,
+        cancel  = function() end,
+        bufnrs  = {},
+        done    = false,
+        channel = nil, ---@diagnostic disable-line: assign-type-mismatch -- set right below, once `run` exists for the clean callback
     }
     _runs[#_runs + 1] = run
 
+    -- One channel per run. A backend that can ask a channel to shed itself (dock's
+    -- `:Dock clean`) gets the same answer `M.clean` gives: a finished run goes,
+    -- a live one stays.
+    run.channel  = require("ezdap.ui.panel").channel({
+        id       = run.id,
+        label    = run.name,
+        state    = "running",
+        on_clean = function()
+            if run.done then M.remove(run) end
+        end,
+    })
+
     local cancel = require("ezdap.task").start(task, {
-        -- Shown in the shared bottom window, and tracked so `clean` can wipe them.
+        -- Shown in the run's panel channel, and tracked so `clean` can wipe them.
         add_bufnr = function(bufnr, opts)
             run.bufnrs[#run.bufnrs + 1] = bufnr
-            require("ezdap.ui.output_win").add(bufnr, opts)
+            run.channel:add(bufnr, opts)
         end,
         report    = function (msg)
             _log(task.name .. ": " .. msg)
         end,
         on_done   = function(ok)
             run.done = true
+            run.channel:set_state(ok and "done" or "failed")
             _log(task.name .. (ok and " finished" or " failed"))
         end,
     })

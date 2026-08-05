@@ -33,8 +33,8 @@
 ---@field stack_trace_limit    integer   max number of call-stack frames shown in DebugView; extended when the current frame is deeper so it stays visible
 ---@field antiflicker_delay    integer   milliseconds to wait before clearing stale UI (inline vars, DebugView) to avoid flicker during step-through
 ---@field output_max_lines     integer   max lines kept in the Output and DAP-messages buffers; oldest lines are trimmed past this (0 = unlimited)
----@field panel_auto_open boolean   open the bottom output window as soon as a run registers its first buffer
----@field panel_height_ratio number  height of the bottom output window, as a fraction of the editor's lines
+---@field panel_auto_open boolean   open the bottom output window as soon as a run registers its first buffer; ignored when dock.nvim owns the panel, which has its own `auto_open`
+---@field panel_height_ratio number  height of the bottom output window, as a fraction of the editor's lines; ignored when dock.nvim owns the panel, which has its own `size`
 ---@field debug_view_width_ratio number  width of the debug panel on first open, as a fraction of the editor's columns
 ---@field inline_vars          ezdap.InlineVarsMode  placement of inline variable values
 ---@field raw_messages         boolean   capture raw DAP protocol messages in a dedicated buffer; a debugging aid, off by default

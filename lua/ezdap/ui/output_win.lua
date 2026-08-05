@@ -1,9 +1,13 @@
----@brief The single bottom split that shows a run's buffer.
+---@brief The single bottom split that shows a run's buffer — the fallback
+---backend behind `ezdap.ui.panel`, used when dock.nvim is not installed.
 ---
 ---A run spawns several buffers (Terminal, Output, REPL, adapter log, DAP
 ---messages); `ezdap.runner` registers each here with a priority, and this window
 ---holds the highest-priority live one. One window is reused for all of them:
 ---registering a buffer swaps the occupant rather than opening a second split.
+---
+---There being one window, every run's channel is the same window: a channel
+---carries no state of its own and its label and run state have nowhere to show.
 
 local fixedwin = require("ezdap.util.fixedwin")
 local config   = require("ezdap.config")
@@ -193,5 +197,32 @@ end
 function M.winid()
     return _open_win()
 end
+
+-- Channel API (`ezdap.ui.panel`)
+
+---@class ezdap.ui.output_win.Channel : ezdap.ui.Channel
+local Channel   = {}
+Channel.__index = Channel
+
+---A run's handle on the window. All runs share it, so the channel is stateless:
+---its buffers rank against every other run's, as they did before channels.
+---@param _spec ezdap.ui.ChannelSpec
+---@return ezdap.ui.Channel
+function M.channel(_spec)
+    return setmetatable({}, Channel)
+end
+
+---@param bufnr integer
+---@param opts? ezdap.AddBufOpts
+function Channel:add(bufnr, opts) M.add(bufnr, opts) end
+
+---@param bufnr integer
+---@param opts? ezdap.AddBufOpts
+function Channel:show(bufnr, opts) M.show(bufnr, opts) end
+
+---@param _state ezdap.ui.ChannelState
+function Channel:set_state(_state) end
+
+function Channel:remove() end
 
 return M
