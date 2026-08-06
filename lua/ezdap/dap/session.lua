@@ -312,6 +312,21 @@ function Session:current_thread()
     return self:_find_thread(self._thread_id)
 end
 
+---A frame whose source we can show: a real file path, not deemphasized by the
+---adapter. Disassembly and other adapter-served virtual sources (a bare
+---`sourceReference`, e.g. codelldb's `@__cxa_throw`) don't count.
+---@param frame ezdap.dap.StackFrame
+---@return boolean
+local function _has_source(frame)
+    local src = frame.source
+    if not src or src.path == nil or src.path == "" then return false end
+    if src.origin == "disassembly" then return false end
+    if src.presentationHint == "deemphasize" then return false end
+    return frame.presentationHint ~= "label" and frame.presentationHint ~= "subtle"
+end
+
+---With no explicit selection, prefer the topmost frame with source so stopping
+---inside a system library lands on the nearest user code.
 ---@return ezdap.dap.StackFrame?
 function Session:current_stack_frame()
     local thread = self:current_thread()
@@ -320,6 +335,9 @@ function Session:current_stack_frame()
         for _, f in ipairs(thread.stack_frames) do
             if f.id == self._stack_id then return f end
         end
+    end
+    for _, f in ipairs(thread.stack_frames) do
+        if _has_source(f) then return f end
     end
     return thread.stack_frames[1]
 end
