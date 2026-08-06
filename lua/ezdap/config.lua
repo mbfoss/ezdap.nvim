@@ -50,7 +50,7 @@
 local M = {
 	root_markers        = { ".git" },
 	data_filename = ".ezdap.json",
-	debug_value_max_len = 30,
+	debug_value_max_len = 120,
 	stack_trace_limit   = 10,
 	antiflicker_delay   = 200,
 	output_max_lines    = 10000,
