@@ -498,6 +498,8 @@ require("ezdap").setup({
   panel_height_ratio = 0.25,
   -- Width of the debug panel on first open, as a fraction of the editor's columns.
   debug_view_width_ratio = 0.3,
+  -- Side the debug panel splits off on: "left" | "right".
+  debug_view_position = "left",
 
   -- Inline value placement: "inline" | "eol" | "eol_right_align" | "right_align" | "off"
   inline_vars         = "eol",

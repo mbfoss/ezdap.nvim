@@ -26,6 +26,9 @@
 ---  • "off"             — do not render inline values
 ---@alias ezdap.InlineVarsMode "inline"|"eol"|"eol_right_align"|"right_align"|"off"
 
+---Side of the editor the debug panel's full-height vertical split lives on.
+---@alias ezdap.DebugViewPosition "left"|"right"
+
 ---@class ezdap.Config
 ---@field root_markers         string[]  filenames/dirs whose presence identifies a project root
 ---@field data_filename string
@@ -36,6 +39,7 @@
 ---@field panel_auto_open boolean   open the bottom output window as soon as a run registers its first buffer; ignored when dock.nvim owns the panel, which has its own `auto_open`
 ---@field panel_height_ratio number  height of the bottom output window, as a fraction of the editor's lines; ignored when dock.nvim owns the panel, which has its own `size`
 ---@field debug_view_width_ratio number  width of the debug panel on first open, as a fraction of the editor's columns
+---@field debug_view_position ezdap.DebugViewPosition  side of the editor the debug panel splits off
 ---@field inline_vars          ezdap.InlineVarsMode  placement of inline variable values
 ---@field raw_messages         boolean   capture raw DAP protocol messages in a dedicated buffer; a debugging aid, off by default
 ---@field popup_menu           boolean   add a "Debug Inspect" entry to the right-click menu while a session is live
@@ -53,6 +57,7 @@ local M = {
 	panel_auto_open = true,
 	panel_height_ratio = 0.25,
 	debug_view_width_ratio = 0.3,
+	debug_view_position = "left",
 	inline_vars         = "eol",
 	raw_messages        = false,
 	popup_menu          = true,
