@@ -681,7 +681,7 @@ function Session:_on_stopped(body)
         if body.description then parts[#parts + 1] = body.description end
         local msg = table.concat(parts, ":\n\t") .. "\n"
         self.exception_description = msg
-        self:_emit("output", "stderr", msg)
+        self:_emit("output", "console", msg)
     end
 
     if body.hitBreakpointIds then
