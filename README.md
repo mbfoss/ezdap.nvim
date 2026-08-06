@@ -485,7 +485,7 @@ require("ezdap").setup({
   data_filename       = ".ezdap.json",
 
   -- Max characters shown for a value in the debug panel before truncation.
-  debug_value_max_len = 30,
+  debug_value_max_len = 100,
   -- Max call-stack frames shown (extended when the current frame is deeper).
   stack_trace_limit   = 10,
   -- Delay (ms) before clearing stale UI, to avoid flicker while stepping.
