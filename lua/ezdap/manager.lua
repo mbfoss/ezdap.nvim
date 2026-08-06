@@ -112,6 +112,38 @@ function M.select_session(id)
     if client.get_session(id) then _set_active(id) end
 end
 
+-- Frame preference on stop
+
+---A frame whose source we can show: a real file path, not deemphasized by the
+---adapter. Disassembly and other adapter-served virtual sources (a bare
+---`sourceReference`, e.g. codelldb's `@__cxa_throw`) don't count.
+---@param frame ezdap.dap.StackFrame
+---@return boolean
+local function _has_source(frame)
+    local src = frame.source
+    if not src or src.path == nil or src.path == "" then return false end
+    if src.origin == "disassembly" then return false end
+    if src.presentationHint == "deemphasize" then return false end
+    return frame.presentationHint ~= "label" and frame.presentationHint ~= "subtle"
+end
+
+-- A stop clears the frame selection, so the session falls to the adapter's top
+-- frame. When that frame has no source — an exception thrown inside a system
+-- library — select the topmost frame that has one, so we land on user code.
+client.on_session_stopped:subscribe(function(id)
+    if vim.b.ezdap_disasm then return end
+    local sess   = client.get_session(id)
+    local thread = sess and sess:current_thread()
+    local frames = thread and thread.stack_frames
+    if not frames or not frames[1] or _has_source(frames[1]) then return end
+    for _, f in ipairs(frames) do
+        if _has_source(f) then
+            client.select_frame(id, f.id)
+            return
+        end
+    end
+end)
+
 -- Stepping (delegate to client with active id)
 
 ---Granularity used for subsequent steps. Derived from the focused buffer:
