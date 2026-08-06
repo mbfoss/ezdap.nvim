@@ -32,7 +32,6 @@
 ---@class ezdap.Config
 ---@field root_markers         string[]  filenames/dirs whose presence identifies a project root
 ---@field data_filename string
----@field debug_value_max_len  integer   max characters shown for variable/expression values in DebugView before truncating
 ---@field stack_trace_limit    integer   max number of call-stack frames shown in DebugView; extended when the current frame is deeper so it stays visible
 ---@field antiflicker_delay    integer   milliseconds to wait before clearing stale UI (inline vars, DebugView) to avoid flicker during step-through
 ---@field output_max_lines     integer   max lines kept in the Output and DAP-messages buffers; oldest lines are trimmed past this (0 = unlimited)
@@ -50,7 +49,6 @@
 local M = {
 	root_markers        = { ".git" },
 	data_filename = ".ezdap.json",
-	debug_value_max_len = 120,
 	stack_trace_limit   = 10,
 	antiflicker_delay   = 200,
 	output_max_lines    = 10000,

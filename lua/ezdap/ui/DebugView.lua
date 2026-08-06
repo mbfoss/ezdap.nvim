@@ -144,14 +144,14 @@ end
 local _VALUE_MIN_W = 8
 
 ---Columns left for a `name<sep>value` row's value: what the window leaves once the
----name and separator are on the line, never wider than `debug_value_max_len`.
+---name and separator are on the line.
 ---@param name string
 ---@param sep_w integer
 ---@param width integer  columns left for this row's own text
 ---@return integer
 local function _value_width(name, sep_w, width)
     local room = width - vim.fn.strdisplaywidth(name) - sep_w
-    return math.min(config.debug_value_max_len, math.max(room, _VALUE_MIN_W))
+    return math.max(room, _VALUE_MIN_W)
 end
 
 ---@param data ezdap.DebugView.ItemData
@@ -366,7 +366,7 @@ end
 ---@return integer
 function DebugView:_get_win_width()
     local winid = self._tree:get_winid()
-    return winid > 0 and vim.api.nvim_win_get_width(winid) or config.debug_value_max_len
+    return winid > 0 and vim.api.nvim_win_get_width(winid) or vim.o.columns
 end
 
 ---Re-render every line when the view window's width changed: the formatter crops

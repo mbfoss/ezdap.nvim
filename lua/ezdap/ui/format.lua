@@ -181,13 +181,12 @@ function M.oneline(value)
     return (tostring(value or ""):gsub("\n", "⏎"))
 end
 
----A value on one line, cropped to `max_len` columns (`debug_value_max_len` by
----default).
+---A value on one line, cropped to `max_len`
 ---@param value any
----@param max_len integer?
+---@param max_len integer
 ---@return string
 function M.value(value, max_len)
-    return (str_util.crop_for_ui(M.oneline(value), max_len or config.debug_value_max_len))
+    return (str_util.crop_for_ui(M.oneline(value), max_len))
 end
 
 ---Split a path into a directory prefix and its last segment, cropping only the
