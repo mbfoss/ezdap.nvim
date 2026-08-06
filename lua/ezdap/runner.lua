@@ -64,7 +64,7 @@ end
 ---@return ezdap.OutputBuffer
 local function _make_log(run)
     local log = OutputBuffer.new({
-        name       = ui_util.unique_buf_name("ezdap://" .. run.id .. "-log"),
+        name       = ui_util.unique_buf_name("ezdap://" .. run.id .. ":log"),
         max_lines  = _config.output_max_lines,
         autoscroll = true,
     })

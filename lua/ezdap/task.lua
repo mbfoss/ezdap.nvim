@@ -85,7 +85,7 @@ M.start            = function(task, callbacks)
 
     -- REPL buffer: interactive DAP expression evaluation.
     local repl = require("ezdap.ui.ReplBuffer").new({
-        name     = ui_util.unique_buf_name("ezdap://" .. run_key .. "-repl"),
+        name     = ui_util.unique_buf_name("ezdap://" .. run_key .. ":repl"),
         evaluate = function(expr, cb)
             manager.evaluate(expr, "repl", function(body, err)
                 cb(body and body.result, err)
@@ -106,7 +106,7 @@ M.start            = function(task, callbacks)
         if #lines == 0 then return end
         if not out_buf then
             out_buf = OutputBuffer.new({
-                name        = ui_util.unique_buf_name("ezdap://" .. run_key .. "-output"),
+                name        = ui_util.unique_buf_name("ezdap://" .. run_key .. ":output"),
                 max_lines   = _config.output_max_lines,
                 ansi_colors = true,
                 autoscroll  = true,
@@ -160,7 +160,7 @@ M.start            = function(task, callbacks)
                 sess:on("run_in_terminal", function(bufnr, title)
                     require("ezdap.util.term").rename(bufnr,
                         ui_util.unique_buf_name("ezdap://" ..
-                        run_key .. '-' .. ((title and title ~= config.adapter) and title or "term")))
+                        run_key .. ':' .. ((title and title ~= config.adapter) and title or "term")))
                     vim.bo[bufnr].buflisted = true
                     add_bufnr(bufnr, { label = "term", priority = 10 })
                 end)
@@ -169,7 +169,7 @@ M.start            = function(task, callbacks)
                 if _config.raw_messages then
                     local out ---@type ezdap.OutputBuffer?
                     out = OutputBuffer.new({
-                        name        = ui_util.unique_buf_name("ezdap://" .. run_key .. "-dap-messages"),
+                        name        = ui_util.unique_buf_name("ezdap://" .. run_key .. ":dap"),
                         max_lines   = _config.output_max_lines,
                         ansi_colors = true,
                         autoscroll  = true,
