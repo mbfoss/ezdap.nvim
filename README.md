@@ -504,7 +504,7 @@ require("ezdap").setup({
   -- Inline value placement: "inline" | "eol" | "eol_right_align" | "right_align" | "off"
   inline_vars         = "eol",
 
-  -- Log every DAP message to a "DAP Messages" buffer. For debugging ezdap or an
+  -- Log every DAP message to a "dap" buffer. For debugging ezdap or an
   -- adapter; leave off otherwise.
   raw_messages        = false,
 

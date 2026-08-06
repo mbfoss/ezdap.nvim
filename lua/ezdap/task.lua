@@ -95,7 +95,7 @@ M.start            = function(task, callbacks)
             manager.complete(text, col, cb)
         end,
     })
-    add_bufnr(repl:bufnr(), { label = "REPL", priority = -1 })
+    add_bufnr(repl:bufnr(), { label = "repl", priority = -1 })
 
     -- Output buffer: created on first non-console output event.
     local out_buf = nil ---@type ezdap.OutputBuffer?
@@ -112,7 +112,7 @@ M.start            = function(task, callbacks)
                 autoscroll  = true,
             })
             local buf = assert(out_buf:bufnr())
-            add_bufnr(buf, { label = "Output", priority = 0, autoscroll = true })
+            add_bufnr(buf, { label = "output", priority = 0, autoscroll = true })
         end
         out_buf:append(lines)
     end
@@ -175,7 +175,7 @@ M.start            = function(task, callbacks)
                         autoscroll  = true,
                     })
                     local buf = assert(out:bufnr())
-                    add_bufnr(buf, { label = "DAP Messages", priority = -3, autoscroll = true })
+                    add_bufnr(buf, { label = "dap", priority = -3, autoscroll = true })
                     unsub = manager.on_raw_message:subscribe(function(sid, direction, msg)
                         if sid ~= id or not out:is_valid() then
                             unsub()
