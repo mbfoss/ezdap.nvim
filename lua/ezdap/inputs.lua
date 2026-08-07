@@ -84,14 +84,6 @@ local function _expand(raw)
     return vim.fn.expand(raw)
 end
 
----Resolve to an absolute path so `.`/relative dirs are anchored to Neovim's cwd,
----not the adapter's own working directory (which may differ).
----@param raw string
----@return string
-local function _abspath(raw)
-    return vim.fn.fnamemodify(vim.fn.expand(raw), ":p")
-end
-
 ---@param raw string
 ---@return integer? value, string? err
 local function _port(raw)
@@ -131,7 +123,7 @@ end
 ---formats. `kind` is a `getcompletion` type ("file"/"dir").
 ---@param kind string
 ---@return fun(partial: string): string[]
-local function _paths(kind)
+local function _complete_path(kind)
     return function(partial) return vim.fn.getcompletion(partial, kind) end
 end
 
@@ -140,7 +132,7 @@ end
 ---this is `file` completion applied to whichever token is being typed.
 ---@param partial string
 ---@return string[]
-local function _command(partial)
+local function _complete_command(partial)
     -- Vim's argument splitting means the line arrives with its spaces escaped
     -- (`command=./a.out\ --flag`); tokens are found in the real line, and the head
     -- goes back onto each candidate — escaped again, so it still extends what was typed.
@@ -154,7 +146,7 @@ end
 ---Completion over a fixed set of values, offering those that extend `partial`.
 ---@param values string[]
 ---@return fun(partial: string): string[]
-local function _choices(values)
+local function _complete_choices(values)
     return function(partial)
         return vim.tbl_filter(function(v) return vim.startswith(v, partial) end, values)
     end
@@ -165,11 +157,11 @@ end
 ---the `build` that wants it split is what splits it.
 ---@type table<string, ezdap.FormatDef>
 M.formats = {
-    file    = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _paths("file") },
-    dir     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _paths("dir") },
-    cwd     = { type = "string", schema = { type = "string" }, parse = _abspath, seed = "", complete = _paths("dir") },
-    command = { type = "string", schema = { type = "string" }, seed = "", complete = _command },
-    host    = { type = "string", schema = { type = "string" }, seed = "", complete = _choices({ "localhost", "127.0.0.1", "0.0.0.0" }) },
+    file    = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("file") },
+    dir     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("dir") },
+    cwd     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("dir") },
+    command = { type = "string", schema = { type = "string" }, seed = "", complete = _complete_command },
+    host    = { type = "string", schema = { type = "string" }, seed = "", complete = _complete_choices({ "localhost", "127.0.0.1", "0.0.0.0" }) },
     port    = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
     map     = { type = "table", item_type = "string", schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map, seed = {} },
     list    = { type = "table", item_type = "string", schema = { type = "array", items = { type = "string" } }, parse = _list, seed = {} },
@@ -263,11 +255,11 @@ function M.completion(input, partial)
         -- typed — everything after the last comma — that a value completes.
         local head = def and def.item_type and partial:match("^.*,") or ""
         local tail = partial:sub(#head + 1)
-        return vim.tbl_map(function(v) return head .. v end, _choices(input.choices)(tail))
+        return vim.tbl_map(function(v) return head .. v end, _complete_choices(input.choices)(tail))
     end
 
     local input_type = (def and def.type) or (input and input.type)
-    if input_type == "boolean" then return _choices({ "true", "false" })(partial) end
+    if input_type == "boolean" then return _complete_choices({ "true", "false" })(partial) end
 
     if def and def.complete then return def.complete(partial) end
     return {}
