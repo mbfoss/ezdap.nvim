@@ -20,7 +20,7 @@ end
 
 ---A run's state as a tab glyph, drawn from the same signs and highlights the
 ---views use, so a running run reads the same in the dock as in the DebugView.
----@param state? ezdap.ui.ChannelState
+---@param state? ezdap.runner.RunState
 ---@return dock.Badge?
 local function _badge(state)
     if state == "running" then
@@ -68,7 +68,7 @@ function Channel:show(bufnr, opts)
     self._group:activate({ buf = bufnr, enter = true })
 end
 
----@param state ezdap.ui.ChannelState
+---@param state ezdap.runner.RunState
 function Channel:set_state(state)
     self._group:set_busy(state == "running"):set_badge(_badge(state))
 end

@@ -5,9 +5,10 @@
 ---supplies its own callbacks via its backend; this module is the standalone
 ---equivalent (progress, run lifecycle).
 ---
----A run's buffers are shown through `ezdap.ui.panel`, which gives each run a
----channel — a dock.nvim tab, or the shared bottom window when dock is not
----installed. They are tracked here as well so a finished run's buffers can be wiped.
+---A run announces itself through signals — it started, it spawned a buffer, its
+---state changed, it wants a buffer on screen, it is gone — and holds the buffers
+---it spawned so a late subscriber can catch up. Where any of that is shown is
+---`ezdap.ui.panel`'s decision; nothing here knows about windows.
 ---
 ---One task per file: a run file returns a single task (or a function
 ---returning one):
@@ -16,25 +17,47 @@
 
 local OutputBuffer = require "ezdap.ui.OutputBuffer"
 local ui_util      = require "ezdap.util.ui"
+local Signal       = require "ezdap.util.Signal"
 local _config      = require "ezdap.config"
 
 local M            = {}
 
+---@alias ezdap.runner.RunState "running"|"done"|"failed"
+
+---One buffer a run spawned, together with how it asked to be presented.
+---@class ezdap.runner.RunBuffer
+---@field bufnr integer
+---@field opts  ezdap.AddBufOpts
+
 ---A run: a unique id, the task name, a cancel function, the buffers it spawned
----(REPL, Output, Terminal, DAP messages), the panel channel showing them, and
----whether it has finished. Runs are tracked together so tasks can run in parallel.
+---(REPL, Output, Terminal, DAP messages) and how it is faring. Runs are tracked
+---together so tasks can run in parallel.
 ---@class ezdap.runner.Run
 ---@field id      string
 ---@field name    string
 ---@field cancel  fun()
----@field bufnrs  integer[]
----@field done    boolean
----@field channel ezdap.ui.Channel
----@field log     ezdap.OutputBuffer  this run's own progress log; its buffer is one of `bufnrs`
+---@field buffers ezdap.runner.RunBuffer[]
+---@field state   ezdap.runner.RunState
+---@field log     ezdap.OutputBuffer  this run's own progress log; its buffer is one of `buffers`
+
+-- Signals. A run's whole life is announced here and nowhere else: a view
+-- subscribes to decide how runs are shown, and the runner stays out of it.
+
+M.on_run_started = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner.Run)>
+
+M.on_run_buffer  = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner.Run, bufnr: integer, opts: ezdap.AddBufOpts)>
+
+M.on_run_state   = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner.Run, state: ezdap.runner.RunState)>
+
+---A run asking for one of its buffers to be put on screen now (`:Debug log`).
+M.on_run_reveal  = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner.Run, bufnr: integer, opts: ezdap.AddBufOpts)>
+
+---A run being forgotten, emitted while its buffers are still valid.
+M.on_run_removed = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner.Run)>
 
 ---@type ezdap.runner.Run[]
-local _runs    = {}
-local _counter = 0
+local _runs      = {}
+local _counter   = 0
 
 ---The most recently run task, kept so `rerun()` can re-launch it from scratch.
 ---@type ezdap.Task?
@@ -52,14 +75,28 @@ local function _is_task(v)
     return type(v) == "table" and type(v.adapter) == "string"
 end
 
--- A run's progress is appended to a scratch log buffer of its own, one page of
--- its channel alongside the Output and REPL, reachable by name (`:b
--- ezdap://<run>-log`) or via `:Debug log`. Pre-flight errors stay on vim.notify,
--- happening before the run exists.
+---Record a buffer on `run` and announce it. The run keeps it so it can be wiped
+---when the run is forgotten, and so a view attaching later sees it.
+---@param run ezdap.runner.Run
+---@param bufnr integer
+---@param opts? ezdap.AddBufOpts
+local function _add_buf(run, bufnr, opts)
+    opts                          = opts or {}
+    run.buffers[#run.buffers + 1] = { bufnr = bufnr, opts = opts }
+    M.on_run_buffer:emit(run, bufnr, opts)
+end
+
+-- A run's progress is appended to a scratch log buffer of its own, alongside the
+-- Output and REPL, reachable by name (`:b ezdap://<run>-log`) or via `:Debug
+-- log`. Pre-flight errors stay on vim.notify, happening before the run exists.
+
+---The log's presentation: the lowest-ranked buffer of a run, so it never
+---displaces that run's Output, and pinned to its last line while shown.
+---@type ezdap.AddBufOpts
+local _LOG_OPTS = { label = "log", priority = -4, autoscroll = true }
 
 ---Create a run's log — an `OutputBuffer` like the run's Output, so the line cap
----and autoscroll are the same ones — and register it as the lowest-ranked page
----of its channel, so it never displaces that Output.
+---and autoscroll are the same ones — and register it as one of the run's buffers.
 ---@param run ezdap.runner.Run
 ---@return ezdap.OutputBuffer
 local function _make_log(run)
@@ -69,9 +106,7 @@ local function _make_log(run)
         autoscroll = true,
     })
 
-    local buf                   = assert(log:bufnr())
-    run.bufnrs[#run.bufnrs + 1] = buf
-    run.channel:add(buf, { label = "log", priority = -4 })
+    _add_buf(run, assert(log:bufnr()), _LOG_OPTS)
     return log
 end
 
@@ -87,14 +122,14 @@ local function _log(run, msg)
     run.log:append(lines)
 end
 
----Drop a run's channel and wipe the buffers it spawned. The channel goes first,
----so the panel is off those buffers before they are deleted.
+---Announce a run's removal and wipe the buffers it spawned. The signal goes
+---first, so subscribers are off those buffers before they are deleted.
 ---@param run ezdap.runner.Run
 local function _remove_run(run)
-    run.channel:remove()
-    for _, b in ipairs(run.bufnrs) do
-        if vim.api.nvim_buf_is_valid(b) then
-            pcall(vim.api.nvim_buf_delete, b, { force = true })
+    M.on_run_removed:emit(run)
+    for _, b in ipairs(run.buffers) do
+        if vim.api.nvim_buf_is_valid(b.bufnr) then
+            pcall(vim.api.nvim_buf_delete, b.bufnr, { force = true })
         end
     end
 end
@@ -106,7 +141,7 @@ end
 local function _clear_finished(name)
     local kept = {}
     for _, r in ipairs(_runs) do
-        if r.done and r.name == name then
+        if r.state ~= "running" and r.name == name then
             _remove_run(r)
         else
             kept[#kept + 1] = r
@@ -115,9 +150,9 @@ local function _clear_finished(name)
     _runs = kept
 end
 
----Show a run's log in the panel, parked on its last line — the newest live run's
----by default, else the most recent one's. Warns when no run has logged anything
----yet. Bound to `:Debug log`.
+---Ask for a run's log to be shown — the newest live run's by default, else the
+---most recent one's; where it lands is the subscriber's call. Warns when no run
+---has logged anything yet. Bound to `:Debug log`.
 ---@param run? ezdap.runner.Run  defaults to the newest live run, else the latest
 function M.log_open(run)
     run = run or M.active() or _runs[#_runs]
@@ -125,16 +160,11 @@ function M.log_open(run)
         _warn("log: nothing logged yet")
         return
     end
-    local buf = assert(run.log:bufnr())
-    run.channel:show(buf, { label = "log", priority = -4 })
-    local win = require("ezdap.ui.panel").winid()
-    if win then
-        vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
-    end
+    M.on_run_reveal:emit(run, assert(run.log:bufnr()), _LOG_OPTS)
 end
 
----Forget a single run, wiping its buffers and dropping its channel. A live run
----is not stopped first — cancel it before removing it.
+---Forget a single run, announcing it and wiping its buffers. A live run is not
+---stopped first — cancel it before removing it.
 ---@param run ezdap.runner.Run
 function M.remove(run)
     for i, r in ipairs(_runs) do
@@ -151,7 +181,7 @@ end
 function M.clean()
     local kept, finished = {}, {}
     for _, r in ipairs(_runs) do
-        if r.done then
+        if r.state ~= "running" then
             finished[#finished + 1] = r
         else
             kept[#kept + 1] = r
@@ -182,42 +212,33 @@ function M.run(task)
 
     _counter = _counter + 1
     ---@type ezdap.runner.Run
-    ---@diagnostic disable-next-line: missing-fields -- channel and log_buf are set right below, once `run` exists for the clean callback
+    ---@diagnostic disable-next-line: missing-fields -- log is set right below, once `run` exists to hang it on
     local run = {
         id      = task.name .. "-" .. _counter,
         name    = task.name,
         cancel  = function() end,
-        bufnrs  = {},
-        done    = false,
+        buffers = {},
+        state   = "running",
     }
     _runs[#_runs + 1] = run
 
-    -- One channel per run. A backend that can ask a channel to shed itself (dock's
-    -- `:Dock clean`) gets the same answer `M.clean` gives: a finished run goes,
-    -- a live one stays.
-    run.channel  = require("ezdap.ui.panel").channel({
-        id       = run.id,
-        label    = run.name,
-        state    = "running",
-        on_clean = function()
-            if run.done then M.remove(run) end
-        end,
-    })
+    -- Announced before it has any buffer, so a subscriber that renders a run as a
+    -- whole (a tab, a status line) exists by the time the first one arrives.
+    M.on_run_started:emit(run)
     -- The log is this run's own buffer, so its lines need no task-name prefix.
     run.log      = _make_log(run)
 
     local cancel = require("ezdap.task").start(task, {
-        -- Shown in the run's panel channel, and tracked so `clean` can wipe them.
+        -- Announced for display, and tracked so `clean` can wipe them.
         add_bufnr = function(bufnr, opts)
-            run.bufnrs[#run.bufnrs + 1] = bufnr
-            run.channel:add(bufnr, opts)
+            _add_buf(run, bufnr, opts)
         end,
         report    = function (msg)
             _log(run, msg)
         end,
         on_done   = function(ok)
-            run.done = true
-            run.channel:set_state(ok and "done" or "failed")
+            run.state = ok and "done" or "failed"
+            M.on_run_state:emit(run, run.state)
             _log(run, ok and "finished" or "failed")
         end,
     })
@@ -410,7 +431,7 @@ end
 ---setup (before any session exists, where `:Debug stop` has nothing to act on yet).
 function M.cancel()
     for _, r in ipairs(_runs) do
-        if not r.done then r.cancel() end
+        if r.state == "running" then r.cancel() end
     end
 end
 
@@ -418,9 +439,16 @@ end
 ---@return ezdap.runner.Run?
 function M.active()
     for i = #_runs, 1, -1 do
-        if not _runs[i].done then return _runs[i] end
+        if _runs[i].state == "running" then return _runs[i] end
     end
     return nil
+end
+
+---Every tracked run, live and finished, in start order — how a subscriber
+---attaching after the fact catches up with the runs it missed.
+---@return ezdap.runner.Run[]
+function M.runs()
+    return vim.list_slice(_runs)
 end
 
 return M

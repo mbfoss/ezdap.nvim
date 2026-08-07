@@ -220,7 +220,7 @@ function Channel:add(bufnr, opts) M.add(bufnr, opts) end
 ---@param opts? ezdap.AddBufOpts
 function Channel:show(bufnr, opts) M.show(bufnr, opts) end
 
----@param _state ezdap.ui.ChannelState
+---@param _state ezdap.runner.RunState
 function Channel:set_state(_state) end
 
 function Channel:remove() end
