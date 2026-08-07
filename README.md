@@ -321,7 +321,7 @@ local ezdap = require("ezdap")
 ezdap.run({ adapter = "delve", request = "launch", parameters = { mode = "test" } })
 
 -- The run_profile / run_file / new_run_file / rerun entry points, too
-ezdap.run_profile({ "debugpy", "launch", "command=./main.py" })
+ezdap.run_profile("debugpy", "launch", { command = "./main.py" })
 ezdap.run_file("debug.lua")
 ezdap.rerun()
 ```

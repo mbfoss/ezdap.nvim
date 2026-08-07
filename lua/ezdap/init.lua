@@ -191,6 +191,30 @@ local _debug_subs = {
     "project", "clean",
 }
 
+---Read `:Debug run <adapter> <profile> [input=value]…`: the adapter and profile are
+---strictly the first two positionals, every later token an `input=value` assignment.
+---@param args string[]  the command-line tokens from the adapter on
+---@return string? adapter, string? profile, table<string, string>? inputs
+local function _parse_run_args(args)
+    local adapter, profile = args[1], args[2]
+    if (adapter and adapter:find("=", 1, true)) or (profile and profile:find("=", 1, true)) then
+        vim.notify("[ezdap] run: usage: :Debug run <adapter> <profile> [input=value]…",
+            vim.log.levels.WARN)
+        return
+    end
+    local inputs = {}
+    for i = 3, #args do
+        local tok = args[i]
+        local eq = tok:find("=", 1, true)
+        if not eq then
+            vim.notify("[ezdap] run: expected input=value, got '" .. tok .. "'", vim.log.levels.WARN)
+            return
+        end
+        inputs[tok:sub(1, eq - 1)] = tok:sub(eq + 1)
+    end
+    return adapter, profile, inputs
+end
+
 ---@type ezdap.util.usercmd.run_fn
 local function _debug_run(_, args, opts)
     local cmd = _cmd()
@@ -198,7 +222,8 @@ local function _debug_run(_, args, opts)
     if sub == "run_file" then
         M.run_file(args[2])
     elseif sub == "run" then
-        M.run_profile({ unpack(args, 2) })
+        local adapter, profile, inputs = _parse_run_args({ unpack(args, 2) })
+        if inputs then M.run_profile(adapter or "", profile or "", inputs) end
     elseif sub == "new_run_file" then
         M.new_run_file({ unpack(args, 2) })
     elseif sub == "rerun" then
@@ -473,13 +498,15 @@ function M.new_run_file(assignments)
 end
 
 ---Launch or attach under an adapter using one of its declared `profiles`, assembling
----the request body from `input=value` assignments — the entry point behind `:Debug
----run`. `assignments` leads with the adapter and profile as bare positionals.
----@param assignments string[]  adapter, profile name, then "input=value" tokens
-function M.run_profile(assignments)
+---the request body from `inputs` — the answers to the profile's declared inputs, in
+---either authoring form. The entry point behind `:Debug run`.
+---@param adapter string  adapter name, e.g. "debugpy"
+---@param profile string  profile name, e.g. "launch"
+---@param inputs? table<string, string>  input name -> value, e.g. { command = "./main.py" }
+function M.run_profile(adapter, profile, inputs)
     _require_setup("run_profile")
     M.clean()
-    return require("ezdap.runner").run_profile(assignments)
+    return require("ezdap.runner").run_profile(adapter, profile, inputs)
 end
 
 --- function intended to be called by custom plugins that manages their own task UI

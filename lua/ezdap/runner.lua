@@ -350,19 +350,18 @@ function M.run_file(path)
         " must set either `profile` (a named profile) or `configuration` (a raw DAP table)")
 end
 
----Launch or attach under an adapter's named profile. `assignments[1]`/`[2]` are the
----adapter and profile; each later `input=value` is resolved by `schema.resolve_task`.
+---Launch or attach under an adapter's named profile, resolving `inputs` — the
+---answers to the profile's declared inputs, in either authoring form — through
+---`schema.resolve_task`.
 ---Returns nil when `build` stops to ask the user something — the run starts on answer.
----@param assignments string[]  adapter, profile name, then "input=value" tokens, e.g. { "codelldb", "launch", "command=./a.out" }
+---@param adapter string  adapter name, e.g. "codelldb"
+---@param profile_name string  profile name, e.g. "launch"
+---@param inputs? table<string, string>  input name -> value, e.g. { command = "./a.out" }
 ---@return ezdap.runner.Run?
-function M.run_profile(assignments)
+function M.run_profile(adapter, profile_name, inputs)
     local schema = require("ezdap.schema")
 
-    -- The adapter and profile name are strictly the first two positional
-    -- arguments (`:Debug run codelldb launch …`); every argument from the
-    -- third on is an `input=value` assignment.
-    local adapter, profile_name = assignments[1], assignments[2]
-    if not adapter or adapter == "" or adapter:find("=", 1, true) then
+    if not adapter or adapter == "" then
         _warn("run: usage: :Debug run <adapter> <profile> [input=value]…")
         return
     end
@@ -371,22 +370,13 @@ function M.run_profile(assignments)
             " (available: " .. table.concat(schema.profiled_adapters(), ", ") .. ")")
         return
     end
-    if not profile_name or profile_name == "" or profile_name:find("=", 1, true) then
+    if not profile_name or profile_name == "" then
         _warn("run: usage: :Debug run " .. adapter .. " <profile> [input=value]…"
             .. " (profiles: " .. table.concat(schema.profile_names(adapter), ", ") .. ")")
         return
     end
 
-    local values = {}
-    for i = 3, #assignments do
-        local tok = assignments[i]
-        local eq = tok:find("=", 1, true)
-        if not eq then
-            _warn("run: expected input=value, got '" .. tok .. "'")
-            return
-        end
-        values[tok:sub(1, eq - 1)] = tok:sub(eq + 1)
-    end
+    local values = inputs or {}
 
     -- A profile whose `build` asks the user something (an attach resolving an unset
     -- `pid`) resolves only once they answer, so the run starts from the callback.
