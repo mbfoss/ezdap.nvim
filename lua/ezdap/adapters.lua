@@ -53,7 +53,6 @@
 ---| "dir"         # → string: a path, expanded
 ---| "cwd"         # → string: a path, expanded and made absolute
 ---| "command"     # → string: a command line, verbatim (each token completed as a path)
----| "host"        # → string: taken verbatim
 ---| "port"        # → integer: range-checked (0-65535)
 ---| "map"         # → table: "A=1,B=2" → { A = "1", B = "2" }
 ---| "list"        # → table: "a,b" → { "a", "b" }
@@ -152,7 +151,11 @@ local remote = {
             description = "attach to a DAP server listening on host:port",
             request     = "attach",
             inputs = {
-                host = { type = "string", format = "host", description = "DAP server host" },
+                host = {
+                    type = "string", description = "DAP server host",
+                    -- Loopback then any-interface, in each family.
+                    choices = { "localhost", "127.0.0.1", "::1", "::" },
+                },
                 port = { type = "integer", format = "port", description = "DAP server port" },
             },
             build = function(_, connect, inputs)

@@ -40,19 +40,12 @@ local M = {}
 ---One format, in all the ways it is read. `parse` may be omitted when the string
 ---form is just the `type` read back. `seed` is a starting value for a scaffolded
 ---document; `item_type` is what one element of a collection format becomes.
----
----`choices` is the format's own fixed candidate set, standing to the format
----exactly as an input's `choices` stands to the input: values offered, never
----required. It is data rather than a `complete` closure so that *every*
----projection can read it — a set only `complete` could see would be a value
----space whose string form knew more than its typed form.
 ---@class ezdap.FormatDef
 ---@field type       ezdap.InputType   what `build` receives
 ---@field item_type? ezdap.InputType   what one element becomes, for a collection
 ---@field schema     table               JSON Schema for the typed authored form
 ---@field parse?     fun(raw: string): any?, string?  the string authored form → a value of `type`
 ---@field seed?      any                 starting value for a scaffolded document
----@field choices?   string[]            values this format is normally written with
 ---@field complete?  fun(partial: string): string[]  candidate values, for command lines
 
 ---Read a raw string as a value of `input_type`. This is the no-format path — the
@@ -161,14 +154,15 @@ end
 
 ---Every declared `ezdap.InputFormat`. `file`/`dir` differ only in the completion
 ---they drive, not in the value they produce; `command` is a verbatim string too —
----the `build` that wants it split is what splits it.
+---the `build` that wants it split is what splits it. There is no `host` row: a
+---host is a verbatim string, which `type` already says, and the addresses worth
+---offering are the adapter's to name as its input's `choices`.
 ---@type table<string, ezdap.FormatDef>
 M.formats = {
     file    = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("file") },
     dir     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("dir") },
     cwd     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("dir") },
     command = { type = "string", schema = { type = "string" }, seed = "", complete = _complete_command },
-    host    = { type = "string", schema = { type = "string" }, seed = "", choices = { "localhost", "127.0.0.1", "0.0.0.0" } },
     port    = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
     map     = { type = "table", item_type = "string", schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map, seed = {} },
     list    = { type = "table", item_type = "string", schema = { type = "array", items = { type = "string" } }, parse = _list, seed = {} },
@@ -184,15 +178,6 @@ local function _def(input)
     local format = input and input.format
     if format == nil or format == "" then return nil end
     return M.formats[format]
-end
-
----The fixed candidate set for an input: its own `choices` when it names them,
----otherwise its format's. The input is the narrower statement, so it wins.
----@param input ezdap.Input?
----@param def ezdap.FormatDef?
----@return string[]?
-local function _choices(input, def)
-    return (input and input.choices) or (def and def.choices) or nil
 end
 
 ---Read an input's **string form** — a raw `name=value` argument — into a value of
@@ -217,7 +202,7 @@ end
 ---@return table
 function M.json_schema(input)
     local def = _def(input)
-    local choices = _choices(input, def)
+    local choices = input and input.choices
     if def then
         local schema = vim.deepcopy(def.schema)
         if choices then
@@ -257,16 +242,16 @@ function M.seed(input)
 end
 
 ---Candidate values for an input's **string form** — what a command line offers for
----the value half of `name=value`. A fixed candidate set answers first (the input's
----own, else its format's), then its type (a boolean is written one of two ways),
----then its format's completion (paths). Empty when values can't be enumerated.
+---the value half of `name=value`. An input's own `choices` answer first, then its
+---type (a boolean is written one of two ways), then its format (paths).
+---Empty for an input whose values can't be enumerated.
 ---@param input ezdap.Input?
 ---@param partial string?  the value typed so far
 ---@return string[]
 function M.completion(input, partial)
     partial = partial or ""
     local def = _def(input)
-    local choices = _choices(input, def)
+    local choices = input and input.choices
 
     if choices then
         -- A collection's string form is comma-separated, so it is the entry being
