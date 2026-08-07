@@ -153,15 +153,14 @@ local function _complete_choices(values)
 end
 
 ---Every declared `ezdap.InputFormat`. `file`/`dir` differ only in the completion
----they drive, not in the value they produce; `command` is a verbatim string too —
----the `build` that wants it split is what splits it. There is no `host` row: a
----host is a verbatim string, which `type` already says, and the addresses worth
----offering are the adapter's to name as its input's `choices`.
+---they drive, not in the value they produce, which is why `dir` covers a working
+---directory too; `command` is a verbatim string the wanting `build` splits itself.
+---A host needs no row at all: it is the verbatim string `type` already describes,
+---and the addresses worth offering are the adapter's to name as `choices`.
 ---@type table<string, ezdap.FormatDef>
 M.formats = {
     file    = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("file") },
     dir     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("dir") },
-    cwd     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("dir") },
     command = { type = "string", schema = { type = "string" }, seed = "", complete = _complete_command },
     port    = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
     map     = { type = "table", item_type = "string", schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map, seed = {} },

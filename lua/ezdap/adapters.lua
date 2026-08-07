@@ -50,8 +50,7 @@
 ---→ what `build` receives.
 ---@alias ezdap.InputFormat
 ---| "file"        # → string: a path, expanded
----| "dir"         # → string: a path, expanded
----| "cwd"         # → string: a path, expanded and made absolute
+---| "dir"         # → string: a path, expanded (a working directory too)
 ---| "command"     # → string: a command line, verbatim (each token completed as a path)
 ---| "port"        # → integer: range-checked (0-65535)
 ---| "map"         # → table: "A=1,B=2" → { A = "1", B = "2" }
@@ -153,7 +152,7 @@ local remote = {
             inputs = {
                 host = {
                     type = "string", description = "DAP server host",
-                    -- Loopback then any-interface, in each family.
+                    -- Loopback in each family, then `::` for any interface.
                     choices = { "localhost", "127.0.0.1", "::1", "::" },
                 },
                 port = { type = "integer", format = "port", description = "DAP server port" },
