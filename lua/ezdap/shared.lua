@@ -26,6 +26,60 @@ function M.split_command(command)
     return vim.fn.expand(argv[1] or ""), { unpack(argv, 2) }
 end
 
+---Expand one candidate path from a lookup list: a leading `$VAR` becomes the
+---environment variable's value (nil when unset, so the caller skips the entry),
+---`~` becomes the home directory, and a relative entry is taken against `cwd` when
+---one is given. Pass no `cwd` for a list of programs, where a bare name is meant
+---to be looked up on $PATH rather than resolved against a directory.
+---@param path string
+---@param cwd? string  base for relative entries; without it they are left as-is
+---@return string?
+function M.expand_path(path, cwd)
+    local var, rest = path:match("^%$([%w_]+)(.*)$")
+    if var then
+        local value = vim.env[var]
+        if not value or value == "" then return nil end
+        path = value .. rest
+    end
+    if cwd and not path:match("^~") and vim.fn.isabsolutepath(path) == 0 then
+        path = vim.fs.joinpath(cwd, path)
+    end
+    return vim.fs.normalize(path)
+end
+
+---Walk a list of candidate locations and return the first one `accept` approves,
+---alongside every candidate actually tried (for an error message naming them).
+---Entries are expanded by `expand_path`, mapped through `opts.transform` when one
+---is given, and de-duplicated. Entries are literal paths — no globbing.
+---@param candidates string[]  lookup list, in preference order
+---@param accept fun(path: string): boolean  the test a usable candidate passes
+---@param opts? { cwd?: string, transform?: fun(path: string): string }
+---@return string? found, string[] tried
+function M.resolve_path(candidates, accept, opts)
+    opts = opts or {}
+    local tried, seen = {}, {}
+    for _, cand in ipairs(candidates) do
+        local path = M.expand_path(cand, opts.cwd)
+        if path and opts.transform then path = opts.transform(path) end
+        if path and not seen[path] then
+            seen[path] = true
+            tried[#tried + 1] = path
+            if accept(path) then return path, tried end
+        end
+    end
+    return nil, tried
+end
+
+---`accept` for `resolve_path` when the candidate must be a runnable program.
+---@param path string
+---@return boolean
+function M.is_executable(path) return vim.fn.executable(path) == 1 end
+
+---`accept` for `resolve_path` when the candidate must be an existing directory.
+---@param path string
+---@return boolean
+function M.is_directory(path) return vim.fn.isdirectory(path) == 1 end
+
 ---The process id to attach to: the one already given, or one picked interactively.
 ---What an attach profile's `build` calls for its `pid` input, which is why no adapter
 ---marks it `required`. Yields (see `select_process`) only when `pid` is nil.
