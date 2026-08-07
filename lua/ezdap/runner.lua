@@ -6,9 +6,9 @@
 ---equivalent (progress, run lifecycle).
 ---
 ---A run announces itself through signals — it started, it spawned a buffer, its
----state changed, it wants a buffer on screen, it is gone — and holds the buffers
----it spawned so a late subscriber can catch up. Where any of that is shown is
----`ezdap.ui.panel`'s decision; nothing here knows about windows.
+---state changed, it is gone — and holds the buffers it spawned so a late
+---subscriber can catch up. Whether and how any of it is shown is the panel
+---backends' decision; nothing here knows about windows.
 ---
 ---One task per file: a run file returns a single task (or a function
 ---returning one):
@@ -49,9 +49,6 @@ M.on_run_buffer  = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner
 
 M.on_run_state   = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner.Run, state: ezdap.runner.RunState)>
 
----A run asking for one of its buffers to be put on screen now (`:Debug log`).
-M.on_run_reveal  = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner.Run, bufnr: integer, opts: ezdap.AddBufOpts)>
-
 ---A run being forgotten, emitted while its buffers are still valid.
 M.on_run_removed = Signal.new() ---@type ezdap.util.Signal<fun(run: ezdap.runner.Run)>
 
@@ -87,16 +84,12 @@ local function _add_buf(run, bufnr, opts)
 end
 
 -- A run's progress is appended to a scratch log buffer of its own, alongside the
--- Output and REPL, reachable by name (`:b ezdap://<run>-log`) or via `:Debug
--- log`. Pre-flight errors stay on vim.notify, happening before the run exists.
-
----The log's presentation: the lowest-ranked buffer of a run, so it never
----displaces that run's Output, and pinned to its last line while shown.
----@type ezdap.AddBufOpts
-local _LOG_OPTS = { label = "log", priority = -4, autoscroll = true }
+-- Output and REPL, reachable by name (`:b ezdap://<run>-log`). Pre-flight errors
+-- stay on vim.notify, happening before the run exists.
 
 ---Create a run's log — an `OutputBuffer` like the run's Output, so the line cap
----and autoscroll are the same ones — and register it as one of the run's buffers.
+---and autoscroll are the same ones — and register it as the lowest-ranked of the
+---run's buffers, so it never displaces that Output.
 ---@param run ezdap.runner.Run
 ---@return ezdap.OutputBuffer
 local function _make_log(run)
@@ -106,7 +99,7 @@ local function _make_log(run)
         autoscroll = true,
     })
 
-    _add_buf(run, assert(log:bufnr()), _LOG_OPTS)
+    _add_buf(run, assert(log:bufnr()), { label = "log", priority = -4, autoscroll = true })
     return log
 end
 
@@ -148,19 +141,6 @@ local function _clear_finished(name)
         end
     end
     _runs = kept
-end
-
----Ask for a run's log to be shown — the newest live run's by default, else the
----most recent one's; where it lands is the subscriber's call. Warns when no run
----has logged anything yet. Bound to `:Debug log`.
----@param run? ezdap.runner.Run  defaults to the newest live run, else the latest
-function M.log_open(run)
-    run = run or M.active() or _runs[#_runs]
-    if not run or not run.log:is_valid() then
-        _warn("log: nothing logged yet")
-        return
-    end
-    M.on_run_reveal:emit(run, assert(run.log:bufnr()), _LOG_OPTS)
 end
 
 ---Forget a single run, announcing it and wiping its buffers. A live run is not

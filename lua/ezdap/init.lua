@@ -188,7 +188,7 @@ local _debug_subs = {
     "stop", "stop_all",
     "session", "thread", "terminate_thread", "frame",
     "inspect", "value", "disassemble",
-    "project", "clean", "log",
+    "project", "clean",
 }
 
 ---@type ezdap.util.usercmd.run_fn
@@ -257,8 +257,6 @@ local function _debug_run(_, args, opts)
         M.project_info()
     elseif sub == "clean" then
         M.clean()
-    elseif sub == "log" then
-        require("ezdap.runner").log_open()
     elseif sub == "breakpoint" then
         _bp_run({ unpack(args, 2) })
     else
@@ -400,7 +398,14 @@ local function _init()
     require("ezdap.ui.debugline_ui").init()
     require("ezdap.ui.inlinevars").enable()
     require("ezdap.ui.popup_menu").init()
-    require("ezdap.ui.panel").init()
+    -- A panel backend subscribes to the runner on its own; this is the one place
+    -- picking which. dock.nvim gives each run a tab of its own, so it takes the
+    -- runs when installed and ezdap's bottom split stays out of the way.
+    if pcall(require, "dock") then
+        require("ezdap.ui.dock_panel").init()
+    else
+        require("ezdap.ui.output_win").init()
+    end
 
     local client = require("ezdap.dap.client")
     client.on_session_added:subscribe(function()
@@ -475,14 +480,6 @@ function M.run_profile(assignments)
     _require_setup("run_profile")
     M.clean()
     return require("ezdap.runner").run_profile(assignments)
-end
-
----@param task ezdap.Task
-function M.run(task)
-    _require_setup("run")
-    M.clean()
-    local runner = require("ezdap.runner")
-    return runner.run(task)
 end
 
 --- function intended to be called by custom plugins that manages their own task UI

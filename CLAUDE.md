@@ -21,7 +21,9 @@ loaded, so a session that never used the plugin stays untouched.
 The code is layered; higher layers depend on lower ones, not the reverse.
 
 **Public API** — [init.lua](lua/ezdap/init.lua)
-- `setup`, `run` (task entry point), `debug_view`/`open_debug_view`, user commands.
+- `setup`, `run_file`/`run_profile`/`new_run_file` (task entry points),
+  `start_task` (for plugins owning their own task UI), `debug_view`/
+  `open_debug_view`, user commands.
 
 **Active session / programmatic API** — [manager.lua](lua/ezdap/manager.lua)
 - Owns the "which session is active" concept that keymaps and UI subscribe to.
@@ -75,10 +77,10 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   every `ezdap.runner.Run` (its buffers with the `ezdap.AddBufOpts` they were
   registered with, and its `state`) and owns the run log. It knows nothing about
   windows — a run's life is announced through signals (`on_run_started`,
-  `on_run_buffer`, `on_run_state`, `on_run_reveal` for `:Debug log`,
-  `on_run_removed` before its buffers are wiped) and `runs()` hands the same
-  state to a subscriber that attaches later. Whether and how any of it is shown
-  is `ezdap.ui.panel`'s decision.
+  `on_run_buffer`, `on_run_state`, `on_run_removed` before its buffers are
+  wiped), and `runs()`/`active()` hand the same state to a subscriber that
+  attaches later. Whether and how any of it is shown is the panel backends'
+  decision.
 - [inputs.lua](lua/ezdap/inputs.lua) — the input-format registry: one row per
   `ezdap.InputFormat`, each stating every way that format is read — `type` (what
   `build` receives), `item_type` (what one element of a collection becomes),
@@ -109,7 +111,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   `ezdap.inputs`), calls the profile's `build` to assemble the native
   request body and any task-level connection, and delivers a **complete
   `ezdap.Task`** — request kind and host/port included — ready for
-  `run`/`start_task`. Callers supply values and get back a task; they never rejoin
+  `runner.run`/`start_task`. Callers supply values and get back a task; they never rejoin
   the two themselves. Inputs marked `required` are errors when left unset, other
   unset inputs arrive at `build` as nil (so Lua drops the fields assigned from them)
   unless that `build` answers them another way. `build` runs on a coroutine — it is
@@ -135,7 +137,7 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   inputs), and a **raw** one (`adapter` + `configuration`) whose `configuration` is
   an nvim-dap-like table of raw DAP parameters including `request` — `request` is
   lifted out and the rest is forwarded to the adapter verbatim as the DAP body,
-  yielding the same `ezdap.Task` shape `run`/`start_task` take. `resolve_task`
+  yielding the same `ezdap.Task` shape `runner.run`/`start_task` take. `resolve_task`
   only handles the profile shape; `run_file` builds the task for the raw shape.
 
 **Persistence** — [store.lua](lua/ezdap/store.lua)
@@ -164,22 +166,23 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   presentation of an `ezdap.DebugView.ItemData`; it owns no state and never
   touches the tree, which is why it takes the row's data and the session as
   arguments rather than living on the view.
-- `panel.lua` — where a run's buffers are shown. `init()` (called from `setup`)
-  subscribes to `runner`'s signals and adopts any run that started before then;
-  the runner never reaches back. Each run gets a **channel** the panel opens on
-  first sight of it and feeds (`add`/`show`/`set_state`), dropping it when the
-  run is removed; the backend behind that API is `dock_panel` when dock.nvim is
-  installed and `output_win` otherwise, chosen once on first use.
+- Where a run's buffers are shown is settled by two **panel backends**, each an
+  independent `runner` subscriber. `setup` starts one of them — `dock_panel` when
+  dock.nvim is installed, `output_win` otherwise, the only place that choice is
+  made — and its `init()` subscribes to `runner`'s signals and adopts any run
+  that started before then; the runner never reaches back. The unstarted one
+  holds no buffer and no window and is inert, which is why `:Debug output`
+  toggles both.
 - `dock_panel.lua` — the dock.nvim backend: one dock group (tab) per run under
   the `ezdap` source, one page per buffer, the run's state as the tab's badge and
   busy flag. dock owns the window, tab bar and focus rules; ezdap keeps owning
   its buffers, which is why `on_clean` drops a finished run rather than dock
   deleting anything.
-- `output_win.lua` — the fallback backend: the one bottom split a run's buffers
-  share. Each buffer is registered with a priority; the window holds the
-  highest-priority live one and closes with the run's last buffer. Every run's
-  channel is that same window, so a channel holds no state and a run's label and
-  state have nowhere to show.
+- `output_win.lua` — the fallback backend: the one bottom split every run's
+  buffers share. Each buffer is registered with a priority; the window holds the
+  highest-priority live one and closes with the last buffer. One shared window is
+  why it ignores all but `on_run_buffer` — a run's label and state have nowhere
+  to show.
 - `format.lua` — shared presentation, pure and stateless: how debug state becomes
   glyphs, highlights and display strings. A breakpoint or session state maps to a
   `config.signs` name and from there to a glyph + highlight

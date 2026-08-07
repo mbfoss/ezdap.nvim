@@ -395,8 +395,7 @@ run's last buffer. `:Debug output` toggles it; `panel_auto_open` and
 `panel_height_ratio` tune it.
 
 Each run keeps its own log — `ezdap://<run>-log`, wiped with the run — rather
-than appending to a shared one, so parallel runs never interleave. `:Debug log`
-shows the newest live run's, falling back to the most recent run's.
+than appending to a shared one, so parallel runs never interleave.
 
 With [dock.nvim](https://github.com/mbfoss/dock.nvim) installed, ezdap uses it
 instead — no configuration needed. Each run becomes a tab in dock's shared panel,
@@ -670,20 +669,26 @@ adapters.myadapter = {
 }
 ```
 
-Either way, that bare definition is already enough to run:
+Either way, that bare definition is already enough to run — from a run file,
+using the raw shape (`adapter` + `configuration`) described in
+[Run files](#run-files--versionable-debug-configs):
 
 ```lua
-require("ezdap").run({
-  adapter    = "myadapter",
-  request    = "launch",
-  parameters = { program = "/path/to/thing", stopOnEntry = true },
-})
+-- debug.lua
+return {
+  name          = "my thing",
+  adapter       = "myadapter",
+  configuration = {
+    request     = "launch",
+    program     = "/path/to/thing",
+    stopOnEntry = true,
+  },
+}
 ```
 
-…or from a run file, using the raw shape (`adapter` + `configuration`) described
-in [Run files](#run-files--versionable-debug-configs). `parameters` is sent to
-the adapter as the DAP launch/attach body verbatim — ezdap never rewrites the
-keys, so use whatever the adapter's own documentation calls them.
+Everything but `request` is sent to the adapter as the DAP launch/attach body
+verbatim — ezdap never rewrites the keys, so use whatever the adapter's own
+documentation calls them.
 
 ### The adapter definition
 

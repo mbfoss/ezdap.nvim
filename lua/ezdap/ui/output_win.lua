@@ -1,18 +1,24 @@
----@brief The single bottom split that shows a run's buffer — the fallback
----backend behind `ezdap.ui.panel`, used when dock.nvim is not installed.
+---@brief The single bottom split that shows a run's buffer — the panel backend
+---used when dock.nvim is not installed.
 ---
 ---A run spawns several buffers (Terminal, Output, REPL, adapter log, DAP
----messages); `ezdap.runner` registers each here with a priority, and this window
----holds the highest-priority live one. One window is reused for all of them:
----registering a buffer swaps the occupant rather than opening a second split.
+---messages); this module subscribes to `ezdap.runner` and registers each with a
+---priority, and the window holds the highest-priority live one. One window is
+---reused for all of them: registering a buffer swaps the occupant rather than
+---opening a second split.
 ---
----There being one window, every run's channel is the same window: a channel
----carries no state of its own and its label and run state have nowhere to show.
+---There being one window shared by every run, a run's label and state have
+---nowhere to show — which is why `ezdap.ui.dock_panel` takes over when dock.nvim
+---can give each run a tab of its own.
 
 local fixedwin = require("ezdap.util.fixedwin")
 local config   = require("ezdap.config")
 
 local M        = {}
+
+---Whether this window is the backend in play, established by `init`. Everything
+---below is inert until then, so `:Debug output` reaches the dock instead.
+local _enabled = false
 
 ---One buffer a run registered for display, as passed to `ezdap.AddBufOpts`.
 ---@class ezdap.ui.output_win.Entry
@@ -93,6 +99,7 @@ end
 ---Open the window (a no-op when already open) and show the target buffer.
 ---@param focus? boolean  leave the cursor in the window; default false
 function M.open(focus)
+    if not _enabled then return end
     _prune()
     local bufnr = _target()
     if not bufnr then return end
@@ -188,6 +195,7 @@ end
 ---@param bufnr integer
 ---@param opts? ezdap.AddBufOpts
 function M.show(bufnr, opts)
+    if not _enabled then return end
     M.add(bufnr, opts)
     M.open(true)
     _display(bufnr)
@@ -198,31 +206,23 @@ function M.winid()
     return _open_win()
 end
 
--- Channel API (`ezdap.ui.panel`)
+---Subscribe to the runner: every buffer a run registers is ranked here, and a
+---run's end is nothing to show, so only that one signal is listened to. Called
+---from `setup` unless dock.nvim took the runs; safe to call again.
+function M.init()
+    if _enabled then return end
+    _enabled = true
 
----@class ezdap.ui.output_win.Channel : ezdap.ui.Channel
-local Channel   = {}
-Channel.__index = Channel
+    local runner = require("ezdap.runner")
+    -- There being one window for all runs, which run a buffer came from does not
+    -- matter here: it ranks against every other run's buffers.
+    runner.on_run_buffer:subscribe(function(_run, bufnr, opts) M.add(bufnr, opts) end)
 
----A run's handle on the window. All runs share it, so the channel is stateless:
----its buffers rank against every other run's, as they did before channels.
----@param _spec ezdap.ui.ChannelSpec
----@return ezdap.ui.Channel
-function M.channel(_spec)
-    return setmetatable({}, Channel)
+    -- A run that started before now still holds the buffers it spawned, so it is
+    -- registered after the fact exactly as it would have been live.
+    for _, run in ipairs(runner.runs()) do
+        for _, buf in ipairs(run.buffers) do M.add(buf.bufnr, buf.opts) end
+    end
 end
-
----@param bufnr integer
----@param opts? ezdap.AddBufOpts
-function Channel:add(bufnr, opts) M.add(bufnr, opts) end
-
----@param bufnr integer
----@param opts? ezdap.AddBufOpts
-function Channel:show(bufnr, opts) M.show(bufnr, opts) end
-
----@param _state ezdap.runner.RunState
-function Channel:set_state(_state) end
-
-function Channel:remove() end
 
 return M

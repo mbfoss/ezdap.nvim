@@ -899,9 +899,11 @@ function M.view.toggle()
 end
 
 ---Toggle the panel a run's buffers are shown in — a dock.nvim panel when that is
----installed, ezdap's own bottom window otherwise.
+---installed, ezdap's own bottom window otherwise. The backend that stood down
+---holds no buffer and no window, so toggling it is a no-op.
 function M.view.output_toggle()
-    require("ezdap.ui.panel").toggle()
+    require("ezdap.ui.dock_panel").toggle()
+    require("ezdap.ui.output_win").toggle()
 end
 
 return M
