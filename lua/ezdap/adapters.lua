@@ -152,7 +152,6 @@ local remote = {
             inputs = {
                 host = {
                     type = "string", description = "DAP server host",
-                    -- Loopback in each family, then `::` for any interface.
                     choices = { "localhost", "127.0.0.1", "::1", "::" },
                 },
                 port = { type = "integer", format = "port", description = "DAP server port" },
