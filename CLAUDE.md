@@ -21,7 +21,7 @@ loaded, so a session that never used the plugin stays untouched.
 The code is layered; higher layers depend on lower ones, not the reverse.
 
 **Public API** — [init.lua](lua/ezdap/init.lua)
-- `setup`, `run_file`/`run_profile`/`new_run_file` (task entry points),
+- `setup`, `run_task`/`run_file`/`run_profile`/`new_run_file` (task entry points),
   `start_task` (for plugins owning their own task UI), `debug_view`/
   `open_debug_view`, user commands.
 

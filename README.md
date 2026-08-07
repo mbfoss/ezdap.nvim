@@ -318,7 +318,7 @@ Everything above is available programmatically:
 local ezdap = require("ezdap")
 
 -- Run a task table directly
-ezdap.run({ adapter = "delve", request = "launch", parameters = { mode = "test" } })
+ezdap.run_task({ adapter = "delve", request = "launch", parameters = { mode = "test" } })
 
 -- The run_profile / run_file / new_run_file / rerun entry points, too
 ezdap.run_profile("debugpy", "launch", { command = "./main.py" })

@@ -509,6 +509,17 @@ function M.run_profile(adapter, profile, inputs)
     return require("ezdap.runner").run_profile(adapter, profile, inputs)
 end
 
+---Run a complete native task — `adapter`/`request`/`parameters` (plus optional
+---`name`/`host`/`port`) — in ezdap's own run host, the same one `run_profile` and
+---`run_file` end in. Returns nil when `task` is not a valid task table.
+---@param task ezdap.Task
+---@return ezdap.runner.Run?
+function M.run_task(task)
+    _require_setup("run_task")
+    M.clean()
+    return require("ezdap.runner").run(task)
+end
+
 --- function intended to be called by custom plugins that manages their own task UI
 ---@param task ezdap.Task
 ---@param callbacks ezdap.TaskCallback
