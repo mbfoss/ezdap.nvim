@@ -5,7 +5,6 @@ local config        = require("ezdap.config")
 local expressions   = require("ezdap.ui.expressions")
 local breakpoints   = require("ezdap.dap.breakpoints")
 local format        = require("ezdap.ui.format")
-local str_util      = require("ezdap.util.strutil")
 local inputwin      = require("ezdap.util.inputwin")
 local select        = require("ezdap.util.select")
 local timer         = require("ezdap.util.timer")
@@ -13,7 +12,6 @@ local floatwin      = require("ezdap.util.floatwin")
 local fixedwin      = require("ezdap.util.fixedwin")
 local ui            = require("ezdap.util.ui")
 local UndoStack     = require("ezdap.util.UndoStack")
-local throttle      = require("ezdap.util.throttle")
 
 ---@alias ezdap.DebugView.ItemKind
 ---| "root"
@@ -128,10 +126,9 @@ end
 
 ---@param data ezdap.DebugView.ItemData
 ---@param chunks ezdap.DebugView.Chunk[]
----@param width integer  columns left for this row's own text
-local function _fmt_stackframe(data, chunks, width)
+local function _fmt_stackframe(data, chunks)
     local hl = data.greyout and "NonText" or (data.is_current and "Special" or nil)
-    chunks[#chunks + 1] = { str_util.crop_for_ui(data.name, width), hl }
+    chunks[#chunks + 1] = { data.name, hl }
 end
 
 ---@param data ezdap.DebugView.ItemData
@@ -140,46 +137,29 @@ local function _fmt_scope(data, chunks)
     chunks[#chunks + 1] = { data.name, "@module" }
 end
 
--- Columns a cropped value never drops below, however narrow the window gets.
-local _VALUE_MIN_W = 8
-
----Columns left for a `name<sep>value` row's value: what the window leaves once the
----name and separator are on the line.
----@param name string
----@param sep_w integer
----@param width integer  columns left for this row's own text
----@return integer
-local function _value_width(name, sep_w, width)
-    local room = width - vim.fn.strdisplaywidth(name) - sep_w
-    return math.max(room, _VALUE_MIN_W)
-end
-
 ---@param data ezdap.DebugView.ItemData
 ---@param chunks ezdap.DebugView.Chunk[]
----@param width integer  columns left for this row's own text
-local function _fmt_variable(data, chunks, width)
+local function _fmt_variable(data, chunks)
     local base_hl = data.greyout and "NonText" or nil
     chunks[#chunks + 1] = { data.name, base_hl }
     chunks[#chunks + 1] = { ": ", base_hl or "NonText" }
-    chunks[#chunks + 1] = { format.value(data.value, _value_width(data.name, 2, width)), base_hl or "@string" }
+    chunks[#chunks + 1] = { format.oneline(data.value), base_hl or "@string" }
 end
 
 ---@param data ezdap.DebugView.ItemData
 ---@param chunks ezdap.DebugView.Chunk[]
----@param width integer  columns left for this row's own text
-local function _fmt_expression(data, chunks, width)
+local function _fmt_expression(data, chunks)
     chunks[#chunks + 1] = { data.name }
     chunks[#chunks + 1] = { " = ", "NonText" }
     chunks[#chunks + 1] = {
-        format.value(data.value, _value_width(data.name, 3, width)),
+        format.oneline(data.value),
         (data.is_na or data.greyout) and "NonText" or "@string",
     }
 end
 
 ---@param data ezdap.DebugView.ItemData
 ---@param chunks ezdap.DebugView.Chunk[]
----@param width integer  columns left for this row's own text
-local function _fmt_breakpoint(data, chunks, width)
+local function _fmt_breakpoint(data, chunks)
     local icon, hl      = format.breakpoint_sign({
         kind          = data.bp_kind,
         disabled      = data.disabled,
@@ -209,31 +189,21 @@ local function _fmt_breakpoint(data, chunks, width)
             chunks[#chunks + 1] = { " [" .. data.access_type .. "]", "Comment" }
         end
     else
-        -- Source breakpoint: crop only the directory prefix (from the left), keeping
-        -- the filename:line and the condition/logpoint suffix always intact.
-        local suffix = {}
+        -- Source breakpoint: the whole path, then the condition/logpoint suffix.
+        chunks[#chunks + 1] = { data.name, name_hl }
         if data.condition then
-            suffix[#suffix + 1] = { " • if: " .. data.condition, "Comment" }
+            chunks[#chunks + 1] = { " • if: " .. data.condition, "Comment" }
         end
         if data.hit_condition then
-            suffix[#suffix + 1] = { " • hit: " .. data.hit_condition, "Comment" }
+            chunks[#chunks + 1] = { " • hit: " .. data.hit_condition, "Comment" }
         end
         if data.log_message then
-            suffix[#suffix + 1] = { " • log: " .. data.log_message, "Comment" }
+            chunks[#chunks + 1] = { " • log: " .. data.log_message, "Comment" }
         end
-
-        -- 2 columns for the sign glyph and its trailing space.
-        local used = 2
-        for _, c in ipairs(suffix) do used = used + vim.fn.strdisplaywidth(c[1]) end
-        local dir, tail = format.fit_path(data.name, width - used)
-
-        chunks[#chunks + 1] = { dir, name_hl }
-        chunks[#chunks + 1] = { tail, name_hl }
-        for _, c in ipairs(suffix) do chunks[#chunks + 1] = c end
     end
 end
 
----@type table<ezdap.DebugView.ItemKind, fun(data: ezdap.DebugView.ItemData, chunks: ezdap.DebugView.Chunk[], width: integer)>
+---@type table<ezdap.DebugView.ItemKind, fun(data: ezdap.DebugView.ItemData, chunks: ezdap.DebugView.Chunk[])>
 local _formatters = {
     root       = _fmt_root,
     session    = _fmt_session,
@@ -245,13 +215,12 @@ local _formatters = {
 }
 
 ---@param data ezdap.DebugView.ItemData?
----@param width integer  columns left for this row's own text
 ---@return ezdap.DebugView.Chunk[], table
-local function _node_formatter(data, width)
+local function _node_formatter(data)
     if not data then return {}, {} end
     local chunks = {}
     local fmt = _formatters[data.kind]
-    if fmt then fmt(data, chunks, width) end
+    if fmt then fmt(data, chunks) end
     return chunks, {}
 end
 
@@ -260,8 +229,6 @@ end
 ---@class ezdap.DebugView
 ---@field private _tree             ezdap.util.TreeBuffer
 ---@field private _width_ratio      number?   last-known width ratio, reused on the next open
----@field private _rendered_width   integer?  window width the visible lines were cropped to
----@field private _refit            fun()     throttled re-render after a width change
 ---@field private _active_id        number?
 ---@field private _active_sess      ezdap.dap.Session?
 ---@field private _query_ctx        number
@@ -301,10 +268,8 @@ end
 function DebugView:_init_tree()
     self._tree = TreeBuffer.new({
         filetype  = "ezdap-view",
-        -- The tree prefix (indent + expand icon) is already spoken for, so what a
-        -- formatter may fill is the window minus it.
-        formatter = function(_, data, _, prefix_width)
-            return _node_formatter(data, math.max(self:_get_win_width() - prefix_width, _VALUE_MIN_W))
+        formatter = function(_, data)
+            return _node_formatter(data)
         end,
     })
 
@@ -360,23 +325,6 @@ function DebugView:_init_tree()
             end
         end,
     })
-end
-
----@private
----@return integer
-function DebugView:_get_win_width()
-    local winid = self._tree:get_winid()
-    return winid > 0 and vim.api.nvim_win_get_width(winid) or vim.o.columns
-end
-
----Re-render every line when the view window's width changed: the formatter crops
----names, values and paths to that width, so the crop only holds while it does.
----@private
-function DebugView:_refit_width()
-    local width = self:_get_win_width()
-    if width == self._rendered_width then return end
-    self._rendered_width = width
-    self._tree:redraw()
 end
 
 -- Signal subscriptions
@@ -464,16 +412,6 @@ function DebugView:_setup_subs()
     self._subs[#self._subs + 1] = manager.on_breakpoint_updated:subscribe(function()
         self:_load_breakpoints()
     end)
-
-    -- Dragging a split fires WinResized per step; throttle the full re-render.
-    self._refit = throttle.throttle_wrap(40, function() self:_refit_width() end)
-    local au = vim.api.nvim_create_autocmd({ "WinResized", "VimResized" }, {
-        desc = "ezdap: re-crop DebugView lines to the window width",
-        callback = function()
-            if self._tree:get_winid() > 0 then self._refit() end
-        end,
-    })
-    self._subs[#self._subs + 1] = function() pcall(vim.api.nvim_del_autocmd, au) end
 end
 
 function DebugView:teardown()
@@ -1048,7 +986,6 @@ function DebugView:_open(focus)
         return
     end
     local bufnr = self:get_bufnr(function() end)
-    self._rendered_width = nil
     -- fixedwin owns the split's creation, width pinning, resize/ratio tracking
     -- and re-pinning across layout changes; we only layer on the view-specific
     -- window options and swap in the tree buffer.
@@ -1061,8 +998,7 @@ function DebugView:_open(focus)
     _setlocal(win, "signcolumn", "no")
     _setlocal(win, "number", false)
     _setlocal(win, "relativenumber", false)
-    -- Lines rendered while hidden were cropped to the fallback width.
-    self:_refit_width()
+    _setlocal(win, "wrap", false)
 end
 
 ---Open the DebugView in a vertical split (or focus if already visible).
