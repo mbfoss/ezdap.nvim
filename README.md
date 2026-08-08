@@ -759,8 +759,8 @@ adapters.myadapter = {
       request     = "launch",
       inputs = {
         command       = { type = "string",  format = "command", required = true, description = "command line to debug" },
-        cwd           = { type = "string",  format = "cwd",     description = "working directory" },
-        env           = { type = "table",   format = "map",     description = "environment variables" },
+        cwd           = { type = "string",  format = "dir",     description = "working directory" },
+        env           = { type = "map",                         description = "environment variables" },
         stop_on_entry = { type = "boolean",                      description = "break at program entry" },
       },
       build = function(params, connect, inputs)
@@ -785,12 +785,16 @@ How the pieces fit:
 
 - **`inputs`** — one entry per accepted value, keyed by the name typed on the
   command line or written in a run file's `parameters`. `type` is what `build`
-  receives (`string`, `boolean`, `integer`, `number`, `table`); `format` says how
-  the authored forms reach that type and drives completion — `file`/`dir`/`cwd`
-  (path expansion), `command` (a command line, taken verbatim; the program and
-  each argument complete as paths), `host`, `port` (range-checked), `map`
-  (`A=1,B=2` → table), `list` (`a,b` → table). Omit `format` and the value is
-  read by `type` alone.
+  receives (`string`, `boolean`, `integer`, `number`, and the two collections
+  `list` — `a,b` — and `map` — `A=1,B=2`, string keys); `format` says how the
+  authored forms reach that type and drives completion — `file`/`dir` (path
+  expansion), `command` (a command line, taken verbatim; the program and each
+  argument complete as paths), `port` (range-checked). A format never changes the
+  `type`, so on a `list`/`map` it describes one *element*: `{ type = "list", format
+  = "dir" }` is a list of directories, each entry expanded and completed as a path.
+  Each scalar type is a format too — the one that constrains nothing — so omitting
+  `format` just names your own `type`, and `{ type = "list", format = "integer" }`
+  is a list of integers.
   The full vocabulary is one row per format in
   [inputs.lua](lua/ezdap/inputs.lua) — every consumer reads those rows, so a new
   format is a single addition there, never a `if format == …` anywhere else.

@@ -83,12 +83,26 @@ The code is layered; higher layers depend on lower ones, not the reverse.
   decision.
 - [inputs.lua](lua/ezdap/inputs.lua) — the input-format registry: one row per
   `ezdap.InputFormat`, each stating every way that format is read — `type` (what
-  `build` receives), `item_type` (what one element of a collection becomes),
-  `schema` (JSON Schema for the typed authored form), `parse` (the string authored
-  form), `seed` (a scaffolded document's starting value) and `complete`
-  (the candidate values a command line offers). Consumers call the five projections
-  (`parse`/`json_schema`/`seed`/`completion`/`item_type`) and **never switch on a format name**;
-  an unknown or absent format falls back to `type` alone. Adding a format is one
+  `build` receives), `schema` (JSON Schema for the typed authored form), `parse`
+  (the string authored form), `seed` (a scaffolded document's starting value) and
+  `complete` (the candidate values a command line offers). Consumers call the five
+  projections (`parse`/`json_schema`/`seed`/`completion`/`item_type`) and **never
+  switch on a format name**; an unknown or absent format falls back to `type` alone.
+
+  A format never changes the declared `type`, so **every row is a scalar**. Being a
+  collection is a `type` — `list` or `map` (string keys) — and a collection's row is
+  the one its *elements* are read by, which is how `list` × `file` says a list of
+  paths without being a row of its own. The projections compose the two: `parse`
+  splits the comma-separated string form and reads each entry, `json_schema` wraps
+  the element schema in an array/object, `completion` completes the entry being
+  typed, `item_type` names what an element becomes.
+
+  A type **is** a format — the one that constrains nothing — so each scalar type has
+  a row too and an input's row is `format` if it names one, `type` otherwise (a
+  collection that names none reads elements as `string`). The lookup is therefore
+  total: every input has a schema, a seed and a reading by construction, no
+  projection carries a fallback ladder, and a `list` of non-strings is said the way
+  a scalar is (`{ type = "list", format = "integer" }`). Adding a format is one
   row here, and every consumer — in both plugins — picks it up.
 
   A value space has two authoring forms, which is why `values` is a per-input union

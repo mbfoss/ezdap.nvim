@@ -30,31 +30,40 @@
 ---@field report    fun(message: string)
 ---@field profile?  string
 
----What an input *is* — the Lua type of the value `build` receives.
+---What an input *is* — the Lua type of the value `build` receives. The two
+---collection types are written comma-separated on a command line ("a,b",
+---"A=1,B=2") and as an array/object in a typed file; a `map`'s keys are strings.
 ---@alias ezdap.InputType
 ---| "string"   # the default
 ---| "boolean"
 ---| "integer"
 ---| "number"
----| "table"    # always needs a `format` to say how the string becomes one
+---| "list"     # a table of entries, each read by `format`
+---| "map"      # a table of `key=value` entries, each value read by `format`
 
 ---Which of the declared formats an input takes — the whole vocabulary lives in
 ---[inputs.lua](../inputs.lua), one row per name, and each row states every way that
 ---format is read: parsed from a command line, described as JSON Schema for a typed
----file, seeded into a scaffolded document, completed on a command line. Omit the
----format and the string form is read by `type` alone: verbatim for a string,
----`tonumber` for a number/integer, true/1/yes or false/0/no for a boolean.
+---file, seeded into a scaffolded document, completed on a command line.
 ---
 ---A format never changes the declared `type` — it only says how to get there, and
----which values are legal on the way. The arrows below are that trip: what you write
----→ what `build` receives.
+---which values are legal on the way. So every format is a scalar one: on a
+---`list`/`map` it describes one **element**, which is how a list of paths is said
+---(`type = "list", format = "file"`) without being a format of its own.
+---
+---Each scalar type is a format too — the one that constrains nothing — so omitting
+---`format` is naming your own `type`, and an element with no format is a `string`.
+---The arrows below are the trip a value makes: what you write → what `build`
+---receives.
 ---@alias ezdap.InputFormat
----| "file"        # → string: a path, expanded
----| "dir"         # → string: a path, expanded (a working directory too)
+---| "string"      # → string: verbatim (what a format-less input already is)
+---| "integer"     # → integer: `tonumber`, rejecting a fraction
+---| "number"      # → number: `tonumber`
+---| "boolean"     # → boolean: true/1/yes or false/0/no
+---| "file"        # → string: a file path, expanded
+---| "dir"         # → string: a directory path, expanded
 ---| "command"     # → string: a command line, verbatim (each token completed as a path)
 ---| "port"        # → integer: range-checked (0-65535)
----| "map"         # → table: "A=1,B=2" → { A = "1", B = "2" }
----| "list"        # → table: "a,b" → { "a", "b" }
 
 ---One declared input of a profile — a `name=value` argument to `:Debug run`, a
 ---`parameters` key in an easytasks tasks file. `type` is what `build` receives;
@@ -71,7 +80,7 @@
 ---outside them reaches `build` unhindered, in either authoring form.
 ---@class ezdap.Input
 ---@field type?        ezdap.InputType    default `string`
----@field format?      ezdap.InputFormat  default: read by `type` alone
+---@field format?      ezdap.InputFormat  default: the plain reading of `type`
 ---@field choices?     string[]  the values this input takes, when they're a fixed set
 ---@field required?    boolean  unset is an error (default false)
 ---@field description? string   a few words on what the input means

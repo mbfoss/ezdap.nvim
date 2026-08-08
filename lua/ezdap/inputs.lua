@@ -30,52 +30,41 @@
 ---row that had to be explained twice. It is now where it belongs, in the `build`
 ---that wants the split (`shared.split_command`).
 ---
----Nothing outside this module switches on a format name; consumers call the
----projections below and let an unknown or absent format fall back to `type` alone.
+---A format never changes the declared `type`, which is why *every row here is a
+---scalar*. Being a collection is a `type` — `list` or `map` — and a collection's
+---row is the one its **elements** are read by, so `list` × `file` is a list of
+---paths and `map` × `port` a mapping to ports, without either being a row. The
+---projections below compose the two.
+---
+---A type is itself a format — the one that constrains nothing — so the plain
+---reading of each scalar is a row here too, and an input's row is `format` if it
+---names one and `type` otherwise. That makes the lookup **total**: every input
+---resolves to a row, so every input has a schema, a seed and a way to be read by
+---construction rather than by a fallback ladder in each projection, and a `list` of
+---anything is said the same way a scalar is (`format = "integer"`). Nothing outside
+---this module switches on a format name; consumers call the projections below.
 
 local M = {}
 
 -- The registry
 
----One format, in all the ways it is read. `parse` may be omitted when the string
----form is just the `type` read back. `seed` is a starting value for a scaffolded
----document; `item_type` is what one element of a collection format becomes.
+---One format, in all the ways it is read — a scalar value, whether it is an
+---input's whole value or one element of a `list`/`map`. `parse` is omitted by the
+---rows whose string form *is* the string; `seed` is a starting value for a
+---scaffolded document.
 ---@class ezdap.FormatDef
 ---@field type       ezdap.InputType   what `build` receives
----@field item_type? ezdap.InputType   what one element becomes, for a collection
 ---@field schema     table               JSON Schema for the typed authored form
+---@field seed       any                 starting value for a scaffolded document
 ---@field parse?     fun(raw: string): any?, string?  the string authored form → a value of `type`
----@field seed?      any                 starting value for a scaffolded document
 ---@field complete?  fun(partial: string): string[]  candidate values, for command lines
 
----Read a raw string as a value of `input_type`. This is the no-format path — the
----string form of a format-less input, and the fallback for a row without a `parse`.
+---Is this a collection type — one whose string form is a comma-separated list of
+---entries, each read by the input's format?
 ---@param input_type ezdap.InputType?
----@param raw string
----@return any? value, string? err
-local function _by_type(input_type, raw)
-    if input_type == nil or input_type == "" or input_type == "string" then
-        return raw
-    elseif input_type == "integer" then
-        local n = tonumber(raw)
-        if not n or n ~= math.floor(n) then
-            return nil, ("expected an integer, got %q"):format(raw)
-        end
-        return math.floor(n)
-    elseif input_type == "number" then
-        local n = tonumber(raw)
-        if not n then return nil, ("expected a number, got %q"):format(raw) end
-        return n
-    elseif input_type == "boolean" then
-        local low = raw:lower()
-        if low == "true" or low == "1" or low == "yes" then return true end
-        if low == "false" or low == "0" or low == "no" then return false end
-        return nil, ("expected a boolean (true/false), got %q"):format(raw)
-    elseif input_type == "table" then
-        -- Nothing about `table` says how a string becomes one — only a format does.
-        return nil, "a table input needs a format (map/list)"
-    end
-    return raw
+---@return boolean
+local function _is_collection(input_type)
+    return input_type == "list" or input_type == "map"
 end
 
 ---@param raw string
@@ -86,8 +75,35 @@ end
 
 ---@param raw string
 ---@return integer? value, string? err
+local function _integer(raw)
+    local n = tonumber(raw)
+    if not n or n ~= math.floor(n) then
+        return nil, ("expected an integer, got %q"):format(raw)
+    end
+    return math.floor(n)
+end
+
+---@param raw string
+---@return number? value, string? err
+local function _number(raw)
+    local n = tonumber(raw)
+    if not n then return nil, ("expected a number, got %q"):format(raw) end
+    return n
+end
+
+---@param raw string
+---@return boolean? value, string? err
+local function _boolean(raw)
+    local low = raw:lower()
+    if low == "true" or low == "1" or low == "yes" then return true end
+    if low == "false" or low == "0" or low == "no" then return false end
+    return nil, ("expected a boolean (true/false), got %q"):format(raw)
+end
+
+---@param raw string
+---@return integer? value, string? err
 local function _port(raw)
-    local n, err = _by_type("integer", raw)
+    local n, err = _integer(raw)
     if err then return nil, err end
     if n < 0 or n > 65535 then
         return nil, ("port out of range (0-65535), got %d"):format(n)
@@ -95,26 +111,37 @@ local function _port(raw)
     return n
 end
 
----Comma-separated list of verbatim strings (each element kept whole, so entries
----may contain spaces — e.g. full LLDB command lines).
+---Read one scalar — an input's whole value, or one element of a collection — by
+---its row. A row with no `parse` is one whose string form is the string itself.
+---@param def ezdap.FormatDef
 ---@param raw string
----@return string[]
-local function _list(raw)
-    return vim.split(raw, ",", { plain = true, trimempty = true })
+---@return any? value, string? err
+local function _read(def, raw)
+    if not def.parse then return raw end
+    return def.parse(raw)
 end
 
----Comma-separated `key=value` pairs — environment variables, source-path
----remappings, anything written as a flat string→string mapping.
+---Read a collection's string form: comma-separated entries, each element kept
+---whole so it may contain spaces (a full LLDB command line), and each `key=value`
+---for a `map` — environment variables, source-path remappings.
+---@param input_type "list"|"map"
+---@param def ezdap.FormatDef  the row its elements are read by
 ---@param raw string
----@return table<string, string>? value, string? err
-local function _map(raw)
+---@return table? value, string? err
+local function _read_collection(input_type, def, raw)
     local out = {}
-    for _, pair in ipairs(vim.split(raw, ",", { plain = true, trimempty = true })) do
-        local eq = pair:find("=", 1, true)
-        if not eq then
-            return nil, ("expected KEY=VALUE pairs, got %q"):format(pair)
+    for _, entry in ipairs(vim.split(raw, ",", { plain = true, trimempty = true })) do
+        local key, text = nil, entry
+        if input_type == "map" then
+            local eq = entry:find("=", 1, true)
+            if not eq then
+                return nil, ("expected KEY=VALUE pairs, got %q"):format(entry)
+            end
+            key, text = entry:sub(1, eq - 1), entry:sub(eq + 1)
         end
-        out[pair:sub(1, eq - 1)] = pair:sub(eq + 1)
+        local value, err = _read(def, text)
+        if err then return nil, err end
+        if key then out[key] = value else out[#out + 1] = value end
     end
     return out
 end
@@ -152,78 +179,78 @@ local function _complete_choices(values)
     end
 end
 
----Every declared `ezdap.InputFormat`. `file`/`dir` differ only in the completion
----they drive, not in the value they produce, which is why `dir` covers a working
----directory too; `command` is a verbatim string the wanting `build` splits itself.
----A host needs no row at all: it is the verbatim string `type` already describes,
----and the addresses worth offering are the adapter's to name as `choices`.
+---Every declared `ezdap.InputFormat`, plus the plain reading of each scalar type —
+---a type *is* a format, the one that constrains nothing, which is what lets an
+---input with no format of its own still resolve to a row. `file`/`dir` differ only
+---in the completion they drive, not in the value they produce, which is why `dir`
+---covers a working directory too; `command` is a verbatim string the wanting
+---`build` splits itself. A host needs no row: it is the plain `string`, and the
+---addresses worth offering are the adapter's to name as `choices`.
 ---@type table<string, ezdap.FormatDef>
 M.formats = {
+    string  = { type = "string", schema = { type = "string" }, seed = "" },
+    integer = { type = "integer", schema = { type = "integer" }, parse = _integer, seed = 0 },
+    number  = { type = "number", schema = { type = "number" }, parse = _number, seed = 0 },
+    boolean = { type = "boolean", schema = { type = "boolean" }, parse = _boolean, seed = false, complete = _complete_choices({ "true", "false" }) },
+
     file    = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("file") },
     dir     = { type = "string", schema = { type = "string" }, parse = _expand, seed = "", complete = _complete_path("dir") },
     command = { type = "string", schema = { type = "string" }, seed = "", complete = _complete_command },
     port    = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _port, seed = 0 },
-    map     = { type = "table", item_type = "string", schema = { type = "object", additionalProperties = { type = "string" } }, parse = _map, seed = {} },
-    list    = { type = "table", item_type = "string", schema = { type = "array", items = { type = "string" } }, parse = _list, seed = {} },
 }
 
 -- Projections
 
----The row for an input's declared format, or nil when it declares none (or one
----this version doesn't know, which is a declaration bug — `type` still answers).
+---The row an input's value is read by: its declared format, else the plain reading
+---of its `type`. For a collection that row is its *elements*' — which is why a
+---`list`/`map` lands on `string` when it names no format. Never nil, so no
+---projection needs a type ladder of its own; an unknown format or type is a
+---declaration bug, and the plainest reading is what answers it.
 ---@param input ezdap.Input?
----@return ezdap.FormatDef?
+---@return ezdap.FormatDef
 local function _def(input)
     local format = input and input.format
-    if format == nil or format == "" then return nil end
-    return M.formats[format]
+    if format ~= nil and format ~= "" and M.formats[format] then
+        return M.formats[format]
+    end
+    local input_type = input and input.type
+    if _is_collection(input_type) then return M.formats.string end
+    return M.formats[input_type] or M.formats.string
 end
 
 ---Read an input's **string form** — a raw `name=value` argument — into a value of
----its declared `type`. The format, when it declares a `parse`, is what does the
----reading; otherwise the string is read by `type` alone.
+---its declared `type`, by the row that reads it. A collection type splits into
+---entries first, and that row reads each of them.
 ---@param input ezdap.Input
 ---@param raw string
 ---@return any? value, string? err
 function M.parse(input, raw)
     local def = _def(input)
-    if not def then return _by_type(input.type, raw) end
-    if not def.parse then return _by_type(def.type, raw) end
-    return def.parse(raw)
+    if _is_collection(input.type) then
+        return _read_collection(input.type --[[@as "list"|"map"]], def, raw)
+    end
+    return _read(def, raw)
 end
 
 ---JSON Schema for an input's **typed form** — how a structured file writes it.
----An input's `choices` are `examples`, not an `enum`: they are offered, never
----required, so the typed form stays as permissive as the command line.
----A fresh table each call: callers annotate it (with the input's `description`)
----and must not reach the registry's own rows.
+---Every input resolves to a row, so every input has a schema: the row's, wrapped
+---in an array/object for a collection. An input's `choices` are `examples`, not an
+---`enum`: they are offered, never required, so the typed form stays as permissive
+---as the command line. A fresh table each call: callers annotate it (with the
+---input's `description`) and must not reach the registry's own rows.
 ---@param input ezdap.Input?
 ---@return table
 function M.json_schema(input)
-    local def = _def(input)
+    -- A collection's row and choices describe one *entry*, so both land on the
+    -- element schema — the array's items, the object's values.
+    local schema = vim.deepcopy(_def(input).schema)
     local choices = input and input.choices
-    if def then
-        local schema = vim.deepcopy(def.schema)
-        if choices then
-            -- A collection's choices are what one *entry* may be, so they describe
-            -- the element schema — the array's items, the object's values.
-            local element = schema.items or schema.additionalProperties or schema
-            element.examples = vim.deepcopy(choices)
-        end
-        return schema
-    end
-    if choices then
-        return { type = (input and input.type) or "string", examples = vim.deepcopy(choices) }
-    end
+    if choices then schema.examples = vim.deepcopy(choices) end
 
     local input_type = input and input.type
-    if input_type == "integer" or input_type == "number" or input_type == "boolean" then
-        return { type = input_type }
-    end
-    -- A format-less `table` has no authoring form at all (`parse` says so); there
-    -- is no schema that makes such a declaration true, so describe it as the string
-    -- it will be written as and let the parse error name the real problem.
-    return { type = "string" }
+    if input_type == "list" then return { type = "array", items = schema } end
+    if input_type == "map" then return { type = "object", additionalProperties = schema } end
+    return schema
 end
 
 ---A starting value for an input in a scaffolded document, appropriate to the form
@@ -231,49 +258,60 @@ end
 ---@param input ezdap.Input?
 ---@return any
 function M.seed(input)
-    local def = _def(input)
-    if def and def.seed ~= nil then return vim.deepcopy(def.seed) end
+    -- A collection is seeded empty whatever its elements are, so its row — which
+    -- describes one element — has nothing to say here.
+    if _is_collection(input and input.type) then return {} end
+    return vim.deepcopy(_def(input).seed)
+end
 
-    local input_type = input and input.type
-    if input_type == "integer" or input_type == "number" then return 0 end
-    if input_type == "boolean" then return false end
-    return ""
+---The part of a collection's string form a value completes: everything before it
+---is kept, everything after is what was typed. A comma starts a fresh entry, and
+---in a `map` the value being completed is what follows that entry's `=`.
+---@param input_type ezdap.InputType?
+---@param partial string
+---@return string head, string tail
+local function _entry_at(input_type, partial)
+    if not _is_collection(input_type) then return "", partial end
+    local head = partial:match("^.*,") or ""
+    if input_type == "map" then
+        head = head .. (partial:sub(#head + 1):match("^[^=]*=") or "")
+    end
+    return head, partial:sub(#head + 1)
 end
 
 ---Candidate values for an input's **string form** — what a command line offers for
----the value half of `name=value`. An input's own `choices` answer first, then its
----type (a boolean is written one of two ways), then its format (paths).
----Empty for an input whose values can't be enumerated.
+---the value half of `name=value`, or for the entry being typed in a collection. An
+---input's own `choices` answer first, then its row (paths, or the two ways a
+---boolean is written). Empty when the values can't be enumerated.
 ---@param input ezdap.Input?
 ---@param partial string?  the value typed so far
 ---@return string[]
 function M.completion(input, partial)
-    partial = partial or ""
     local def = _def(input)
     local choices = input and input.choices
+    local head, tail = _entry_at(input and input.type, partial or "")
 
+    local values
     if choices then
-        -- A collection's string form is comma-separated, so it is the entry being
-        -- typed — everything after the last comma — that a value completes.
-        local head = def and def.item_type and partial:match("^.*,") or ""
-        local tail = partial:sub(#head + 1)
-        return vim.tbl_map(function(v) return head .. v end, _complete_choices(choices)(tail))
+        values = _complete_choices(choices)(tail)
+    elseif def.complete then
+        values = def.complete(tail)
+    else
+        return {}
     end
 
-    local input_type = (def and def.type) or (input and input.type)
-    if input_type == "boolean" then return _complete_choices({ "true", "false" })(partial) end
-
-    if def and def.complete then return def.complete(partial) end
-    return {}
+    if head == "" then return values end
+    return vim.tbl_map(function(v) return head .. v end, values)
 end
 
----What one element of an input's value becomes — a `list` entry, a `map` value.
----Nil for an input that isn't a collection, and for a format-less one.
+---What one element of an input's value becomes — a `list` entry, a `map` value:
+---the type of the row its elements are read by. Nil for an input that isn't a
+---collection.
 ---@param input ezdap.Input?
 ---@return ezdap.InputType?
 function M.item_type(input)
-    local def = _def(input)
-    return def and def.item_type or nil
+    if not _is_collection(input and input.type) then return nil end
+    return _def(input).type
 end
 
 return M
