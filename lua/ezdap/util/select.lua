@@ -73,6 +73,11 @@ local _antiflicker_delay = 200
 
 -- Helpers
 
+---Rows and columns the outermost border eats: `nvim_open_win` draws it on the
+---row and column it is handed, so a float reaches one cell past its geometry.
+---Centring has to allow for it or the picker sits low and to the right.
+local _BORDER_SPAN       = 2
+
 ---@param v number
 ---@param min number
 ---@param max number
@@ -81,11 +86,43 @@ local function _clamp(v, min, max)
     return math.max(min, math.min(max, v))
 end
 
+--- Whether a statusline is drawn at the bottom of the editor. With
+--- `laststatus == 1`, assume no status line
+---@return boolean
+local function _has_statusline()
+    local laststatus = vim.o.laststatus
+    return laststatus ~= 0 and laststatus ~=1
+end
+
+---Editor rows the picker may occupy: everything `vim.o.lines` counts, less the
+---command line and the statusline. Floats are placed relative to the editor,
+---whose row 0 is the top of the screen, so those rows come off the bottom.
+---@return integer
+local function _usable_lines()
+    local reserved = vim.o.cmdheight + (_has_statusline() and 1 or 0)
+    return math.max(1, vim.o.lines - reserved)
+end
+
+---Nudge `span` so the leftover after centring it inside `available` divides in
+---two: the callers' `math.floor` would hand an odd spare cell to the bottom (or
+---the right), so spend it on the picker. Grows, shrinking only if it cannot.
+---@param span integer
+---@param available integer
+---@return integer
+local function _even_gaps(span, available)
+    if (available - span - _BORDER_SPAN) % 2 == 0 then
+        return span
+    elseif span + _BORDER_SPAN < available then
+        return span + 1
+    end
+    return math.max(1, span - 1)
+end
+
 ---@param opts { has_preview:boolean, height_ratio:number?, width_ratio:number? }
 ---@return ezdap.select.Layout
 local function _get_horizontal_layout(opts)
     local cols         = vim.o.columns
-    local lines        = vim.o.lines
+    local lines        = _usable_lines()
 
     local has_preview  = opts.has_preview
     local spacing      = has_preview and 2 or 0
@@ -100,16 +137,26 @@ local function _get_horizontal_layout(opts)
         preview_width = 0
     end
 
-    local total_height = math.ceil(lines * _clamp(opts.height_ratio or 0.7, 0.3, 0.8))
+    -- The spare cell of an odd remainder goes to the float that can take it.
+    local total_width = list_width + preview_width + spacing
+    local grow        = _even_gaps(total_width, cols) - total_width
+    if has_preview and preview_width + grow >= 1 then
+        preview_width = preview_width + grow
+    else
+        list_width = math.max(1, list_width + grow)
+    end
+    total_width        = list_width + preview_width + spacing
+
+    local total_height = _even_gaps(math.ceil(lines * _clamp(opts.height_ratio or 0.7, 0.3, 0.8)), lines)
     local list_height  = _clamp(total_height - 3, 1, lines)
 
-    local row          = math.floor((lines - total_height - 1) / 2)
-    local col          = math.floor((cols - (list_width + preview_width + spacing)) / 2)
+    local row          = math.floor((lines - total_height - _BORDER_SPAN) / 2)
+    local col          = math.floor((cols - total_width - _BORDER_SPAN) / 2)
 
     return {
         prompt_row     = row,
         prompt_col     = col,
-        prompt_width   = list_width + preview_width + spacing,
+        prompt_width   = total_width,
 
         list_row       = row + 3,
         list_col       = col,
