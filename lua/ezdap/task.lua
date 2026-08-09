@@ -211,7 +211,7 @@ M.start            = function(task, callbacks)
                     local category, text = ...
                     if category == "stdout" or category == "stderr" then
                         append_output(text)
-                    else
+                    elseif category ~= "telemetry" then
                         if category ~= "console" then
                             text = ("[%s] %s"):format(category, text)
                         end
