@@ -42,9 +42,9 @@
 ---| "map"      # a table of `key=value` entries, each value read by `format`
 
 ---Which of the declared formats an input takes — the whole vocabulary lives in
----[inputs.lua](../inputs.lua), one row per name, and each row states every way that
----format is read: parsed from a command line, described as JSON Schema for a typed
----file, seeded into a scaffolded document, completed on a command line.
+---[inputs.lua](../inputs.lua), one row per name, each stating every way that format
+---is read: parsed from a command line, checked when it arrives already typed,
+---described as JSON Schema, seeded into a scaffolded document, completed.
 ---
 ---A format never changes the declared `type` — it only says how to get there, and
 ---which values are legal on the way. So every format is a scalar one: on a
@@ -69,11 +69,11 @@
 ---`parameters` key in an easytasks tasks file. `type` is what `build` receives;
 ---`format` says which authored forms reach it (and drives path-aware value
 ---completion). Omit both for an input taken verbatim as a string. An input with
----`required = true` must be supplied — leaving it unset is a resolve error; any
----other input simply arrives at `build` as nil, which a `build` is free to answer
----some other way than by omitting the field (an attach profile asks the user
----to pick a process for an unset `pid`, which is why no adapter marks that input
----`required`).
+---`required = true` must be supplied — leaving it unset, or answering it with an
+---empty string, is a resolve error; any other input simply arrives at `build` as
+---nil, which a `build` is free to answer some other way than by omitting the field
+---(an attach profile asks the user to pick a process for an unset `pid`, which is
+---why no adapter marks that input `required`).
 ---`choices` are the values an input is normally written with, when the adapter
 ---names them itself — a `console`, a mode, a backend. They are offered by
 ---completion and by a typed file's schema (as `examples`), never enforced: a value

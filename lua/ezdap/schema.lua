@@ -109,9 +109,9 @@ end
 
 -- Resolving
 
----Read every declared input from `values`. A string is that input's string form and is
----parsed by its `type`/`format`; any other Lua value is the typed form, taken verbatim.
----Unset inputs are absent from the result (recorded in `missing` when `required`).
+---Read every declared input from `values`, in whichever form it was authored: a
+---string is the string form and is `parse`d, any other Lua value is the typed form
+---and is `read`. Unset inputs are absent (recorded in `missing` when `required`).
 ---@param profile ezdap.Profile
 ---@param values table<string, any>  input name → a value in either authoring form
 ---@return table<string, any> inputs, string[] missing, string[] errs
@@ -119,12 +119,17 @@ local function _read_inputs(profile, values)
     local inputs, missing, errs = {}, {}, {}
     for name, spec in pairs(profile.inputs or {}) do
         local raw = values[name]
-        if raw == nil then
+        -- An input cleared rather than answered (`:Debug run … cwd=`) is one that was
+        -- not supplied: `build` assigns it unconditionally, and only nil drops the field.
+        if raw == nil or raw == "" then
             if spec.required then missing[#missing + 1] = name end
-        elseif type(raw) ~= "string" then
-            inputs[name] = raw
         else
-            local val, cerr = inputs_registry.parse(spec, raw)
+            local val, cerr
+            if type(raw) == "string" then
+                val, cerr = inputs_registry.parse(spec, raw)
+            else
+                val, cerr = inputs_registry.read(spec, raw)
+            end
             if cerr then
                 errs[#errs + 1] = name .. ": " .. cerr
             else
