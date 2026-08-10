@@ -164,8 +164,8 @@ function M.resolve_task(spec, done)
     ---@param err string?
     local function finish(task, err)
         if settled or cancelled then return end
-        settled = true
         done(task, err)
+        settled = true -- set after done() because it may fail and settle with error
     end
 
     local function cancel() cancelled = true end

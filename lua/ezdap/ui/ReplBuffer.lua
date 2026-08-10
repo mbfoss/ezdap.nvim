@@ -1,3 +1,4 @@
+local ui = require "ezdap.util.ui"
 ---@brief DAP REPL buffer.
 ---Uses nvim_open_term to render a prompt-driven REPL with history, cursor
 ---movement, async evaluation, and Tab completion with cycling.
@@ -86,11 +87,15 @@ end
 -- Initialisation
 
 function ReplBuffer:_init(name)
-    local buf = vim.api.nvim_create_buf(true, true)
-    vim.bo[buf].buflisted = true
-    vim.bo[buf].bufhidden = "hide"
+    self._bufnr = ui.create_scratch_buffer(true, {
+        bufhidden = "hide",
+        spelloptions = "noplainbuffer",
+    }, function()
+        self._bufnr = -1
+    end)
+
+    local buf =  self._bufnr
     vim.api.nvim_buf_set_name(buf, name)
-    self._bufnr = buf
 
     self._chan = vim.api.nvim_open_term(buf, {
         on_input = function(_, _, _, data)
