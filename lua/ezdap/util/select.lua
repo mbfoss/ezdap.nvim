@@ -47,7 +47,6 @@ local _antiflicker_delay = 200
 ---@field height_ratio number?
 ---@field width_ratio number?
 ---@field list_wrap boolean?
----@field list_wrap_indent integer?  -- indent for wrapped list lines; defaults to 0 with separators, else 2
 
 ---@class ezdap.select.Layout
 ---@field prompt_row integer
@@ -78,18 +77,13 @@ local _antiflicker_delay = 200
 ---Centring has to allow for it or the picker sits low and to the right.
 local _BORDER_SPAN       = 2
 
--- Helix-style framing: the prompt and the list are one box. The prompt draws the
--- top, the sides and the rule dividing the query from the items; the list draws
--- its sides and the bottom, and nothing of its own where the rule already is --
--- so the two floats read as a single frame. Border order is
--- {tl, t, tr, r, br, b, bl, l}; an empty string means no border there, and no row
--- or column reserved for it. The rule takes its own highlight, a `{char, hl}`
--- pair where the rest is a plain string on `FloatBorder`: it divides the frame
--- rather than bounding it, so it reads better dimmed. Its ends are the plain side
--- character, not a tee, so the sides run straight past it.
+-- Helix-style framing
 local _BORDER_TOP        = { "╭", "─", "╮", "│", "│", { "─", "NonText" }, "│", "│" }
 local _BORDER_BOTTOM     = { "", "", "", "│", "╯", "─", "╰", "│" }
 local _BORDER_FULL       = "rounded"
+
+-- Indent every list row sits at, shared by rendering and wrapped-line indent.
+local _ROW_PREFIX        = "  "
 
 -- Rows the prompt costs: its top border, its single line of text, and the rule.
 local _PROMPT_ROWS       = 3
@@ -365,7 +359,6 @@ local _active_picker = nil
 ---@field preview_timer table?
 ---@field _source_items ezdap.select.ListItem[]
 ---@field _initial integer?
----@field _list_sep_line string?
 ---@field _has_virt_lines boolean
 local Picker = {}
 Picker.__index = Picker
@@ -442,10 +435,6 @@ function Picker:relayout()
         height_ratio = opts.height_ratio,
         width_ratio  = opts.width_ratio,
     }
-
-    if self._has_virt_lines then
-        self._list_sep_line = string.rep("─", self.layout.list_width)
-    end
 
     local base_cfg    = { relative = "editor", style = "minimal" }
     local winhl       = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title"
@@ -529,13 +518,7 @@ function Picker:relayout()
         vim.wo[self.lwin].winhighlight = winhl
         vim.wo[self.lwin].wrap = self.opts.list_wrap ~= false
         vim.wo[self.lwin].cursorline = false
-        -- Indent wrapped lines so continuations read as part of the entry above.
-        -- A separator already delimits entries, so it defaults that case to 0.
-        local wrap_indent = opts.list_wrap_indent or (self._has_virt_lines and 0 or 2)
-        if wrap_indent > 0 then
-            vim.wo[self.lwin].breakindent = true
-            vim.wo[self.lwin].breakindentopt = "shift:" .. wrap_indent
-        end
+        vim.wo[self.lwin].breakindent = true
     else
         vim.api.nvim_win_set_config(self.lwin, vim.tbl_extend("force", base_cfg, {
             row    = self.layout.list_row,
@@ -632,7 +615,7 @@ end
 
 function Picker:render_list()
     if not self.lbuf then return end
-    local prefix   = "  "
+    local prefix   = _ROW_PREFIX
     local lines    = {}
     local extmarks = {}
 
@@ -663,14 +646,11 @@ function Picker:render_list()
             end
         end
 
-        -- Display-only lines hung under the entry: the item's own `virt_line`
-        -- (aligned with the label by the row prefix) then the separator rule.
+        -- Display-only line hung under the entry: the item's own `virt_line`,
+        -- aligned with the label by the row prefix.
         local vlines = {}
         if item.virt_line then
-            table.insert(vlines, vim.list_extend({ { prefix } }, item.virt_line))
-        end
-        if self._list_sep_line then
-            table.insert(vlines, { { self._list_sep_line, "NonText" } })
+            table.insert(vlines, vim.list_extend({ { prefix }, {"╰─ ", "NonText"} }, item.virt_line))
         end
         if #vlines > 0 then
             table.insert(extmarks, {
@@ -710,7 +690,7 @@ function Picker:_reveal_virt_lines(row)
     if not item then return end
 
     local nvirt = item.virt_line and 1 or 0
-    if nvirt == 0 and not self._list_sep_line then return end
+    if nvirt == 0 then return end
 
     vim.api.nvim_win_call(self.lwin, function()
         -- Screen height of the entry's own text (wrapped rows, excluding virt_lines).
