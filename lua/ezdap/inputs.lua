@@ -1,13 +1,17 @@
----@brief The input-format registry: one row per `ezdap.InputFormat`.
+---@brief The input registry: one row per scalar `ezdap.InputType`, plus one per
+---`ezdap.InputFormat` refining the type it names.
 
 local M = {}
 
----@class ezdap.FormatDef
+---One scalar reading, in every form it is read: an input's whole value, or one
+---entry of a `list`/`map`. A row with no `parse` is one whose string form is the
+---string itself.
+---@class ezdap.InputDef
 ---@field type       ezdap.InputType   what `build` receives
 ---@field schema     table               JSON Schema for the typed authored form
 ---@field seed       any                 starting value for a scaffolded document
 ---@field parse?     fun(raw: string): any?, string?  the string authored form → a value of `type`
----@field check?     fun(value: any): string?  reject a value of the right `type` the format doesn't take
+---@field check?     fun(value: any): string?  reject a value of the right `type` this row doesn't take
 ---@field complete?  fun(partial: string): string[]  candidate values, for command lines
 
 ---@param input_type ezdap.InputType?
@@ -87,7 +91,7 @@ end
 ---Hold one scalar to its row: the shape its `type` names, then whatever the row
 ---itself refuses. Both forms pass through here — a parsed string on its way out of
 ---`parse`, a typed value on its way in.
----@param def ezdap.FormatDef
+---@param def ezdap.InputDef
 ---@param value any
 ---@return string? err
 local function _check(def, value)
@@ -99,7 +103,7 @@ end
 
 ---Read one scalar — an input's whole value, or one element of a collection — by
 ---its row. A row with no `parse` is one whose string form is the string itself.
----@param def ezdap.FormatDef
+---@param def ezdap.InputDef
 ---@param raw string
 ---@return any? value, string? err
 local function _read(def, raw)
@@ -118,7 +122,7 @@ end
 ---whole so it may contain spaces (a full LLDB command line), and each `key=value`
 ---for a `map` — environment variables, source-path remappings.
 ---@param input_type "list"|"map"
----@param def ezdap.FormatDef  the row its elements are read by
+---@param def ezdap.InputDef  the row its elements are read by
 ---@param raw string
 ---@return table? value, string? err
 local function _read_collection(input_type, def, raw)
@@ -183,29 +187,41 @@ local function _complete_choices(values)
     end
 end
 
----@type table<string, ezdap.FormatDef>
-M.formats = {
+---The plain reading of each scalar type — what an input says when it names no
+---format, and what a collection's entries are read as.
+---@type table<string, ezdap.InputDef>
+M.types = {
     string  = { type = "string", schema = { type = "string" }, seed = "" },
     integer = { type = "integer", schema = { type = "integer" }, parse = _integer, seed = 0 },
     number  = { type = "number", schema = { type = "number" }, parse = _number, seed = 0 },
     boolean = { type = "boolean", schema = { type = "boolean" }, parse = _boolean, seed = false, complete = _complete_choices({ "true", "false" }) },
+}
 
+---Each format is a narrower reading of the type it names — a string that is a
+---path, an integer that is a port — so a row here says which type it refines and
+---then only what that plain reading doesn't.
+---@type table<string, ezdap.InputDef>
+M.formats = {
     file    = { type = "string", schema = { type = "string" }, parse = _path, seed = "", complete = _complete_path("file") },
     dir     = { type = "string", schema = { type = "string" }, parse = _path, seed = "", complete = _complete_path("dir") },
     command = { type = "string", schema = { type = "string" }, seed = "", complete = _complete_command },
     port    = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _integer, check = _port_range, seed = 0 },
 }
 
+---The row one input's values are read by: its format when it names one, its type
+---otherwise — and for a collection, the row its *entries* answer to, which is why
+---a formatless one reads them as strings. Unknown names fall back to `string`, so
+---every input resolves to a row.
 ---@param input ezdap.Input?
----@return ezdap.FormatDef
+---@return ezdap.InputDef
 local function _def(input)
     local format = input and input.format
-    if format ~= nil and format ~= "" and M.formats[format] then
+    if format ~= nil and M.formats[format] then
         return M.formats[format]
     end
     local input_type = input and input.type
-    if _is_collection(input_type) then return M.formats.string end
-    return M.formats[input_type] or M.formats.string
+    if _is_collection(input_type) then return M.types.string end
+    return M.types[input_type] or M.types.string
 end
 
 ---@param input ezdap.Input?

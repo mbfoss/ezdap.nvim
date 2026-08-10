@@ -10,27 +10,28 @@
 ---@field report    fun(message: string)
 ---@field profile?  string
 
+---What an input's value *is*. A collection holds entries read as scalars — as
+---strings, or by whatever `format` refines them to.
 ---@alias ezdap.InputType
 ---| "string"   # the default
 ---| "boolean"
 ---| "integer"
 ---| "number"
----| "list"     # a table of entries, each read by `format`
----| "map"      # a table of `key=value` entries, each value read by `format`
+---| "list"     # a table of entries
+---| "map"      # a table of `key=value` entries
 
+---An optional refinement of the reading: a narrower value than its type alone
+---takes, or one completed differently. Each names the type it refines, which is
+---the type a collection's entries then take.
 ---@alias ezdap.InputFormat
----| "string"      # → string: verbatim (what a format-less input already is)
----| "integer"     # → integer: `tonumber`, rejecting a fraction
----| "number"      # → number: `tonumber`
----| "boolean"     # → boolean: true/1/yes or false/0/no
----| "file"        # → string: a file path, expanded
----| "dir"         # → string: a directory path, expanded
----| "command"     # → string: a command line, verbatim (each token completed as a path)
----| "port"        # → integer: range-checked (0-65535)
+---| "file"        # string: a file path, normalized
+---| "dir"         # string: a directory path, normalized
+---| "command"     # string: a command line, verbatim (each token completed as a path)
+---| "port"        # integer: range-checked (0-65535)
 
 ---@class ezdap.Input
 ---@field type?        ezdap.InputType    default `string`
----@field format?      ezdap.InputFormat  default: the plain reading of `type`
+---@field format?      ezdap.InputFormat  refines the reading; for a collection, its entries'
 ---@field choices?     string[]  the values this input takes, when they're a fixed set
 ---@field required?    boolean  unset is an error (default false)
 ---@field description? string   a few words on what the input means
