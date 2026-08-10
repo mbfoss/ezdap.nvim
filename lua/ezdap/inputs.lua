@@ -152,6 +152,16 @@ M.formats = {
 ---@field kind    "list"|"map"|nil  nil for a scalar input
 ---@field choices string[]?
 
+---A mistake in how an input was *declared*, not in the value answering it: the
+---profile's `inputs` table says something that can't be read. Said so, because it
+---reaches the user down the same path as "expected an integer, got …".
+---@param msg string
+---@param ... any
+---@return string
+local function _decl_err(msg, ...)
+    return "Error in adapter definition - invalid input: " .. msg:format(...)
+end
+
 ---@param input_type ezdap.InputType?
 ---@return "list"|"map"|nil
 local function _collection_kind(input_type)
@@ -180,8 +190,8 @@ local function _scalar_def(type_name, format_name, what)
     if fmt then
         if scalar and scalar ~= fmt.extends then
             return M.types[scalar] or M.types.string, nil,
-                ("%s %q extends %s, but the input is declared %s")
-                :format(what, format_name, fmt.extends, scalar)
+                _decl_err("%s %q extends %s, but the input is declared %s",
+                    what, format_name, fmt.extends, scalar)
         end
         return M.types[fmt.extends], fmt
     end
@@ -197,15 +207,15 @@ end
 local function _stray_decl(input, kind)
     if kind then
         if input.format then
-            return ("format %q: a collection declares its entries with item_format"):format(input.format)
+            return _decl_err("format %q: a collection declares its entries with item_format", input.format)
         end
         if _collection_kind(input.item_type) then
-            return ("item_type %q: a collection's entries are scalars"):format(input.item_type)
+            return _decl_err("item_type %q: a collection's entries are scalars", input.item_type)
         end
         return nil
     end
     local stray = input.item_type and "item_type" or input.item_format and "item_format"
-    return stray and ("%s: only a list or map declares entries"):format(stray) or nil
+    return stray and _decl_err("%s: only a list or map declares entries", stray) or nil
 end
 
 ---An input as the rows that read it. A collection declares its *entries* separately
