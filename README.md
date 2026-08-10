@@ -786,14 +786,15 @@ How the pieces fit:
 - **`inputs`** — one entry per accepted value, keyed by the name typed on the
   command line or written in a run file's `parameters`. `type` is what `build`
   receives (`string`, `boolean`, `integer`, `number`, and the two collections
-  `list` — `a,b` — and `map` — `A=1,B=2`, string keys). `type` alone says
-  everything for a plain value; the optional `format` only *refines* it — a
-  narrower reading and its own completion — `file`/`dir` (path normalization),
-  `command` (a command line, taken verbatim; the program and each argument complete
-  as paths), `port` (an integer, range-checked). A format never introduces a value
-  its type couldn't hold, and on a `list`/`map` it describes one *element*:
-  `{ type = "list", format = "dir" }` is a list of directories, each normalized and
-  completed as a path, while a formatless collection holds strings.
+  `list` — `a,b` — and `map` — `A=1,B=2`, string keys). `type` alone says everything
+  for a plain value; the optional `format` **extends** one type with a narrower
+  reading of the same value — `file`/`dir` (a string, normalized and completed as a
+  path), `command` (a string taken verbatim, its program and each argument completed
+  as paths), `port` (an integer, range-checked). The value stays the type's, so
+  naming a `type` the format doesn't extend is an error, and naming only the format
+  (`{ format = "port" }`) lets it stand for the type it extends. On a `list`/`map`
+  the format describes one *element*: `{ type = "list", format = "dir" }` is a list
+  of directories, while a formatless collection holds strings.
   The full vocabulary is one row per type and per format in
   [inputs.lua](lua/ezdap/inputs.lua) — every consumer reads those rows, so a new
   format is a single addition there, never a `if format == …` anywhere else.

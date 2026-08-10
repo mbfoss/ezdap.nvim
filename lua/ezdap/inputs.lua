@@ -1,18 +1,28 @@
----@brief The input registry: one row per scalar `ezdap.InputType`, plus one per
----`ezdap.InputFormat` refining the type it names.
+---@brief The input registry: one row per scalar `ezdap.InputType`, and one per
+---`ezdap.InputFormat` extending the type it names.
 
 local M = {}
 
----One scalar reading, in every form it is read: an input's whole value, or one
----entry of a `list`/`map`. A row with no `parse` is one whose string form is the
----string itself.
+---One scalar type, in every form it is read: an input's whole value, or one entry
+---of a `list`/`map`. A row with no `parse` is one whose string form is the string
+---itself.
 ---@class ezdap.InputDef
 ---@field type       ezdap.InputType   what `build` receives
 ---@field schema     table               JSON Schema for the typed authored form
 ---@field seed       any                 starting value for a scaffolded document
 ---@field parse?     fun(raw: string): any?, string?  the string authored form → a value of `type`
----@field check?     fun(value: any): string?  reject a value of the right `type` this row doesn't take
 ---@field complete?  fun(partial: string): string[]  candidate values, for command lines
+
+---A format **extends** one type row: the type still says what the value is, reads
+---it and seeds it, and the format only adds to that reading. Every field is
+---optional because every field is an addition — a format that stated the whole
+---reading would be a type.
+---@class ezdap.FormatDef
+---@field extends    ezdap.InputType   the type this narrows; the value stays that type
+---@field schema?    table               constraints merged onto the type's schema
+---@field refine?    fun(value: any): any  normalize an accepted value (a path, expanded)
+---@field check?     fun(value: any): string?  reject a value of that type this format doesn't take
+---@field complete?  fun(partial: string): string[]  candidates, in place of the type's
 
 ---@param input_type ezdap.InputType?
 ---@return boolean
@@ -88,34 +98,38 @@ local function _show(value)
     return vim.inspect(value)
 end
 
----Hold one scalar to its row: the shape its `type` names, then whatever the row
----itself refuses. Both forms pass through here — a parsed string on its way out of
----`parse`, a typed value on its way in.
+---Hold one scalar to its type, then to the format extending it: the shape the type
+---names, the format's own normalization, then what the format refuses. Both forms
+---pass through here — a parsed string leaving `parse`, a typed value entering `read`.
 ---@param def ezdap.InputDef
+---@param fmt ezdap.FormatDef?
 ---@param value any
----@return string? err
-local function _check(def, value)
+---@return any? value, string? err
+local function _accept(def, fmt, value)
     if not _is_type[def.type](value) then
-        return ("expected %s, got %s"):format(def.type, _show(value))
+        return nil, ("expected %s, got %s"):format(def.type, _show(value))
     end
-    return def.check and def.check(value) or nil
+    if not fmt then return value end
+    if fmt.refine then value = fmt.refine(value) end
+    local err = fmt.check and fmt.check(value)
+    if err then return nil, err end
+    return value
 end
 
 ---Read one scalar — an input's whole value, or one element of a collection — by
----its row. A row with no `parse` is one whose string form is the string itself.
+---its type row. A row with no `parse` is one whose string form is the string itself.
 ---@param def ezdap.InputDef
+---@param fmt ezdap.FormatDef?
 ---@param raw string
 ---@return any? value, string? err
-local function _read(def, raw)
+local function _read(def, fmt, raw)
     local value = raw
     if def.parse then
         local err
         value, err = def.parse(raw)
         if err then return nil, err end
     end
-    local err = _check(def, value)
-    if err then return nil, err end
-    return value
+    return _accept(def, fmt, value)
 end
 
 ---Read a collection's string form: comma-separated entries, each element kept
@@ -123,9 +137,10 @@ end
 ---for a `map` — environment variables, source-path remappings.
 ---@param input_type "list"|"map"
 ---@param def ezdap.InputDef  the row its elements are read by
+---@param fmt ezdap.FormatDef?
 ---@param raw string
 ---@return table? value, string? err
-local function _read_collection(input_type, def, raw)
+local function _read_collection(input_type, def, fmt, raw)
     local out = {}
     for _, entry in ipairs(vim.split(raw, ",", { plain = true, trimempty = true })) do
         local key, text = nil, entry
@@ -136,7 +151,7 @@ local function _read_collection(input_type, def, raw)
             end
             key, text = entry:sub(1, eq - 1), entry:sub(eq + 1)
         end
-        local value, err = _read(def, text)
+        local value, err = _read(def, fmt, text)
         if err then return nil, err end
         if key then out[key] = value else out[#out + 1] = value end
     end
@@ -197,55 +212,60 @@ M.types = {
     boolean = { type = "boolean", schema = { type = "boolean" }, parse = _boolean, seed = false, complete = _complete_choices({ "true", "false" }) },
 }
 
----Each format is a narrower reading of the type it names — a string that is a
----path, an integer that is a port — so a row here says which type it refines and
----then only what that plain reading doesn't.
----@type table<string, ezdap.InputDef>
+---Each format extends one type above with a narrower reading of the same value —
+---a string that is a path, an integer that is a port. Nothing a type already
+---answers (how the value is parsed, seeded, what it is) is restated here.
+---@type table<string, ezdap.FormatDef>
 M.formats = {
-    file    = { type = "string", schema = { type = "string" }, parse = _path, seed = "", complete = _complete_path("file") },
-    dir     = { type = "string", schema = { type = "string" }, parse = _path, seed = "", complete = _complete_path("dir") },
-    command = { type = "string", schema = { type = "string" }, seed = "", complete = _complete_command },
-    port    = { type = "integer", schema = { type = "integer", minimum = 0, maximum = 65535 }, parse = _integer, check = _port_range, seed = 0 },
+    file    = { extends = "string", refine = _path, complete = _complete_path("file") },
+    dir     = { extends = "string", refine = _path, complete = _complete_path("dir") },
+    command = { extends = "string", complete = _complete_command },
+    port    = { extends = "integer", schema = { minimum = 0, maximum = 65535 }, check = _port_range },
 }
 
----The row one input's values are read by: its format when it names one, its type
----otherwise — and for a collection, the row its *entries* answer to, which is why
----a formatless one reads them as strings. Unknown names fall back to `string`, so
----every input resolves to a row.
+---The type row an input's values are read by, and the format extending it. The
+---declared `type` decides, so a format that extends another type doesn't apply and
+---is reported; for a collection the type named is its *entries'*, which a format
+---may name on its own. Unknown or unnamed is `string`, so the lookup is total.
 ---@param input ezdap.Input?
----@return ezdap.InputDef
+---@return ezdap.InputDef def, ezdap.FormatDef? fmt, string? err
 local function _def(input)
-    local format = input and input.format
-    if format ~= nil and M.formats[format] then
-        return M.formats[format]
+    local declared = input and input.type
+    local scalar = not _is_collection(declared) and declared or nil
+    local fmt = input and input.format and M.formats[input.format] or nil
+    if fmt then
+        if scalar and scalar ~= fmt.extends then
+            return M.types[scalar] or M.types.string, nil,
+                ("format %q extends %s, but the input is declared %s")
+                :format(input.format, fmt.extends, scalar)
+        end
+        return M.types[fmt.extends], fmt
     end
-    local input_type = input and input.type
-    if _is_collection(input_type) then return M.types.string end
-    return M.types[input_type] or M.types.string
+    return M.types[scalar] or M.types.string
 end
 
 ---@param input ezdap.Input?
 ---@param raw string
 ---@return any? value, string? err
 function M.parse(input, raw)
-    local def = _def(input)
+    local def, fmt, err = _def(input)
+    if err then return nil, err end
     local input_type = input and input.type
     if _is_collection(input_type) then
-        return _read_collection(input_type --[[@as "list"|"map"]], def, raw)
+        return _read_collection(input_type --[[@as "list"|"map"]], def, fmt, raw)
     end
-    return _read(def, raw)
+    return _read(def, fmt, raw)
 end
 
 ---@param input ezdap.Input?
 ---@param value any
 ---@return any? value, string? err
 function M.read(input, value)
-    local def = _def(input)
+    local def, fmt, err = _def(input)
+    if err then return nil, err end
     local input_type = input and input.type
     if not _is_collection(input_type) then
-        local err = _check(def, value)
-        if err then return nil, err end
-        return value
+        return _accept(def, fmt, value)
     end
 
     if type(value) ~= "table" then
@@ -254,24 +274,31 @@ function M.read(input, value)
     if input_type == "list" and not vim.islist(value) then
         return nil, "expected a list of entries, got a keyed table"
     end
-    -- A collection's row describes one entry, so that is what each of them answers to.
+    -- A collection's type and format describe one entry, so that is what each of them
+    -- answers to. A refined entry is a new value, so the collection is rebuilt rather
+    -- than the caller's own table written through.
+    local out = {}
     for key, item in pairs(value) do
         if input_type == "map" and type(key) ~= "string" then
             return nil, ("expected string keys, got %s"):format(_show(key))
         end
-        local err = _check(def, item)
-        if err then return nil, ("%s: %s"):format(key, err) end
+        local entry, entry_err = _accept(def, fmt, item)
+        if entry_err then return nil, ("%s: %s"):format(key, entry_err) end
+        out[key] = entry
     end
-    if input_type == "map" and next(value) == nil then return vim.empty_dict() end
-    return value
+    if input_type == "map" and next(out) == nil then return vim.empty_dict() end
+    return out
 end
 
 ---@param input ezdap.Input?
 ---@return table
 function M.json_schema(input)
-    -- A collection's row and choices describe one *entry*, so both land on the
-    -- element schema — the array's items, the object's values.
-    local schema = vim.deepcopy(_def(input).schema)
+    -- A collection's type, format and choices describe one *entry*, so all three land
+    -- on the element schema — the array's items, the object's values. A format only
+    -- constrains what its type already said, so its schema is merged onto it.
+    local def, fmt = _def(input)
+    local schema = vim.deepcopy(def.schema)
+    if fmt and fmt.schema then schema = vim.tbl_extend("force", schema, vim.deepcopy(fmt.schema)) end
     local choices = input and input.choices
     if choices then schema.examples = vim.deepcopy(choices) end
 
@@ -288,7 +315,8 @@ end
 function M.seed(input)
     -- A collection is seeded empty whatever its elements are, so its row — which
     -- describes one element — has nothing to say here. An empty table encodes as a
-    -- JSON array, which is why a map is seeded with the one that doesn't.
+    -- JSON array, which is why a map is seeded with the one that doesn't. A format
+    -- narrows a value, never starts a different one, so the type row seeds either way.
     local input_type = input and input.type
     if input_type == "map" then return vim.empty_dict() end
     if _is_collection(input_type) then return {} end
@@ -319,16 +347,18 @@ end
 ---@param partial string?  the value typed so far
 ---@return string[]
 function M.completion(input, partial)
-    local def = _def(input)
+    local def, fmt = _def(input)
     local choices = input and input.choices
     local head, tail = _entry_at(input and input.type, partial or "")
     if not head or not tail then return {} end
 
+    -- A format completes in place of its type: it is the narrower set of the two.
+    local complete = (fmt and fmt.complete) or def.complete
     local values
     if choices then
         values = _complete_choices(choices)(tail)
-    elseif def.complete then
-        values = def.complete(tail)
+    elseif complete then
+        values = complete(tail)
     else
         return {}
     end

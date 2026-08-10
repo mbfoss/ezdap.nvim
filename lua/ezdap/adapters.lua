@@ -20,18 +20,20 @@
 ---| "list"     # a table of entries
 ---| "map"      # a table of `key=value` entries
 
----An optional refinement of the reading: a narrower value than its type alone
----takes, or one completed differently. Each names the type it refines, which is
----the type a collection's entries then take.
+---An optional *extension* of a type: the value stays that type, read the same way,
+---and the format only narrows it — normalizing it, refusing part of its range or
+---completing it differently. Each names the type it extends.
 ---@alias ezdap.InputFormat
----| "file"        # string: a file path, normalized
----| "dir"         # string: a directory path, normalized
----| "command"     # string: a command line, verbatim (each token completed as a path)
----| "port"        # integer: range-checked (0-65535)
+---| "file"        # extends string: a file path, normalized
+---| "dir"         # extends string: a directory path, normalized
+---| "command"     # extends string: a command line, verbatim (each token completed as a path)
+---| "port"        # extends integer: range-checked (0-65535)
 
+---A `format` on a collection extends its *entries*. Naming a `type` the format
+---doesn't extend is an error; naming only the format lets it stand for its type.
 ---@class ezdap.Input
 ---@field type?        ezdap.InputType    default `string`
----@field format?      ezdap.InputFormat  refines the reading; for a collection, its entries'
+---@field format?      ezdap.InputFormat  an extension of `type`
 ---@field choices?     string[]  the values this input takes, when they're a fixed set
 ---@field required?    boolean  unset is an error (default false)
 ---@field description? string   a few words on what the input means
