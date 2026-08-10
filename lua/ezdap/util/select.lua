@@ -52,7 +52,7 @@ local _antiflicker_delay = 200
 ---@class ezdap.select.Layout
 ---@field prompt_row integer
 ---@field prompt_col integer
----@field prompt_width integer
+---@field prompt_width integer  -- same as `list_width`: they share one frame
 ---@field list_row integer
 ---@field list_col integer
 ---@field list_width integer
@@ -77,6 +77,22 @@ local _antiflicker_delay = 200
 ---row and column it is handed, so a float reaches one cell past its geometry.
 ---Centring has to allow for it or the picker sits low and to the right.
 local _BORDER_SPAN       = 2
+
+-- Helix-style framing: the prompt and the list are one box. The prompt draws the
+-- top, the sides and the rule dividing the query from the items; the list draws
+-- its sides and the bottom, and nothing of its own where the rule already is --
+-- so the two floats read as a single frame. Border order is
+-- {tl, t, tr, r, br, b, bl, l}; an empty string means no border there, and no row
+-- or column reserved for it. The rule takes its own highlight, a `{char, hl}`
+-- pair where the rest is a plain string on `FloatBorder`: it divides the frame
+-- rather than bounding it, so it reads better dimmed. Its ends are the plain side
+-- character, not a tee, so the sides run straight past it.
+local _BORDER_TOP        = { "╭", "─", "╮", "│", "│", { "─", "NonText" }, "│", "│" }
+local _BORDER_BOTTOM     = { "", "", "", "│", "╯", "─", "╰", "│" }
+local _BORDER_FULL       = "rounded"
+
+-- Rows the prompt costs: its top border, its single line of text, and the rule.
+local _PROMPT_ROWS       = 3
 
 ---@param v number
 ---@param min number
@@ -148,7 +164,9 @@ local function _get_horizontal_layout(opts)
     total_width        = list_width + preview_width + spacing
 
     local total_height = _even_gaps(math.ceil(lines * _clamp(opts.height_ratio or 0.7, 0.3, 0.8)), lines)
-    local list_height  = _clamp(total_height - 3, 1, lines)
+    -- The frame's shared edge costs one row, not two: the prompt's text and rule
+    -- sit above the list, and only the list's bottom border closes it.
+    local list_height  = _clamp(total_height - (_PROMPT_ROWS - 1), 1, lines)
 
     local row          = math.floor((lines - total_height - _BORDER_SPAN) / 2)
     local col          = math.floor((cols - total_width - _BORDER_SPAN) / 2)
@@ -156,17 +174,20 @@ local function _get_horizontal_layout(opts)
     return {
         prompt_row     = row,
         prompt_col     = col,
-        prompt_width   = total_width,
+        -- The prompt spans the list alone; the two share one frame.
+        prompt_width   = list_width,
 
-        list_row       = row + 3,
+        list_row       = row + _PROMPT_ROWS,
         list_col       = col,
         list_width     = list_width,
         list_height    = list_height,
 
-        preview_row    = row + 3,
+        -- Its top border lands on the prompt's, and its height is the rows
+        -- between the two, so it closes level with the frame beside it.
+        preview_row    = row,
         preview_col    = col + list_width + spacing,
         preview_width  = preview_width,
-        preview_height = list_height,
+        preview_height = list_height + _PROMPT_ROWS - 1,
     }
 end
 
@@ -426,7 +447,7 @@ function Picker:relayout()
         self._list_sep_line = string.rep("─", self.layout.list_width)
     end
 
-    local base_cfg    = { relative = "editor", style = "minimal", border = "rounded" }
+    local base_cfg    = { relative = "editor", style = "minimal" }
     local winhl       = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title"
 
     -- Prompt window
@@ -443,6 +464,7 @@ function Picker:relayout()
             col       = self.layout.prompt_col,
             width     = self.layout.prompt_width,
             height    = 1,
+            border    = _BORDER_TOP,
             title     = title,
             title_pos = "center",
         }), function()
@@ -473,11 +495,16 @@ function Picker:relayout()
             end,
         })
     else
+        -- `nvim_win_set_config` resets what it is not handed, so the border and
+        -- the title come along on every move.
         vim.api.nvim_win_set_config(self.pwin, vim.tbl_extend("force", base_cfg, {
-            row    = self.layout.prompt_row,
-            col    = self.layout.prompt_col,
-            width  = self.layout.prompt_width,
-            height = 1,
+            row       = self.layout.prompt_row,
+            col       = self.layout.prompt_col,
+            width     = self.layout.prompt_width,
+            height    = 1,
+            border    = _BORDER_TOP,
+            title     = title,
+            title_pos = "center",
         }))
     end
 
@@ -494,6 +521,7 @@ function Picker:relayout()
             col    = self.layout.list_col,
             width  = self.layout.list_width,
             height = self.layout.list_height,
+            border = _BORDER_BOTTOM,
         }), function()
             self.lwin = nil
             if not self.closed then vim.schedule(function() self:close() end) end
@@ -514,6 +542,7 @@ function Picker:relayout()
             col    = self.layout.list_col,
             width  = self.layout.list_width,
             height = self.layout.list_height,
+            border = _BORDER_BOTTOM,
         }))
     end
 
@@ -533,6 +562,7 @@ function Picker:relayout()
                 col    = self.layout.preview_col,
                 width  = self.layout.preview_width,
                 height = self.layout.preview_height,
+                border = _BORDER_FULL,
             }), function()
                 self.vwin = nil
             end)
@@ -544,6 +574,7 @@ function Picker:relayout()
                 col    = self.layout.preview_col,
                 width  = self.layout.preview_width,
                 height = self.layout.preview_height,
+                border = _BORDER_FULL,
             }))
         end
         self:update_preview()
