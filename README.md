@@ -791,10 +791,13 @@ How the pieces fit:
   reading of the same value — `file`/`dir` (a string, normalized and completed as a
   path), `command` (a string taken verbatim, its program and each argument completed
   as paths), `port` (an integer, range-checked). The value stays the type's, so
-  naming a `type` the format doesn't extend is an error, and naming only the format
-  (`{ format = "port" }`) lets it stand for the type it extends. On a `list`/`map`
-  the format describes one *element*: `{ type = "list", format = "dir" }` is a list
-  of directories, while a formatless collection holds strings.
+  naming a `type` the format doesn't extend is an error — but the two are one flat
+  vocabulary to write in, so `{ type = "port" }` and `{ format = "port" }` both say
+  a range-checked integer. A `list`/`map`
+  declares one *element* the same way, under `item_type`/`item_format`: `{ type =
+  "list", item_format = "dir" }` is a list of directories, `{ type = "map",
+  item_type = "integer" }` a map of integers, and a collection that declares neither
+  holds strings.
   The full vocabulary is one row per type and per format in
   [inputs.lua](lua/ezdap/inputs.lua) — every consumer reads those rows, so a new
   format is a single addition there, never a `if format == …` anywhere else.

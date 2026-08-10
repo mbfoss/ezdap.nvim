@@ -223,25 +223,49 @@ M.formats = {
     port    = { extends = "integer", schema = { minimum = 0, maximum = 65535 }, check = _port_range },
 }
 
----The type row an input's values are read by, and the format extending it. The
----declared `type` decides, so a format that extends another type doesn't apply and
----is reported; for a collection the type named is its *entries'*, which a format
----may name on its own. Unknown or unnamed is `string`, so the lookup is total.
----@param input ezdap.Input?
+---One scalar's row and the format extending it, from the pair of names that
+---declared them. The type decides, so a format that extends another type doesn't
+---apply and is reported. Unknown or unnamed is `string`, so the lookup is total.
+---@param type_name string?    the declared type, if any
+---@param format_name string?  the declared format, if any
+---@param what string          how the two are spelled, for the error message
 ---@return ezdap.InputDef def, ezdap.FormatDef? fmt, string? err
-local function _def(input)
-    local declared = input and input.type
-    local scalar = not _is_collection(declared) and declared or nil
-    local fmt = input and input.format and M.formats[input.format] or nil
+local function _scalar_def(type_name, format_name, what)
+    -- Authors see one flat vocabulary, so a format may be named in the type slot and
+    -- stands for the type it extends. An explicit format still decides — a type that
+    -- named a different one is then the disagreement reported below.
+    local named = type_name and M.formats[type_name]
+    if named then
+        format_name, type_name = format_name or type_name, named.extends
+    end
+    local scalar = not _is_collection(type_name) and type_name or nil
+    local fmt = format_name and M.formats[format_name] or nil
     if fmt then
         if scalar and scalar ~= fmt.extends then
             return M.types[scalar] or M.types.string, nil,
-                ("format %q extends %s, but the input is declared %s")
-                :format(input.format, fmt.extends, scalar)
+                ("%s %q extends %s, but the input is declared %s")
+                :format(what, format_name, fmt.extends, scalar)
         end
         return M.types[fmt.extends], fmt
     end
     return M.types[scalar] or M.types.string
+end
+
+---The row an input's values are read by, and the format extending it. A collection
+---declares its *entries* separately — `item_type`/`item_format`, so a list of paths
+---and a list of integers are both sayable — and a scalar its own `type`/`format`.
+---@param input ezdap.Input?
+---@return ezdap.InputDef def, ezdap.FormatDef? fmt, string? err
+local function _def(input)
+    input = input or {}
+    if not _is_collection(input.type) then
+        return _scalar_def(input.type, input.format, "format")
+    end
+    if input.item_type and _is_collection(input.item_type) then
+        return M.types.string, nil,
+            ("item_type %q: a collection's entries are scalars"):format(input.item_type)
+    end
+    return _scalar_def(input.item_type, input.item_format, "item_format")
 end
 
 ---@param input ezdap.Input?
@@ -293,9 +317,9 @@ end
 ---@param input ezdap.Input?
 ---@return table
 function M.json_schema(input)
-    -- A collection's type, format and choices describe one *entry*, so all three land
-    -- on the element schema — the array's items, the object's values. A format only
-    -- constrains what its type already said, so its schema is merged onto it.
+    -- A collection's `item_type`/`item_format` and its choices describe one *entry*, so
+    -- all of them land on the element schema — the array's items, the object's values. A
+    -- format only constrains what its type already said, so its schema is merged onto it.
     local def, fmt = _def(input)
     local schema = vim.deepcopy(def.schema)
     if fmt and fmt.schema then schema = vim.tbl_extend("force", schema, vim.deepcopy(fmt.schema)) end
@@ -368,11 +392,11 @@ function M.completion(input, partial)
 end
 
 ---What one element of an input's value becomes — a `list` entry, a `map` value:
----the type of the row its elements are read by. Nil for an input that isn't a
----collection.
+---the type of the row its elements are read by, which its `item_type` names. Nil
+---for an input that isn't a collection.
 ---@param input ezdap.Input?
 ---@return ezdap.InputType?
-function M.item_type(input)
+function M.item_value_type(input)
     if not _is_collection(input and input.type) then return nil end
     return _def(input).type
 end

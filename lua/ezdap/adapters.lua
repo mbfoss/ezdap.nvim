@@ -10,8 +10,8 @@
 ---@field report    fun(message: string)
 ---@field profile?  string
 
----What an input's value *is*. A collection holds entries read as scalars — as
----strings, or by whatever `format` refines them to.
+---What an input's value *is*. A collection holds entries read as scalars, which its
+---`item_type`/`item_format` name.
 ---@alias ezdap.InputType
 ---| "string"   # the default
 ---| "boolean"
@@ -29,13 +29,16 @@
 ---| "command"     # extends string: a command line, verbatim (each token completed as a path)
 ---| "port"        # extends integer: range-checked (0-65535)
 
----A `format` on a collection extends its *entries*. Naming a `type` the format
----doesn't extend is an error; naming only the format lets it stand for its type.
+---A collection declares its *entries* with `item_type`/`item_format`, a scalar itself
+---with `type`/`format`. A format may be named in either type slot (`type = "port"`),
+---where it stands for the type it extends; naming a type it doesn't extend is an error.
 ---@class ezdap.Input
----@field type?        ezdap.InputType    default `string`
----@field format?      ezdap.InputFormat  an extension of `type`
----@field choices?     string[]  the values this input takes, when they're a fixed set
 ---@field required?    boolean  unset is an error (default false)
+---@field type?        ezdap.InputType    default `string`
+---@field format?      ezdap.InputFormat  an extension of `type`, for a scalar input
+---@field item_type?   ezdap.InputType    a `list`/`map` entry's type, default `string`
+---@field item_format? ezdap.InputFormat  an extension of `item_type`
+---@field choices?     string[]  suggested values for the input
 ---@field description? string   a few words on what the input means
 
 ---@class ezdap.Profile
