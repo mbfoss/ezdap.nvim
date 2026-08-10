@@ -258,7 +258,17 @@ end
 ---@return ezdap.InputDef def, ezdap.FormatDef? fmt, string? err
 local function _def(input)
     input = input or {}
-    if not _is_collection(input.type) then
+    -- The pair that doesn't apply is a mistake, not a silent no-op: an entry declared
+    -- under `format` (or a scalar under `item_type`) would otherwise read as a string.
+    local collection = _is_collection(input.type)
+    local stray = collection and input.format and "format"
+        or (not collection and (input.item_type and "item_type" or input.item_format and "item_format"))
+    if stray then
+        return M.types.string, nil, collection
+            and ("format %q: a collection declares its entries with item_format"):format(input.format)
+            or ("%s: only a list or map declares entries"):format(stray)
+    end
+    if not collection then
         return _scalar_def(input.type, input.format, "format")
     end
     if input.item_type and _is_collection(input.item_type) then
