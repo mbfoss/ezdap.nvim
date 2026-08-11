@@ -215,7 +215,8 @@ end
 ---| "modules_changed"
 ---| "loaded_sources_changed"
 ---| "progress"
-
+---| "closed"
+---
 ---@param event   ezdap.dap.SessionEvent
 ---@param handler fun(...)
 function Session:on(event, handler)
@@ -913,6 +914,8 @@ function Session:_on_close(reason)
         self:report(msg)
     end
     if cb then cb() end
+
+    self:_emit("closed")
 end
 
 -- Adapter-initiated requests

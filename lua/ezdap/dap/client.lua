@@ -140,7 +140,6 @@ end
 local function _register_session(sess, callbacks, progress)
     local id                 = _next_id
     _next_id                 = _next_id + 1
-    _sessions[id]            = sess
 
     local on_event           = callbacks.on_event
     local on_session         = callbacks.on_session
@@ -163,16 +162,22 @@ local function _register_session(sess, callbacks, progress)
     end
 
     sess:on("state_changed", function()
-        M.on_session_updated:emit(id, _session_info(id, sess))
+        if _sessions[id] then
+            M.on_session_updated:emit(id, _session_info(id, sess))
+        end
     end)
 
     sess:on("stopped", function()
         local info = _session_info(id, sess)
-        M.on_session_updated:emit(id, info)
-        M.on_session_stopped:emit(id, info)
+        if _sessions[id] then
+            M.on_session_updated:emit(id, info)
+            M.on_session_stopped:emit(id, info)
+        end
     end)
     sess:on("continued", function()
-        M.on_session_updated:emit(id, _session_info(id, sess))
+        if _sessions[id] then
+            M.on_session_updated:emit(id, _session_info(id, sess))
+        end
     end)
     sess:on("selection_changed", function()
         M.on_selection_changed:emit(id, sess)
@@ -202,13 +207,22 @@ local function _register_session(sess, callbacks, progress)
     end)
 
     sess:on("terminated", function()
-        _sessions[id] = nil
-        M.on_session_removed:emit(id)
+        if _sessions[id] then
+            M.on_session_updated:emit(id, _session_info(id, sess))
+        end
+    end)
+
+    sess:on("closed", function()
+        if _sessions[id] then
+            _sessions[id] = nil
+            M.on_session_removed:emit(id)
+        end
     end)
 
     sess.report = function(_, msg) progress(msg) end
 
     progress("session started (id " .. id .. ")")
+    _sessions[id] = sess
     M.on_session_added:emit(id, sess, _session_info(id, sess))
     if on_session then on_session(id, sess) end
 end
