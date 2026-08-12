@@ -83,11 +83,16 @@ local _antiflicker_delay = 200
 ---Centring has to allow for it or the picker sits low and to the right.
 local _BORDER_SPAN       = 2
 
--- Helix-style framing. The rule between the two halves belongs to the list, so
--- the list window can hang its position count off it as a title.
+-- Helix-style framing. The rule between the two halves is drawn by neither
+-- border: it is the list's winbar, filled with `_RULE` and carrying the position
+-- count at its right end. A winbar is a window-local option, so a changing count
+-- neither re-configures a window nor touches the focused prompt.
 local _BORDER_PROMPT     = { "╭", "─", "╮", "│", "", "", "", "│" }
-local _BORDER_LIST       = { "│", { "─", "NonText" }, "│", "│", "╯", "─", "╰", "│" }
+local _BORDER_LIST       = { "", "", "", "│", "╯", "─", "╰", "│" }
 local _BORDER_FULL       = "rounded"
+
+-- Fills the list's winbar, so it reads as the rule between the two halves.
+local _RULE              = "─"
 
 -- Indent every list row sits at, shared by rendering and wrapped-line indent.
 local _ROW_PREFIX        = "  "
@@ -97,7 +102,7 @@ local _VIRT_LINE_ELBOW   = "╰─ "
 local _ELLIPSIS          = "…"
 
 -- Rows the prompt half of the frame costs: its top border, its single line of
--- text, and the rule below it, which the list window draws as its own top edge.
+-- text, and the rule below it, which the list window draws as its winbar.
 local _PROMPT_ROWS       = 3
 
 ---@param v number
@@ -183,7 +188,7 @@ local function _get_horizontal_layout(opts)
         -- The prompt spans the list alone; the two share one frame.
         prompt_width   = list_width,
 
-        -- One row up from the end of the prompt: the list's top border is the
+        -- One row up from the list's own first line: the list's winbar is the
         -- rule they share.
         list_row       = row + _PROMPT_ROWS - 1,
         list_col       = col,
@@ -411,7 +416,7 @@ local _active_picker = nil
 ---@field _source_items ezdap.select.ListItem[]
 ---@field _initial integer?
 ---@field _has_virt_lines boolean
----@field _position_text string?  -- "cursor/total" currently in the list title
+---@field _position_text string?  -- "cursor/total" currently in the list winbar
 local Picker = {}
 Picker.__index = Picker
 
@@ -476,17 +481,13 @@ function Picker:init(opts, callback)
     end)
 end
 
----The title half of the list window config. Split out because
----`nvim_win_set_config` applies partial configs, so a position render can hand
----it over on its own without rebuilding the border and geometry.
+---The list window's winbar: the rule, with `position_text` at its right end. The
+---rule itself is the `wbr` fill char stretched by `%=`, so the winbar is never
+---empty -- an empty 'winbar' would take the row back and pull the list up.
 ---@param position_text string?
----@return table
-local function _lwin_title(position_text)
-    if not position_text then return { title = "" } end
-    return {
-        title     = { { " " .. position_text, "NonText" } },
-        title_pos = "right",
-    }
+---@return string
+local function _lwin_winbar(position_text)
+    return "%#NonText#%=" .. (position_text and (" " .. position_text) or "")
 end
 
 ---The prompt window's full config, for creating and moving the window.
@@ -505,19 +506,20 @@ function Picker:_pwin_config()
     }
 end
 
----The list window's full config, for creating and moving the window.
+---The list window's full config, for creating and moving the window. It has no
+---top border: its first row is the winbar drawing the rule under the prompt,
+---which is what the extra row of height pays for.
 ---@return table
 function Picker:_lwin_config()
-    local cfg = {
+    return {
         relative = "editor",
         style    = "minimal",
         row      = self.layout.list_row,
         col      = self.layout.list_col,
         width    = self.layout.list_width,
-        height   = self.layout.list_height,
+        height   = self.layout.list_height + 1,
         border   = _BORDER_LIST,
     }
-    return vim.tbl_extend("error", cfg, _lwin_title(self._position_text))
 end
 
 function Picker:relayout()
@@ -532,7 +534,8 @@ function Picker:relayout()
     }
 
     local base_cfg    = { relative = "editor", style = "minimal" }
-    local winhl       = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title"
+    local winhl       = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title," ..
+        "WinBar:Normal,WinBarNC:Normal"
 
     -- Prompt window
     if not self.pwin then
@@ -590,6 +593,10 @@ function Picker:relayout()
         vim.wo[self.lwin].wrap = self.opts.list_wrap ~= false
         vim.wo[self.lwin].cursorline = false
         vim.wo[self.lwin].breakindent = true
+        -- `wbr` is what `%=` stretches across the winbar; `eob` comes with the
+        -- window's `style = "minimal"`, and setting 'fillchars' here drops it.
+        vim.wo[self.lwin].fillchars = "eob: ,wbr:" .. _RULE
+        vim.wo[self.lwin].winbar = _lwin_winbar(self._position_text)
     else
         vim.api.nvim_win_set_config(self.lwin, self:_lwin_config())
     end
@@ -782,7 +789,9 @@ function Picker:_reveal_virt_lines(row)
             end_row   = row - 1,
         }).all
         -- Only act when the entry's last row is the bottom row of the viewport.
-        if vim.fn.winline() + line_height - 1 < vim.api.nvim_win_get_height(self.lwin) then
+        -- `winline()` counts from the first text row, the winbar's own row is not
+        -- one of those, but the window height counts it.
+        if vim.fn.winline() + line_height - 1 < vim.api.nvim_win_get_height(self.lwin) - 1 then
             return
         end
         local view = vim.fn.winsaveview()
@@ -816,7 +825,7 @@ function Picker:move_cursor(row, force, clamp)
     self:update_preview()
 end
 
----Show `cursor/total` right-aligned in the list window's top border, the rule it
+---Show `cursor/total` right-aligned in the list window's winbar, the rule it
 ---shares with the prompt.
 function Picker:render_position()
     if self.closed or not self.lwin or not vim.api.nvim_win_is_valid(self.lwin) then return end
@@ -824,11 +833,7 @@ function Picker:render_position()
     local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
     if text == self._position_text then return end
     self._position_text = text
-    -- schedule the title config to avoid cursor flicker
-    vim.schedule(function()
-        if self.closed or not self.lwin or not vim.api.nvim_win_is_valid(self.lwin) then return end
-        vim.api.nvim_win_set_config(self.lwin, _lwin_title(self._position_text or ""))
-    end)
+    vim.wo[self.lwin].winbar = _lwin_winbar(text)
 end
 
 function Picker:render_cursor()
