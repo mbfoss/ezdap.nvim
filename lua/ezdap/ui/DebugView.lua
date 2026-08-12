@@ -579,7 +579,7 @@ function DebugView:_load_stack(ctx)
         return
     end
     local thread = sess:current_thread()
-    if not thread then
+    if not thread or thread.status ~= "stopped" then
         self._tree:set_children(_roots.stack, {})
         return
     end
