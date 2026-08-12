@@ -19,10 +19,6 @@ local _sign_group
 local _line_group
 local _sign_id     = 1 -- fixed id: we only ever show one debugline sign at a time
 local _ex_id       = 2 -- the exception annotation, the frameline group's other mark
--- Identifies the handler set registered by the latest on_active_changed, so the
--- handlers of a session we have since left stay quiet. Not a debug-context guard:
--- these must survive every stop and resume of the session they belong to.
-local _gen         = 0
 ---@type function?  stop fn for the pending deferred clear, if any
 local _stop_clear_timer
 
@@ -114,30 +110,30 @@ function M.init()
     _sign_group = fileextmarks.define_group("framesign")
     _line_group = fileextmarks.define_group("frameline")
 
+    -- Everything below listens to the session-independent signals and filters on
+    -- the active id. Subscribing to the session object instead would mean a fresh
+    -- handler set per activation with no way to drop the previous one.
     manager.on_active_changed:subscribe(function(_, sess)
         _clear()
-        if not sess then return end
+        if sess and sess.state == "stopped" then _show_stopped(sess) end
+    end)
 
-        _gen = _gen + 1
-        local gen = _gen
+    manager.on_session_stopped:subscribe(function(id)
+        local sess = manager.session()
+        if id ~= manager.active_id() or not sess then return end
+        _clear()
+        _show_stopped(sess)
+    end)
 
-        if sess.state == "stopped" then
-            _show_stopped(sess)
-        end
-
-        sess:on("stopped", function()
-            if gen ~= _gen then return end
-            _clear()
-            _show_stopped(sess)
-        end)
-        sess:on("continued", function()
-            if gen ~= _gen then return end
+    -- Not paused (any more): a resume clears late to ride out a step, while a
+    -- session that ended has nothing left to flicker back in.
+    manager.on_session_updated:subscribe(function(id, info)
+        if id ~= manager.active_id() or info.is_paused then return end
+        if info.state == "running" then
             _deferred_clear(config.antiflicker_delay)
-        end)
-        sess:on("terminated", function()
-            if gen ~= _gen then return end
+        else
             _clear()
-        end)
+        end
     end)
 
     manager.on_selection_changed:subscribe(function(_, sess)
