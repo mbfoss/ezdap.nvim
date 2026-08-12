@@ -940,7 +940,7 @@ end
 function DebugView:get_bufnr(on_deleted)
     local bufnr, created = self._tree:create_buffer(on_deleted)
     if created and bufnr > 0 then
-        vim.api.nvim_buf_set_name(bufnr, ui.unique_buf_name("ezdap://Debug View"))
+        vim.api.nvim_buf_set_name(bufnr, ui.unique_buf_name("ezdap://debug-view"))
         self:_setup_keymaps(bufnr)
         -- apply initial state for any already-running sessions
         for id, sess in pairs(manager.sessions()) do
