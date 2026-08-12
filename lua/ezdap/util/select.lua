@@ -83,9 +83,10 @@ local _antiflicker_delay = 200
 ---Centring has to allow for it or the picker sits low and to the right.
 local _BORDER_SPAN       = 2
 
--- Helix-style framing
-local _BORDER_TOP        = { "╭", "─", "╮", "│", "│", { "─", "NonText" }, "│", "│" }
-local _BORDER_BOTTOM     = { "", "", "", "│", "╯", "─", "╰", "│" }
+-- Helix-style framing. The rule between the two halves belongs to the list, so
+-- the list window can hang its position count off it as a title.
+local _BORDER_PROMPT     = { "╭", "─", "╮", "│", "", "", "", "│" }
+local _BORDER_LIST       = { "│", { "─", "NonText" }, "│", "│", "╯", "─", "╰", "│" }
 local _BORDER_FULL       = "rounded"
 
 -- Indent every list row sits at, shared by rendering and wrapped-line indent.
@@ -95,7 +96,8 @@ local _ROW_PREFIX        = "  "
 local _VIRT_LINE_ELBOW   = "╰─ "
 local _ELLIPSIS          = "…"
 
--- Rows the prompt costs: its top border, its single line of text, and the rule.
+-- Rows the prompt half of the frame costs: its top border, its single line of
+-- text, and the rule below it, which the list window draws as its own top edge.
 local _PROMPT_ROWS       = 3
 
 ---@param v number
@@ -181,7 +183,9 @@ local function _get_horizontal_layout(opts)
         -- The prompt spans the list alone; the two share one frame.
         prompt_width   = list_width,
 
-        list_row       = row + _PROMPT_ROWS,
+        -- One row up from the end of the prompt: the list's top border is the
+        -- rule they share.
+        list_row       = row + _PROMPT_ROWS - 1,
         list_col       = col,
         list_width     = list_width,
         list_height    = list_height,
@@ -407,7 +411,7 @@ local _active_picker = nil
 ---@field _source_items ezdap.select.ListItem[]
 ---@field _initial integer?
 ---@field _has_virt_lines boolean
----@field _position_text string?  -- "cursor/total" currently in the prompt footer
+---@field _position_text string?  -- "cursor/total" currently in the list title
 local Picker = {}
 Picker.__index = Picker
 
@@ -472,34 +476,48 @@ function Picker:init(opts, callback)
     end)
 end
 
----The footer half of the prompt window config. Split out because
+---The title half of the list window config. Split out because
 ---`nvim_win_set_config` applies partial configs, so a position render can hand
----it over on its own without rebuilding the border and title.
+---it over on its own without rebuilding the border and geometry.
 ---@param position_text string?
 ---@return table
-local function _pwin_footer(position_text)
-    if not position_text then return { footer = "" } end
+local function _lwin_title(position_text)
+    if not position_text then return { title = "" } end
     return {
-        footer     = { { " " .. position_text, "NonText" } },
-        footer_pos = "right",
+        title     = { { " " .. position_text, "NonText" } },
+        title_pos = "right",
     }
 end
 
 ---The prompt window's full config, for creating and moving the window.
 ---@return table
 function Picker:_pwin_config()
-    local cfg = {
+    return {
         relative  = "editor",
         style     = "minimal",
         row       = self.layout.prompt_row,
         col       = self.layout.prompt_col,
         width     = self.layout.prompt_width,
         height    = 1,
-        border    = _BORDER_TOP,
+        border    = _BORDER_PROMPT,
         title     = self.opts.prompt and (" " .. self.opts.prompt .. " ") or "",
         title_pos = "center",
     }
-    return vim.tbl_extend("error", cfg, _pwin_footer(self._position_text))
+end
+
+---The list window's full config, for creating and moving the window.
+---@return table
+function Picker:_lwin_config()
+    local cfg = {
+        relative = "editor",
+        style    = "minimal",
+        row      = self.layout.list_row,
+        col      = self.layout.list_col,
+        width    = self.layout.list_width,
+        height   = self.layout.list_height,
+        border   = _BORDER_LIST,
+    }
+    return vim.tbl_extend("error", cfg, _lwin_title(self._position_text))
 end
 
 function Picker:relayout()
@@ -564,13 +582,7 @@ function Picker:relayout()
                 if not self.closed then vim.schedule(function() self:close() end) end
             end)
         end
-        self.lwin = ui_util.create_window(self.lbuf, false, vim.tbl_extend("force", base_cfg, {
-            row    = self.layout.list_row,
-            col    = self.layout.list_col,
-            width  = self.layout.list_width,
-            height = self.layout.list_height,
-            border = _BORDER_BOTTOM,
-        }), function()
+        self.lwin = ui_util.create_window(self.lbuf, false, self:_lwin_config(), function()
             self.lwin = nil
             if not self.closed then vim.schedule(function() self:close() end) end
         end)
@@ -579,13 +591,7 @@ function Picker:relayout()
         vim.wo[self.lwin].cursorline = false
         vim.wo[self.lwin].breakindent = true
     else
-        vim.api.nvim_win_set_config(self.lwin, vim.tbl_extend("force", base_cfg, {
-            row    = self.layout.list_row,
-            col    = self.layout.list_col,
-            width  = self.layout.list_width,
-            height = self.layout.list_height,
-            border = _BORDER_BOTTOM,
-        }))
+        vim.api.nvim_win_set_config(self.lwin, self:_lwin_config())
     end
 
     -- Preview window (optional)
@@ -810,18 +816,18 @@ function Picker:move_cursor(row, force, clamp)
     self:update_preview()
 end
 
----Show `cursor/total` right-aligned in the prompt window's bottom border, the
----rule it shares with the list.
+---Show `cursor/total` right-aligned in the list window's top border, the rule it
+---shares with the prompt.
 function Picker:render_position()
-    if self.closed or not self.pwin or not vim.api.nvim_win_is_valid(self.pwin) then return end
+    if self.closed or not self.lwin or not vim.api.nvim_win_is_valid(self.lwin) then return end
     local total = #self.list_items
     local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
     if text == self._position_text then return end
     self._position_text = text
-    -- schedule footer config to avoid cursor flicker
+    -- schedule the title config to avoid cursor flicker
     vim.schedule(function()
-        if self.closed or not self.pwin or not vim.api.nvim_win_is_valid(self.pwin) then return end
-        vim.api.nvim_win_set_config(self.pwin, _pwin_footer(self._position_text or ""))
+        if self.closed or not self.lwin or not vim.api.nvim_win_is_valid(self.lwin) then return end
+        vim.api.nvim_win_set_config(self.lwin, _lwin_title(self._position_text or ""))
     end)
 end
 
