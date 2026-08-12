@@ -88,6 +88,9 @@ M.on_breakpoint_updated = Signal.new() ---@type ezdap.util.Signal<fun(id:number,
 ---Fires when a session's instruction breakpoints change: (id, sess)
 M.on_instruction_breakpoints_changed = Signal
     .new() ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
+---Fires when a session's data breakpoints change: (id, sess)
+M.on_data_breakpoints_changed = Signal
+    .new() ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
 
 -- Session registry
 
@@ -193,6 +196,9 @@ local function _register_session(sess, callbacks, progress)
     end)
     sess:on("instruction_breakpoints_changed", function()
         M.on_instruction_breakpoints_changed:emit(id, sess)
+    end)
+    sess:on("data_breakpoints_changed", function()
+        M.on_data_breakpoints_changed:emit(id, sess)
     end)
 
     sess:on("start_debugging", function(child_config)

@@ -236,7 +236,6 @@ end
 ---@field private _expanded         table<string,boolean>
 ---@field private _greyout_timer    fun()?
 ---@field private _session_timer    fun()?
----@field private _dbp_gen          integer?
 ---@field private _undo             ezdap.util.UndoStack
 local DebugView = {}
 DebugView.__index = DebugView
@@ -409,6 +408,12 @@ function DebugView:_setup_subs()
 
     -- Adapter-verified status (verified flag, bound line, hits) is session-scoped
     -- and arrives via this event rather than the registry's on_change.
+    -- Data breakpoints are session-scoped, so only the active session's matter.
+    self._subs[#self._subs + 1] = manager.on_data_breakpoints_changed:subscribe(function(id)
+        if id ~= self._active_id then return end
+        self:_load_breakpoints()
+    end)
+
     self._subs[#self._subs + 1] = manager.on_breakpoint_updated:subscribe(function()
         self:_load_breakpoints()
     end)
@@ -516,18 +521,6 @@ function DebugView:_set_active(id, sess)
     local old_id      = self._active_id
     self._active_id   = id
     self._active_sess = sess
-
-    -- Re-bind data-breakpoint refresh to the new active session. Data breakpoints
-    -- are session-scoped, so we listen directly; stale listeners self-disable via
-    -- the generation guard (the session drops all listeners when it terminates).
-    self._dbp_gen     = (self._dbp_gen or 0) + 1
-    local dbp_gen     = self._dbp_gen
-    if sess then
-        sess:on("data_breakpoints_changed", function()
-            if dbp_gen ~= self._dbp_gen then return end
-            self:_load_breakpoints()
-        end)
-    end
 
     -- refresh is_current flag on old and new session rows
     if old_id then

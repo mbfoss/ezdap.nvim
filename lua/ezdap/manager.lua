@@ -30,6 +30,8 @@ M.on_breakpoint_updated = client
     .on_breakpoint_updated ---@type ezdap.util.Signal<fun(id:number, bp:table, status:ezdap.dap.BpStatus)>
 M.on_instruction_breakpoints_changed = client
     .on_instruction_breakpoints_changed ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
+M.on_data_breakpoints_changed = client
+    .on_data_breakpoints_changed ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
 
 ---@param id number
 ---@return ezdap.dap.Session?
