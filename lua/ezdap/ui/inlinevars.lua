@@ -16,9 +16,8 @@ local _max_size      = 30
 -- name is cropped to a third of it, the value to the rest.
 local _line_max_size = 45
 local _enabled       = true
-local _gen           = 0
-local _unsub
-local _unsub_var
+---@type function[]  unsubscribe fns for the signals, held while enabled
+local _unsubs        = {}
 local _mark_id       = 0
 local _clear_timer   = nil
 
@@ -340,17 +339,24 @@ local function _collect_variables(session, frame, cb)
 	end
 end
 
+---Render `frame`'s values, once the adapter has served them.
+---
+---Two guards, for two different races: `_seq` drops a reply that a newer update
+---has already superseded, and the context id drops one whose pause is over. The
+---latter is not implied by the former — a resume schedules a clear rather than an
+---update, so nothing would bump `_seq`, and the reply would land, cancel that
+---pending clear and paint values from the finished pause over running code.
 local function _update(session, frame)
 	if not _active() then return end
 	if not frame or not frame.source or not frame.source.path then return end
 
 	_seq = _seq + 1
 	local my_seq = _seq
+	local context = manager.context_id()
 
 	_collect_variables(session, frame, function(vars)
-		if my_seq ~= _seq then return end
+		if my_seq ~= _seq or manager.context_id() ~= context then return end
 
-		_cancel_clear_timer()
 		_clear()
 		_render_variables(frame, vars)
 	end)
@@ -365,48 +371,55 @@ function M.enable(v)
 	if not _enabled then
 		_clear()
 	end
-	if _enabled and not _unsub then
-		_unsub_var = manager.on_variable_changed:subscribe(function(_, sess)
+	-- All of these listen to the session-independent signals and filter on the
+	-- active id, so disabling really does detach: handlers registered on a session
+	-- object cannot be taken off it again, and would keep firing after the unsub.
+	if _enabled and #_unsubs == 0 then
+		local function sub(signal, handler)
+			_unsubs[#_unsubs + 1] = signal:subscribe(handler)
+		end
+
+		sub(manager.on_variable_changed, function(id, sess)
+			if id ~= manager.active_id() then return end
 			vim.schedule(function()
-				local frame = sess:current_stack_frame()
-				_update(sess, frame)
+				_update(sess, sess:current_stack_frame())
 			end)
 		end)
 
-		_unsub = manager.on_active_changed:subscribe(function(_, sess)
+		sub(manager.on_active_changed, function(_, sess)
 			_clear()
-			if not sess then return end
-
-			_gen = _gen + 1
-			local gen = _gen
-
-			if sess.state == "stopped" then
-				local frame = sess:current_stack_frame()
-				_update(sess, frame)
+			if sess and sess.state == "stopped" then
+				_update(sess, sess:current_stack_frame())
 			end
+		end)
 
-			sess:on("stopped", function()
-				if gen ~= _gen then return end
-				local frame = sess:current_stack_frame()
-				_update(sess, frame)
-			end)
-			sess:on("continued", function()
-				if gen ~= _gen then return end
-				_deferred_clear(config.antiflicker_delay)
-			end)
-			sess:on("terminated", function()
-				if gen ~= _gen then return end
+		sub(manager.on_session_stopped, function(id)
+			local sess = manager.session()
+			if id ~= manager.active_id() or not sess then return end
+			_update(sess, sess:current_stack_frame())
+		end)
+
+		-- Values belong to a pause, so they go once it ends: at once for a session
+		-- that is over, late for a resume so stepping doesn't blink them. A thread
+		-- starting under a live breakpoint also reads as "running", which is why
+		-- the thread the values were collected for is what decides.
+		sub(manager.on_session_updated, function(id, info)
+			if id ~= manager.active_id() then return end
+			if info.state == "terminated" or info.state == "exited" then
 				_clear()
-			end)
+				return
+			end
+			if info.is_paused then return end
+			local sess   = manager.session()
+			local thread = sess and sess:current_thread()
+			if thread and thread.status == "stopped" then return end
+			_deferred_clear(config.antiflicker_delay)
 		end)
 	end
 
-	if not _enabled and _unsub then
-		_unsub()
-		_unsub = nil
-		if _unsub_var then
-			_unsub_var(); _unsub_var = nil
-		end
+	if not _enabled then
+		for _, unsub in ipairs(_unsubs) do unsub() end
+		_unsubs = {}
 	end
 end
 
