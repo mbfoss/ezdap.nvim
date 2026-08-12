@@ -106,7 +106,7 @@ end
 ---@field private _paging?   boolean  in-flight paging guard
 ---@field private _exhausted table<"up"|"down", boolean>  edges with no further instructions to fetch
 ---@field private _aug?      integer  sync autocmd group; created on open, deleted on close
----@field private _gen       integer  generation guard for stale session callbacks
+---@field private _load_seq  integer  identifies the current render; guards page splices
 ---@field private _syncing   boolean  re-entrancy guard around programmatic moves
 ---@field private _closing?   boolean  re-entrancy guard around close()
 ---@field private _src_sync  fun()    throttled source -> asm
@@ -122,7 +122,7 @@ function DisassemblyView.new()
         _ns_pc     = vim.api.nvim_create_namespace("ezdap_disasm_pc"),
         _ns_block  = vim.api.nvim_create_namespace("ezdap_disasm_block"),
         _ns_bp     = vim.api.nvim_create_namespace("ezdap_disasm_bp"),
-        _gen       = 0,
+        _load_seq  = 0,
         _syncing   = false,
         _exhausted = { up = false, down = false },
     }, DisassemblyView)
@@ -135,11 +135,39 @@ function DisassemblyView:_init()
     self._src_sync = throttle.throttle_wrap(40, function() self:_sync_from_source() end)
     self._asm_sync = throttle.throttle_wrap(40, function() self:_sync_to_source() end)
 
-    manager.on_active_changed:subscribe(function(_, sess) self:_bind_session(sess) end)
+    manager.on_active_changed:subscribe(function(_, sess) self._sess = sess end)
     manager.on_selection_changed:subscribe(function()
         if self:_is_open() then self:_load(false) end
     end)
-    self:_bind_session(manager.session())
+
+    manager.on_session_stopped:subscribe(function(id)
+        if id ~= manager.active_id() then return end
+        if self:_is_open() then self:_load(false) end
+    end)
+
+    -- The PC marker belongs to a pause; drop it once that pause is over, keeping
+    -- the pane itself open for post-mortem inspection. A thread starting under a
+    -- live breakpoint also reads as "running", so the thread the marker was drawn
+    -- for is what decides.
+    manager.on_session_updated:subscribe(function(id, info)
+        if id ~= manager.active_id() then return end
+        if info.state == "terminated" or info.state == "exited" then
+            self:_clear_pc()
+            return
+        end
+        if info.is_paused then return end
+        local sess   = manager.session()
+        local thread = sess and sess:current_thread()
+        if thread and thread.status == "stopped" then return end
+        self:_clear_pc()
+    end)
+
+    manager.on_instruction_breakpoints_changed:subscribe(function(id)
+        if id ~= manager.active_id() then return end
+        if self:_is_open() then self:_draw_bps() end
+    end)
+
+    self._sess = manager.session()
 end
 
 ---Create the sync autocmd group (and its source-side listener) on first open.
@@ -170,36 +198,6 @@ function DisassemblyView:_teardown_autocmds()
         vim.api.nvim_del_augroup_by_id(self._aug)
         self._aug = nil
     end
-end
-
--- Session binding
-
----@private
----@param sess ezdap.dap.Session?
-function DisassemblyView:_bind_session(sess)
-    self._gen = self._gen + 1
-    local gen = self._gen
-    self._sess = sess
-    if not sess then return end
-
-    sess:on("stopped", function()
-        if gen ~= self._gen then return end
-        if self:_is_open() then self:_load(false) end
-    end)
-    sess:on("continued", function()
-        if gen ~= self._gen then return end
-        self:_clear_pc()
-    end)
-    sess:on("terminated", function()
-        if gen ~= self._gen then return end
-        -- keep the pane open for post-mortem inspection; just drop the now-stale
-        -- PC marker (mirrors debugline_ui's terminate handling).
-        self:_clear_pc()
-    end)
-    sess:on("instruction_breakpoints_changed", function()
-        if gen ~= self._gen then return end
-        if self:_is_open() then self:_draw_bps() end
-    end)
 end
 
 -- Window / buffer plumbing
@@ -313,11 +311,16 @@ function DisassemblyView:_load(focus)
         return
     end
 
-    local count  = self:_page_size()
-    local offset = -math.floor(count / 2)
+    local count   = self:_page_size()
+    local offset  = -math.floor(count / 2)
+    -- The reply renders a PC marker and can open the pane, so a stale one would
+    -- point at a pause that is over. Dropping it on any context change also settles
+    -- two loads racing across a fast step: the superseded one never lands.
+    local context = manager.context_id()
     sess:disassemble({ memoryReference = ref, instructionCount = count, instructionOffset = offset },
         function(instrs, err)
             vim.schedule(function()
+                if manager.context_id() ~= context then return end
                 if err or not instrs then
                     vim.notify("[dap] disassemble failed: " .. (err or "no instructions"), vim.log.levels.WARN)
                     return
@@ -415,6 +418,7 @@ function DisassemblyView:_render(instrs, pc_ref, recenter)
     self._pc_ref    = pc_ref
     self._exhausted = { up = false, down = false }
     self._paging    = false -- a fresh load supersedes any page still in flight
+    self._load_seq  = self._load_seq + 1
 
     self:_draw_pc(pc_row)
     self:_draw_bps()
@@ -613,12 +617,16 @@ function DisassemblyView:_page(dir)
     local page   = self:_page_size()
     local offset = dir == "down" and 1 or -page
 
-    local gen    = self._gen
+    -- A page splices into the buffer it was measured against, so what invalidates
+    -- it is a fresh render replacing the rows (or the session under them) — not the
+    -- debug context: instructions are static memory, and paging through the pane
+    -- stays valid while the program runs.
+    local load_seq = self._load_seq
     sess:disassemble({ memoryReference = edge_addr, instructionCount = page, instructionOffset = offset },
         function(new, err)
-            if gen ~= self._gen then return end
+            if load_seq ~= self._load_seq or sess ~= self._sess then return end
             vim.schedule(function()
-                if gen ~= self._gen then return end
+                if load_seq ~= self._load_seq or sess ~= self._sess then return end
                 self._paging = false
                 if not self:_is_open() then return end
                 -- Past the edge of disassemblable memory the adapter returns nothing,

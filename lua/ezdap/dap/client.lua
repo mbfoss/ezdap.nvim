@@ -85,6 +85,9 @@ M.on_selection_changed  = Signal.new() ---@type ezdap.util.Signal<fun(id:number,
 M.on_variable_changed   = Signal.new() ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
 ---Fires when a breakpoint's adapter-verified status changes: (id, bp, status)
 M.on_breakpoint_updated = Signal.new() ---@type ezdap.util.Signal<fun(id:number, bp:table, status:ezdap.dap.BpStatus)>
+---Fires when a session's instruction breakpoints change: (id, sess)
+M.on_instruction_breakpoints_changed = Signal
+    .new() ---@type ezdap.util.Signal<fun(id:number, sess:ezdap.dap.Session)>
 
 -- Session registry
 
@@ -187,6 +190,9 @@ local function _register_session(sess, callbacks, progress)
     end)
     sess:on("breakpoint_updated", function(bp, status)
         M.on_breakpoint_updated:emit(id, bp, status)
+    end)
+    sess:on("instruction_breakpoints_changed", function()
+        M.on_instruction_breakpoints_changed:emit(id, sess)
     end)
 
     sess:on("start_debugging", function(child_config)
