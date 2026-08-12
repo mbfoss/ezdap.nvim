@@ -106,7 +106,7 @@ end
 
 ---@return boolean
 function DetailBlock:is_empty()
-    return #self._lines == 0
+    return #self._lines == 0 or self._lines[1] == ""
 end
 
 ---@return string[]

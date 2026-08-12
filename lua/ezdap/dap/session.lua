@@ -64,6 +64,7 @@ local str_util    = require("ezdap.util.strutil")
 ---@field threads       ezdap.dap.Thread[]
 ---@field _thread_id    integer?
 ---@field _stack_id     integer?
+---@field _stop_seq     integer   identifies the current pause; see _on_stopped
 ---@field exception_description string?
 ---@field _modules      ezdap.dap.proto.Module[]
 ---@field _sources      ezdap.dap.proto.Source[]
@@ -159,6 +160,7 @@ function M.new(conn, config)
         threads               = {},
         _thread_id            = nil,
         _stack_id             = nil,
+        _stop_seq             = 0,
         exception_description = nil,
         _modules              = {},
         _sources              = {},
@@ -695,10 +697,20 @@ function Session:_on_stopped(body)
         end
     end
 
+    -- The emit is two round trips away (threads, then stack frames), and a resume
+    -- in that window is synchronous, so it would otherwise report a pause that is
+    -- already over — and re-mark a running thread as stopped on the way. Abandon
+    -- the chain once this stop is no longer the one the session is in.
+    self._stop_seq = self._stop_seq + 1
+    local seq      = self._stop_seq
+    local current  = function() return seq == self._stop_seq and self.state == "stopped" end
+
     self:_set_thread_status(tid, all_stopped, "stopped")
     self:_update_threads(function()
+        if not current() then return end
         self:_set_thread_status(tid, all_stopped, "stopped")
         self:_update("stack_frames", function()
+            if not current() then return end
             self:_emit("stopped", self)
         end)
     end)

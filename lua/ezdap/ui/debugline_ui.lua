@@ -19,7 +19,10 @@ local _sign_group
 local _line_group
 local _sign_id     = 1 -- fixed id: we only ever show one debugline sign at a time
 local _ex_id       = 2 -- the exception annotation, the frameline group's other mark
-local _gen         = 0 -- generation counter to guard stale session callbacks
+-- Identifies the handler set registered by the latest on_active_changed, so the
+-- handlers of a session we have since left stay quiet. Not a debug-context guard:
+-- these must survive every stop and resume of the session they belong to.
+local _gen         = 0
 ---@type function?  stop fn for the pending deferred clear, if any
 local _stop_clear_timer
 
@@ -27,32 +30,23 @@ local _SIGN_HL     = format.hl.debug_frame
 local _LINE_HL     = format.hl.debug_frame_line
 local _EX_HL       = format.hl.exception
 
----Is `sess` still the paused active session at that frame line? Guards the
----annotation against the session having resumed, ended or moved on while the
----adapter answered.
----@param sess ezdap.dap.Session
----@param path string
----@param lnum integer
----@return boolean
-local function _still_stopped_at(sess, path, lnum)
-    if sess ~= manager.session() or sess.state ~= "stopped" then return false end
-    local frame = sess:current_stack_frame()
-    if not frame or not frame.source or frame.source.path ~= path then return false end
-    return ((frame.line and frame.line > 0) and frame.line or 1) == lnum
-end
-
 ---Annotate the frame line with what the session stopped on, once the adapter
 ---has told us. Nothing is placed for a stop that is not an exception, or one no
 ---adapter text describes.
+---
+---The adapter can answer after the pause the text describes is gone, so the
+---annotation belongs to the context it was requested in: anything that ends that
+---pause — a resume, a re-hit of the same breakpoint, a frame or session switch —
+---drops the reply.
 ---@param sess ezdap.dap.Session
 ---@param path string
 ---@param lnum integer
 local function _show_exception(sess, path, lnum)
     if sess.state_reason ~= "exception" then return end
-    local gen = _gen
+    local context = manager.context_id()
     exception_info.oneline(sess, function(text)
-        if not text or gen ~= _gen or not _line_group then return end
-        if not _still_stopped_at(sess, path, lnum) then return end
+        if not text or not _line_group then return end
+        if manager.context_id() ~= context then return end
         _line_group.set_file_extmark(_ex_id, path, lnum, 0, {
             virt_text     = { { "  " .. config.signs.exception_breakpoint .. " " .. text, _EX_HL } },
             virt_text_pos = "eol",

@@ -41,7 +41,8 @@ end
 
 ---Evaluate `expr` in the active session and show its value. A missing session is
 ---a notification; an adapter error is shown in the float itself, where the value
----the caller asked for would have been.
+---the caller asked for would have been. A reply that arrives after the session
+---moved on is discarded.
 ---@param expr string
 ---@param opts? ezdap.ui.value_hover.Opts
 function M.evaluate(expr, opts)
@@ -54,7 +55,9 @@ function M.evaluate(expr, opts)
         return
     end
     local title = (opts and opts.title) or expr
+    local context = manager.context_id()
     manager.evaluate(expr, "hover", function(body, err)
+        if manager.context_id() ~= context then return end
         if err or not body then
             M.show({ name = title, value = err or "not available" }, opts)
         else

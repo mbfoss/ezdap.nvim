@@ -56,16 +56,34 @@ M.on_selection_changed = Signal.new() ---@type ezdap.util.Signal<fun(id:number, 
 ---@type number?
 local _active_id       = nil
 
+-- Context id: identifies the pause an async caller is asking about. Bumped by
+-- everything that makes an in-flight reply refer to the past — a state change
+-- (stop, including a re-hit of the same line, resume, terminate), a session
+-- switch, a thread/frame selection.
+local _context_id      = 1
+
+local function _bump_context()
+    _context_id = _context_id + 1
+end
+
 ---@param id number?
 local function _set_active(id)
     if _active_id == id then return end
     _active_id = id
+    _bump_context()
     M.on_active_changed:emit(id, id and client.get_session(id) or nil)
 end
 
 -- forward selection changes from the active session only
 client.on_selection_changed:subscribe(function(id, sess)
-    if id == _active_id then M.on_selection_changed:emit(id, sess) end
+    if id ~= _active_id then return end
+    _bump_context()
+    M.on_selection_changed:emit(id, sess)
+end)
+
+-- the active session changed state: stopped, resumed, terminated
+client.on_session_updated:subscribe(function(id)
+    if id == _active_id then _bump_context() end
 end)
 
 -- auto-promote: new session → active
@@ -104,6 +122,14 @@ end
 ---@return number?
 function M.active_id()
     return _active_id
+end
+
+---The current debug context's id. It increments on every session switch, run/stop
+---transition and thread/frame selection, so an async caller can capture it before
+---a request and drop a reply that arrives after the ground moved.
+---@return number
+function M.context_id()
+    return _context_id
 end
 
 ---Manually promote a session to the active slot.
