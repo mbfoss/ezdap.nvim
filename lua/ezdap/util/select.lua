@@ -360,6 +360,7 @@ local _active_picker = nil
 ---@field _source_items ezdap.select.ListItem[]
 ---@field _initial integer?
 ---@field _has_virt_lines boolean
+---@field _position_text string?  -- "cursor/total" currently in the prompt footer
 local Picker = {}
 Picker.__index = Picker
 
@@ -424,10 +425,29 @@ function Picker:init(opts, callback)
     end)
 end
 
+---The prompt window's config. `nvim_win_set_config` resets what it is not
+---handed, so the border, title and footer come along on every move.
+---@return table
+function Picker:_pwin_config()
+    local title = self.opts.prompt and (" " .. self.opts.prompt .. " ") or ""
+    return {
+        relative   = "editor",
+        style      = "minimal",
+        row        = self.layout.prompt_row,
+        col        = self.layout.prompt_col,
+        width      = self.layout.prompt_width,
+        height     = 1,
+        border     = _BORDER_TOP,
+        title      = title,
+        title_pos  = "center",
+        footer     = self._position_text and { { " " .. self._position_text .. " ", "NonText" } } or "",
+        footer_pos = self._position_text and "right" or nil,
+    }
+end
+
 function Picker:relayout()
     if self.closed then return end
     local opts        = self.opts
-    local title       = opts.prompt and (" " .. opts.prompt .. " ") or ""
     local has_preview = self.preview_enabled
 
     self.layout       = _get_horizontal_layout {
@@ -448,15 +468,7 @@ function Picker:relayout()
             end)
         end
         local pwin_augroup
-        self.pwin, pwin_augroup = ui_util.create_window(self.pbuf, true, vim.tbl_extend("force", base_cfg, {
-            row       = self.layout.prompt_row,
-            col       = self.layout.prompt_col,
-            width     = self.layout.prompt_width,
-            height    = 1,
-            border    = _BORDER_TOP,
-            title     = title,
-            title_pos = "center",
-        }), function()
+        self.pwin, pwin_augroup = ui_util.create_window(self.pbuf, true, self:_pwin_config(), function()
             self.pwin = nil
             if not self.closed then vim.schedule(function() self:close() end) end
         end)
@@ -484,17 +496,7 @@ function Picker:relayout()
             end,
         })
     else
-        -- `nvim_win_set_config` resets what it is not handed, so the border and
-        -- the title come along on every move.
-        vim.api.nvim_win_set_config(self.pwin, vim.tbl_extend("force", base_cfg, {
-            row       = self.layout.prompt_row,
-            col       = self.layout.prompt_col,
-            width     = self.layout.prompt_width,
-            height    = 1,
-            border    = _BORDER_TOP,
-            title     = title,
-            title_pos = "center",
-        }))
+        vim.api.nvim_win_set_config(self.pwin, self:_pwin_config())
     end
 
     -- List window
@@ -733,19 +735,15 @@ function Picker:move_cursor(row, force, clamp)
     self:update_preview()
 end
 
+---Show `cursor/total` right-aligned in the prompt window's bottom border, the
+---rule it shares with the list.
 function Picker:render_position()
-    if not self.pbuf then return end
-    vim.api.nvim_buf_clear_namespace(self.pbuf, _NS_CURSOR, 0, -1)
+    if self.closed or not self.pwin or not vim.api.nvim_win_is_valid(self.pwin) then return end
     local total = #self.list_items
-    if total == 0 then return end
-    local cur  = self:get_cursor() or 1
-    local text = string.format("%d/%d", cur, total)
-    vim.api.nvim_buf_set_extmark(self.pbuf, _NS_CURSOR, 0, 0, {
-        virt_text     = { { text, "NonText" } },
-        virt_text_pos = "eol_right_align",
-        hl_mode       = "blend",
-        priority      = 50,
-    })
+    local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
+    if text == self._position_text then return end
+    self._position_text = text
+    vim.api.nvim_win_set_config(self.pwin, self:_pwin_config())
 end
 
 function Picker:render_cursor()
