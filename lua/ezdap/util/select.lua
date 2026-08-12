@@ -111,7 +111,7 @@ end
 ---@return boolean
 local function _has_statusline()
     local laststatus = vim.o.laststatus
-    return laststatus ~= 0 and laststatus ~=1
+    return laststatus ~= 0 and laststatus ~= 1
 end
 
 ---Editor rows the picker may occupy: everything `vim.o.lines` counts, less the
@@ -209,9 +209,9 @@ local function _crop_chunks(chunks, width, side)
     if total <= width then return chunks end
     if width <= 1 then return { { _ELLIPSIS, "NonText" } } end
 
-    local budget = width - 1 -- the ellipsis standing in for the dropped end
-    local out    = {}
-    local used   = 0
+    local budget         = width - 1 -- the ellipsis standing in for the dropped end
+    local out            = {}
+    local used           = 0
     local from, to, step = 1, #chunks, 1
     if side == "left" then from, to, step = #chunks, 1, -1 end
     for i = from, to, step do
@@ -813,12 +813,15 @@ end
 ---Show `cursor/total` right-aligned in the prompt window's bottom border, the
 ---rule it shares with the list.
 function Picker:render_position()
-    if self.closed or not self.pwin or not vim.api.nvim_win_is_valid(self.pwin) then return end
-    local total = #self.list_items
-    local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
-    if text == self._position_text then return end
-    self._position_text = text
-    vim.api.nvim_win_set_config(self.pwin, _pwin_footer(text))
+    -- schedule footer config to avoid cursor flicker
+    vim.schedule(function()
+        if self.closed or not self.pwin or not vim.api.nvim_win_is_valid(self.pwin) then return end
+        local total = #self.list_items
+        local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
+        if text == self._position_text then return end
+        self._position_text = text
+        vim.api.nvim_win_set_config(self.pwin, _pwin_footer(text))
+    end)
 end
 
 function Picker:render_cursor()
@@ -852,7 +855,7 @@ function Picker:update_preview()
     local item   = cursor and self.list_items[cursor] or nil
     if not item then return end
 
-    local preview_width       = math.max(0, self.layout.preview_width - 2) -- -2 for borders
+    local preview_width       = math.max(0, self.layout.preview_width - 2)  -- -2 for borders
     local preview_height      = math.max(0, self.layout.preview_height - 2) -- -2 for borders
 
     local preview_fn          = self.opts.previewer or _file_preview
