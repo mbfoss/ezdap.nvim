@@ -125,15 +125,24 @@ function M.init()
         _show_stopped(sess)
     end)
 
-    -- Not paused (any more): a resume clears late to ride out a step, while a
-    -- session that ended has nothing left to flicker back in.
+    -- The sign is gone once there is no pause left to point at. A session that
+    -- ended clears now — nothing can flicker back in — where a resume clears late,
+    -- so stepping doesn't blink the sign off and on.
+    --
+    -- "Running" is not enough on its own to say the pause is over: a thread
+    -- starting under a live breakpoint puts the whole session in that state. The
+    -- thread the sign belongs to is what settles it.
     manager.on_session_updated:subscribe(function(id, info)
-        if id ~= manager.active_id() or info.is_paused then return end
-        if info.state == "running" then
-            _deferred_clear(config.antiflicker_delay)
-        else
+        if id ~= manager.active_id() then return end
+        if info.state == "terminated" or info.state == "exited" then
             _clear()
+            return
         end
+        if info.is_paused then return end
+        local sess   = manager.session()
+        local thread = sess and sess:current_thread()
+        if thread and thread.status == "stopped" then return end
+        _deferred_clear(config.antiflicker_delay)
     end)
 
     manager.on_selection_changed:subscribe(function(_, sess)
