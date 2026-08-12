@@ -17,19 +17,57 @@ function M.prepare_buffer_lines(lines)
 	return out
 end
 
+local _UTF8_CHAR = "[%z\1-\127\194-\244][\128-\191]*"
+local _ELLIPSIS = "…"
+
+---The `width` display cells of `str` that survive cutting, keeping the start of
+---the string, or its end when `right`. Adds no ellipsis -- callers decorate.
 ---@param str string
----@param max_len number
+---@param width integer  display cells
+---@param right? boolean  cut from the left, keeping the end of the string
+---@return string
+function M.fit_to_width(str, width, right)
+    if width <= 0 then return "" end
+    -- printable ASCII: one byte per cell, so the byte slice is already exact
+    if not str:find("[^\32-\126]") then
+        if #str <= width then return str end
+        return right and str:sub(#str - width + 1) or str:sub(1, width)
+    end
+
+    local chars = {}
+    for char in str:gmatch(_UTF8_CHAR) do chars[#chars + 1] = char end
+
+    local out, used = {}, 0
+    local from, to, step = 1, #chars, 1
+    if right then from, to, step = #chars, 1, -1 end
+    for i = from, to, step do
+        local w = vim.api.nvim_strwidth(chars[i])
+        if used + w > width then break end
+        out[#out + 1] = chars[i]
+        used = used + w
+    end
+    if right then
+        for i = 1, #out / 2 do
+            out[i], out[#out - i + 1] = out[#out - i + 1], out[i]
+        end
+    end
+    return table.concat(out)
+end
+
+---@param str string
+---@param max_len number  display cells
 ---@param right? boolean  crop from the left, keeping the end of the string
 ---@return string preview
 ---@return boolean is_different
 function M.crop_for_ui(str, max_len, right)
     assert(type(str) == 'string', str)
     max_len = max_len > 2 and max_len or 2
-    if #str <= max_len then return str, false end
+    if vim.api.nvim_strwidth(str) <= max_len then return str, false end
+    local kept = M.fit_to_width(str, max_len - 1, right) -- the ellipsis takes a cell
     if right then
-        return "…" .. str:sub(#str - max_len + 2), true
+        return _ELLIPSIS .. kept, true
     end
-    return str:sub(1, max_len - 1) .. "…", true
+    return kept .. _ELLIPSIS, true
 end
 
 ---@param path string

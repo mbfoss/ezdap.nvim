@@ -8,12 +8,17 @@ local M                  = {}
 local fsutil             = require("ezdap.util.fsutil")
 local ui_util            = require("ezdap.util.ui")
 local timer              = require("ezdap.util.timer")
+local str_util           = require("ezdap.util.strutil")
 
 local _NS_CURSOR         = vim.api.nvim_create_namespace("ezdap_select_cursor")
 local _NS_CONTENT        = vim.api.nvim_create_namespace("ezdap_select_content")
 local _NS_PREVIEW        = vim.api.nvim_create_namespace("ezdap_select_preview")
 
 local _antiflicker_delay = 200
+
+---The end a too-wide line is cut at: `"left"` keeps its tail (paths), `"right"`
+---keeps its head. The dropped end is marked with an ellipsis.
+---@alias ezdap.select.Crop "left"|"right"
 
 ---@class ezdap.select.ItemData
 ---@field filepath string?
@@ -44,6 +49,7 @@ local _antiflicker_delay = 200
 ---@field enable_preview boolean?
 ---@field previewer ezdap.select.Previewer?  -- defaults to the built-in file previewer
 ---@field initial integer?  -- 1-based index of the item to pre-select (cursor starts on it)
+---@field virt_line_crop ezdap.select.Crop?  -- end to cut a too-wide `virt_line` at; nil lets it run past the window
 ---@field height_ratio number?
 ---@field width_ratio number?
 ---@field list_wrap boolean?
@@ -84,6 +90,10 @@ local _BORDER_FULL       = "rounded"
 
 -- Indent every list row sits at, shared by rendering and wrapped-line indent.
 local _ROW_PREFIX        = "  "
+
+-- Elbow drawn before an item's virtual line, and the mark left where a crop cut.
+local _VIRT_LINE_ELBOW   = "╰─ "
+local _ELLIPSIS          = "…"
 
 -- Rows the prompt costs: its top border, its single line of text, and the rule.
 local _PROMPT_ROWS       = 3
@@ -183,6 +193,43 @@ local function _get_horizontal_layout(opts)
         preview_width  = preview_width,
         preview_height = list_height + _PROMPT_ROWS - 1,
     }
+end
+
+---Cut `chunks` down to `width` display cells, dropping whole chunks and then
+---part of the one straddling the limit. Highlights ride along on what is kept.
+---@param chunks {[1]:string,[2]:string?}[]
+---@param width integer
+---@param side ezdap.select.Crop
+---@return {[1]:string,[2]:string?}[]
+local function _crop_chunks(chunks, width, side)
+    local total = 0
+    for _, chunk in ipairs(chunks) do
+        total = total + vim.fn.strdisplaywidth(chunk[1] or "")
+    end
+    if total <= width then return chunks end
+    if width <= 1 then return { { _ELLIPSIS, "NonText" } } end
+
+    local budget = width - 1 -- the ellipsis standing in for the dropped end
+    local out    = {}
+    local used   = 0
+    local from, to, step = 1, #chunks, 1
+    if side == "left" then from, to, step = #chunks, 1, -1 end
+    for i = from, to, step do
+        local text, hl = chunks[i][1] or "", chunks[i][2]
+        local w        = vim.fn.strdisplaywidth(text)
+        if used + w <= budget then
+            used = used + w
+        else
+            text = str_util.fit_to_width(text, budget - used, side == "left")
+            used = budget
+        end
+        if text ~= "" then
+            table.insert(out, side == "left" and 1 or #out + 1, { text, hl })
+        end
+        if used >= budget then break end
+    end
+    table.insert(out, side == "left" and 1 or #out + 1, { _ELLIPSIS, "NonText" })
+    return out
 end
 
 ---@param text string  the final string to be shown
@@ -425,24 +472,34 @@ function Picker:init(opts, callback)
     end)
 end
 
----The prompt window's config. `nvim_win_set_config` resets what it is not
----handed, so the border, title and footer come along on every move.
+---The footer half of the prompt window config. Split out because
+---`nvim_win_set_config` applies partial configs, so a position render can hand
+---it over on its own without rebuilding the border and title.
+---@param position_text string?
+---@return table
+local function _pwin_footer(position_text)
+    if not position_text then return { footer = "" } end
+    return {
+        footer     = { { " " .. position_text, "NonText" } },
+        footer_pos = "right",
+    }
+end
+
+---The prompt window's full config, for creating and moving the window.
 ---@return table
 function Picker:_pwin_config()
-    local title = self.opts.prompt and (" " .. self.opts.prompt .. " ") or ""
-    return {
-        relative   = "editor",
-        style      = "minimal",
-        row        = self.layout.prompt_row,
-        col        = self.layout.prompt_col,
-        width      = self.layout.prompt_width,
-        height     = 1,
-        border     = _BORDER_TOP,
-        title      = title,
-        title_pos  = "center",
-        footer     = self._position_text and { { " " .. self._position_text .. " ", "NonText" } } or "",
-        footer_pos = self._position_text and "right" or nil,
+    local cfg = {
+        relative  = "editor",
+        style     = "minimal",
+        row       = self.layout.prompt_row,
+        col       = self.layout.prompt_col,
+        width     = self.layout.prompt_width,
+        height    = 1,
+        border    = _BORDER_TOP,
+        title     = self.opts.prompt and (" " .. self.opts.prompt .. " ") or "",
+        title_pos = "center",
     }
+    return vim.tbl_extend("error", cfg, _pwin_footer(self._position_text))
 end
 
 function Picker:relayout()
@@ -564,6 +621,12 @@ function Picker:relayout()
         end
         self:update_preview()
     end
+
+    -- The list width the crop is measured against has just moved.
+    if #self.list_items > 0 then
+        self:render_list()
+        self:render_cursor()
+    end
 end
 
 ---Filter `_source_items` by the current query and rebuild the visible list.
@@ -617,9 +680,15 @@ end
 
 function Picker:render_list()
     if not self.lbuf then return end
-    local prefix   = _ROW_PREFIX
-    local lines    = {}
-    local extmarks = {}
+    local prefix          = _ROW_PREFIX
+    local lines           = {}
+    local extmarks        = {}
+
+    -- What a virtual line has left after the indent and the elbow before it.
+    local crop            = self.opts.virt_line_crop
+    local virt_line_width = self.layout.list_width
+        - vim.fn.strdisplaywidth(prefix)
+        - vim.fn.strdisplaywidth(_VIRT_LINE_ELBOW)
 
     for row_idx, item in ipairs(self.list_items) do
         local row  = row_idx - 1
@@ -650,9 +719,15 @@ function Picker:render_list()
 
         -- Display-only line hung under the entry: the item's own `virt_line`,
         -- aligned with the label by the row prefix.
-        local vlines = {}
-        if item.virt_line then
-            table.insert(vlines, vim.list_extend({ { prefix }, {"╰─ ", "NonText"} }, item.virt_line))
+        local vlines  = {}
+        local vchunks = item.virt_line
+        if vchunks then
+            -- A virtual line neither wraps nor scrolls, so what runs past the
+            -- window is simply lost; `virt_line_crop` picks the end to lose.
+            if crop then
+                vchunks = _crop_chunks(vchunks, virt_line_width, crop)
+            end
+            table.insert(vlines, vim.list_extend({ { prefix }, { _VIRT_LINE_ELBOW, "NonText" } }, vchunks))
         end
         if #vlines > 0 then
             table.insert(extmarks, {
@@ -743,7 +818,7 @@ function Picker:render_position()
     local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
     if text == self._position_text then return end
     self._position_text = text
-    vim.api.nvim_win_set_config(self.pwin, self:_pwin_config())
+    vim.api.nvim_win_set_config(self.pwin, _pwin_footer(text))
 end
 
 function Picker:render_cursor()

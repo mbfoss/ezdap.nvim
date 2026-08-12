@@ -871,13 +871,15 @@ function M.debug.frame()
         }
     end
     select.open({
-        prompt         = "Select frame",
-        enable_preview = true,
-        list_wrap      = false,
-        items          = items,
-        initial        = initial,
+        prompt          = "Select frame",
+        enable_preview  = true,
+        list_wrap       = false,
+        items           = items,
+        initial         = initial,
+        -- A deep path matters at its tail: keep the file and line, drop the root.
+        virt_line_crop  = "left",
         -- Call order is the frame list's meaning; keep it while filtering.
-        sort_by_score  = false,
+        sort_by_score   = false,
     }, function(data)
         if not data then return end
         -- The thread may have resumed while the picker was open.
