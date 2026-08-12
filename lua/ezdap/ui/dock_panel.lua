@@ -34,13 +34,11 @@ local _groups = {}
 ---@return dock.Badge?
 local function _badge(state)
     if state == "running" then
-        local icon, hl = format.session_sign({ state = "running" })
-        return { icon = icon, hl = hl }
+        return { icon = "▶", hl = format.hl.session_running }
     elseif state == "done" then
-        local icon, hl = format.session_sign({ state = "terminated" })
-        return { icon = icon, hl = hl }
+        return { icon = "✓", hl = format.hl.session_running }
     elseif state == "failed" then
-        return { icon = require("ezdap.config").signs.unsupported_breakpoint, hl = format.hl.exception }
+        return { icon = "✗", hl = format.hl.exception }
     end
     return nil
 end
