@@ -1,10 +1,10 @@
 local M = {}
 
 ---@param str string
----@param len number
+---@param len number  display cells
 ---@return string
 function M.pad_right(str, len)
-	return str .. string.rep(" ", math.max(0, len - #str))
+	return str .. string.rep(" ", math.max(0, len - vim.api.nvim_strwidth(str)))
 end
 
 ---@param lines string[] list of strings (may contain newlines)
@@ -17,41 +17,45 @@ function M.prepare_buffer_lines(lines)
 	return out
 end
 
-local _UTF8_CHAR = "[%z\1-\127\194-\244][\128-\191]*"
 local _ELLIPSIS = "…"
 
 ---The `width` display cells of `str` that survive cutting, keeping the start of
 ---the string, or its end when `right`. Adds no ellipsis -- callers decorate.
+---
+---Cuts between graphemes, never inside one, so a combining mark stays with the
+---character it decorates. The result is the widest such run that fits.
 ---@param str string
 ---@param width integer  display cells
 ---@param right? boolean  cut from the left, keeping the end of the string
 ---@return string
 function M.fit_to_width(str, width, right)
-    if width <= 0 then return "" end
-    -- printable ASCII: one byte per cell, so the byte slice is already exact
-    if not str:find("[^\32-\126]") then
-        if #str <= width then return str end
-        return right and str:sub(#str - width + 1) or str:sub(1, width)
-    end
+	if width <= 0 then return "" end
+	local total_width = vim.api.nvim_strwidth(str)
+	if total_width <= width then return str end
+	-- one byte per cell, so the byte slice is already exact
+	if total_width == #str then
+		return right and str:sub(#str - width + 1) or str:sub(1, width)
+	end
 
-    local chars = {}
-    for char in str:gmatch(_UTF8_CHAR) do chars[#chars + 1] = char end
-
-    local out, used = {}, 0
-    local from, to, step = 1, #chars, 1
-    if right then from, to, step = #chars, 1, -1 end
-    for i = from, to, step do
-        local w = vim.api.nvim_strwidth(chars[i])
-        if used + w > width then break end
-        out[#out + 1] = chars[i]
-        used = used + w
-    end
-    if right then
-        for i = 1, #out / 2 do
-            out[i], out[#out - i + 1] = out[#out - i + 1], out[i]
-        end
-    end
-    return table.concat(out)
+	-- Binary search the grapheme count that fits, measuring each candidate whole:
+	-- summing per-character widths would miscount composing sequences. Every
+	-- grapheme costs at least one cell, so `width` of them is an upper bound --
+	-- for a long string cropped to a small window that is most of the search.
+	-- `strcharpart` clamps a too-long count, so a left cut never needs the total
+	local total = right and vim.fn.strchars(str, 1) or 0
+	local lo, hi = 0, right and (total < width and total or width) or width
+	local best = "" -- the last candidate that fit, so the search need not redo it
+	while lo < hi do
+		local mid = math.ceil((lo + hi) / 2)
+		local part = right and vim.fn.strcharpart(str, total - mid, mid, 1)
+			or vim.fn.strcharpart(str, 0, mid, 1)
+		if vim.api.nvim_strwidth(part) <= width then
+			lo, best = mid, part
+		else
+			hi = mid - 1
+		end
+	end
+	return best
 end
 
 ---@param str string
@@ -60,14 +64,20 @@ end
 ---@return string preview
 ---@return boolean is_different
 function M.crop_for_ui(str, max_len, right)
-    assert(type(str) == 'string', str)
-    max_len = max_len > 2 and max_len or 2
-    if vim.api.nvim_strwidth(str) <= max_len then return str, false end
-    local kept = M.fit_to_width(str, max_len - 1, right) -- the ellipsis takes a cell
-    if right then
-        return _ELLIPSIS .. kept, true
-    end
-    return kept .. _ELLIPSIS, true
+	assert(type(str) == 'string', str)
+	max_len = math.max(max_len, 2)
+	local width = vim.api.nvim_strwidth(str)
+	if width <= max_len then return str, false end
+	local kept -- the ellipsis takes a cell of the budget
+	if width == #str then -- one byte per cell, so the byte slice is already exact
+		kept = right and str:sub(#str - max_len + 2) or str:sub(1, max_len - 1)
+	else
+		kept = M.fit_to_width(str, max_len - 1, right)
+	end
+	if right then
+		return _ELLIPSIS .. kept, true
+	end
+	return kept .. _ELLIPSIS, true
 end
 
 ---@param path string
