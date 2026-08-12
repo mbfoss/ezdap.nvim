@@ -813,14 +813,15 @@ end
 ---Show `cursor/total` right-aligned in the prompt window's bottom border, the
 ---rule it shares with the list.
 function Picker:render_position()
+    if self.closed or not self.pwin or not vim.api.nvim_win_is_valid(self.pwin) then return end
+    local total = #self.list_items
+    local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
+    if text == self._position_text then return end
+    self._position_text = text
     -- schedule footer config to avoid cursor flicker
     vim.schedule(function()
         if self.closed or not self.pwin or not vim.api.nvim_win_is_valid(self.pwin) then return end
-        local total = #self.list_items
-        local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
-        if text == self._position_text then return end
-        self._position_text = text
-        vim.api.nvim_win_set_config(self.pwin, _pwin_footer(text))
+        vim.api.nvim_win_set_config(self.pwin, _pwin_footer(self._position_text or ""))
     end)
 end
 
