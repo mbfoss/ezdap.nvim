@@ -524,10 +524,17 @@ end
 ---@param task ezdap.Task
 ---@param callbacks ezdap.TaskCallback
 ---@return fun() cancel function
+---@return fun() dispose  drop what this run left behind in ezdap's own UI
 function M.start_task(task, callbacks)
     _require_setup("start_task")
     M.clean()
-    return require("ezdap.task").start(task, callbacks)
+    local cancel, sessions = require("ezdap.task").start(task, callbacks)
+    -- The host owns the buffers it was handed; what is left here is this run's
+    -- session rows — and only if a view was ever opened, since disposing is no
+    -- reason to build one.
+    return cancel, function()
+        if _debug_view then _debug_view:clear_sessions(sessions) end
+    end
 end
 
 ---Re-run the most recently run task from scratch. Warns when nothing has run yet.

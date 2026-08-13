@@ -490,6 +490,18 @@ function DebugView:clear_finished_sessions()
     self:_drop_finished_rows(function() return true end)
 end
 
+---Drop the finished rows of just these sessions. For hosts that drive tasks
+---through `start_task` and dispose of them themselves: they clear what they
+---started without touching rows they did not produce.
+---@param ids integer[]
+function DebugView:clear_sessions(ids)
+    local wanted = {} ---@type table<integer, true>
+    for _, id in ipairs(ids) do wanted[id] = true end
+    self:_drop_finished_rows(function(data)
+        return data.session_id ~= nil and wanted[data.session_id] == true
+    end)
+end
+
 ---@param id number
 ---@param info ezdap.client.SessionInfo
 function DebugView:_upsert_session_row(id, info)

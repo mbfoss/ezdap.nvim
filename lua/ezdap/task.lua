@@ -33,12 +33,15 @@ local _run_counter = 0
 ---@param task ezdap.Task  native DAP task (name + adapter + request + parameters, plus optional host/port)
 ---@param callbacks ezdap.TaskCallback
 ---@return fun() -- cancel function
+---@return integer[] -- ids of the sessions this run started, for its teardown
 M.start            = function(task, callbacks)
     local add_bufnr = callbacks.add_bufnr or function() end
     local report    = callbacks.report or function() end
     local on_done   = callbacks.on_done or function() end
 
     local sessions  = {} ---@type table<integer, ezdap.dap.Session>
+    -- Every session this run produced, live or ended: what `dispose` answers for.
+    local started   = {} ---@type integer[]
 
     _run_counter    = _run_counter + 1
     local run_key   = (task.name or "debug") .. "~" .. _run_counter
@@ -150,6 +153,7 @@ M.start            = function(task, callbacks)
         manager.start(config, {
             on_session = function(id, sess)
                 sessions[id] = sess
+                started[#started + 1] = id
                 if _cancel_early then
                     sess:stop()
                     return
@@ -225,7 +229,7 @@ M.start            = function(task, callbacks)
         })
     end)
 
-    return function()
+    local function cancel()
         if next(sessions) then
             for _, sess in pairs(sessions) do
                 sess:stop()
@@ -234,6 +238,9 @@ M.start            = function(task, callbacks)
             _cancel_early = true
         end
     end
+
+    -- `started` is returned by reference: sessions land in it after this call.
+    return cancel, started
 end
 
 return M
