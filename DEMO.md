@@ -1,20 +1,19 @@
 # ezdap.nvim in action
 
-Every clip below is a real session recorded in Neovim against the same small
-Python program, debugged through [debugpy](https://github.com/microsoft/debugpy).
-Commands are typed out in full (`:Debug …`) so what's happening stays visible;
-in daily use they sit behind keymaps — see
-[Keymaps example](README.md#keymaps-example).
+Each clip is a recorded Neovim session debugging the same small Python program
+through [debugpy](https://github.com/microsoft/debugpy). Commands are typed in
+full (`:Debug …`) to show what each step does; map them to keys for daily use —
+see [Keymaps example](README.md#keymaps-example).
 
-The editor in the clips is stock Neovim plus ezdap,
+The editor is Neovim with ezdap,
 [dock.nvim](https://github.com/mbfoss/dock.nvim) for the bottom panel and
 [keystone.nvim](https://github.com/mbfoss/keystone.nvim)'s statusline.
 
 ## Breakpoints, stepping and the debug panel
 
-Set a breakpoint, launch, and the panel opens on the stop: sessions, call stack,
-locals, watch expressions and breakpoints in one tree — with the frame's values
-rendered inline in the source.
+Set a breakpoint and launch. The panel opens on the stop, showing sessions, call
+stack, locals, watch expressions and breakpoints in one tree; the frame's values
+are rendered inline in the source.
 
 ![Breakpoints and stepping](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/01-breakpoint-step.gif)
 
@@ -42,28 +41,29 @@ running program.
 
 ## REPL and run buffers
 
-Each run brings its own buffers — progress log, REPL, adapter terminal, program
-output. The REPL evaluates in the stopped frame, calls included.
+Each run has its own buffers: progress log, REPL, adapter terminal and program
+output. The REPL evaluates expressions in the stopped frame, function calls
+included.
 
 ![REPL and run buffers](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/05-repl.gif)
 
 ## Jump to cursor, step in and out
 
 Move the execution point to the cursor without running the code in between,
-then step into a call and back out — the return value lands in the locals.
+then step into a call and back out. The return value appears in the locals.
 
 ![Jump to cursor and stepping in](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/06-step-in-jump.gif)
 
 ## Parallel sessions
 
-Two debuggees paused at the same breakpoint at once, a panel row and a dock tab
-each; `:Debug session` picks which one the stepping commands drive.
+Two debuggees paused at the same breakpoint at once, each with a panel row and a
+dock tab. `:Debug session` selects which one the stepping commands apply to.
 
 ![Parallel sessions](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/07-parallel-sessions.gif)
 
 ## Persistence
 
-Breakpoints, their conditions and watch expressions are saved per project.
-Quit Neovim, come back, and they are already there.
+Breakpoints, their conditions and watch expressions are saved per project and
+restored on the next start.
 
 ![Project-scoped persistence](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/08-persistence.gif)

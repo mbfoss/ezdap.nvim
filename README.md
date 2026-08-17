@@ -19,7 +19,7 @@ debuggers are kept in
 ![Breakpoints and stepping](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/01-breakpoint-step.gif)
 
 **[More demos →](DEMO.md)** — conditions and logpoints, exception breakpoints,
-the REPL, watch expressions, parallel sessions and more.
+the REPL, watch expressions, parallel sessions, persistence.
 
 ---
 
