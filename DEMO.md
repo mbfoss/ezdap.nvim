@@ -20,13 +20,13 @@ are rendered inline in the source.
 ## Conditions and logpoints
 
 A breakpoint that only stops when `amount > 50`, and a logpoint that prints
-every withdrawal without ever pausing the program.
+every scaling operation without pausing the program.
 
 ![Conditional breakpoints and logpoints](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/02-condition-logpoint.gif)
 
 ## Function and exception breakpoints
 
-Break on `withdraw` by name wherever it is called from, then run into the
+Break on `scale` by name wherever it is called from, then run into the
 program's uncaught `ValueError` and read it with `:Debug exception_info`.
 
 ![Function and exception breakpoints](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/03-function-exception.gif)
