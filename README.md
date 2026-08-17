@@ -16,10 +16,16 @@ Each debugger is described by a single file, and ready-made ones for the common
 debuggers are kept in
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters).
 
+![Breakpoints and stepping](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/01-breakpoint-step.gif)
+
+**[More demos →](DEMO.md)** — conditions and logpoints, exception breakpoints,
+the REPL, watch expressions, parallel sessions and more.
+
 ---
 
 ## Table of contents
 
+- [Demos](DEMO.md)
 - [Highlights](#highlights)
 - [Requirements](#requirements)
 - [Installation](#installation)
