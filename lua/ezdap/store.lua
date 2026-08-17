@@ -4,19 +4,22 @@
 ---contains one of `config.root_markers` (default `.git`). All project state
 ---lives in a single JSON file at that root (`config.data_filename`).
 ---
----This module is a thin path + read/write helper: it locates the root, converts
----paths to/from a portable project-relative form, and reads/writes the data
----file. It knows nothing about *what* is stored — the lifecycle (when to save,
----load and clear) and the breakpoint/expression payloads live in init.lua.
+---This module is a thin path + read/write helper: it converts paths to/from a
+---portable project-relative form and reads/writes the data file, over the root
+---`ezdap.project` locates. It knows nothing about *what* is stored — the
+---lifecycle and the breakpoint/expression payloads live in init.lua.
 
 local M = {}
 
-local fsutil               = require("ezdap.util.fsutil")
-local config               = require("ezdap.config")
+local fsutil     = require("ezdap.util.fsutil")
+local project    = require("ezdap.project")
 
-local _default_filename    = ".ezdap.json"
-local _root                = nil ---@type string|nil
-local _root_resolved       = false
+-- Root and data-path resolution lives in `project`, which the lazy-load path
+-- uses on its own. Re-exported here so `store` stays the one place callers
+-- need for anything project-state.
+M.root           = project.root
+M.invalidate     = project.invalidate
+M.data_path      = project.data_path
 
 ---True when a table holds no data — empty, or only (recursively) empty tables.
 ---@param  tbl table
@@ -26,40 +29,6 @@ local function _is_empty(tbl)
         if type(v) ~= "table" or not _is_empty(v) then return false end
     end
     return true
-end
-
----Walk up from the cwd until a directory holding a root marker is found.
----@return string|nil root
-local function _find_root()
-    local markers = config.root_markers
-    if not markers or #markers == 0 then return nil end
-    local cwd = vim.fn.getcwd() --[[@as string]]
-    local marker = vim.fs.find(markers, { path = cwd, upward = true, limit = 1 })[1]
-    return marker and vim.fs.dirname(marker) or nil
-end
-
----The current project root, or nil when the cwd is not inside a project.
----The result is cached; call invalidate() after a cwd change.
----@return string|nil
-function M.root()
-    if not _root_resolved then
-        _root          = _find_root()
-        _root_resolved = true
-    end
-    return _root
-end
-
----Drop the cached root so the next root() recomputes it. Call after a cwd change.
-function M.invalidate()
-    _root, _root_resolved = nil, false
-end
-
----Absolute path of the data file, or nil when the cwd is not in a project.
----@return string|nil path
-function M.data_path()
-    local root = M.root()
-    if not root then return nil end
-    return vim.fs.joinpath(root, config.data_filename or _default_filename)
 end
 
 ---Make an absolute path relative to the project root, for portable storage.

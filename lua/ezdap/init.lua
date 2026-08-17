@@ -4,18 +4,37 @@ local M = {}
 local _debug_view
 ---@type ezdap.DisassemblyView?
 local _disassembly_view
-local _initialized = false
--- Whether `setup()` has run. The public API relies on the autocmds, UI wiring and
--- restored breakpoints setup installs; calling in before then would silently do
--- the wrong thing, so those entry points fail loudly instead.
+-- Whether `setup()` has run. The public API relies on the config and autocmds
+-- it installs; calling in before then would silently do the wrong thing, so
+-- those entry points fail loudly instead.
 local _setup_done = false
 
+-- Whether the plugin proper is up: UI wiring, DAP subscriptions and the
+-- restored project state. `setup()` deliberately stops short of this, so a
+-- session that never debugs pays for nothing beyond the command and autocmds.
+local _loaded = false
+---Defined below, once `_init` is in scope.
+---@type fun()
+local _ensure_loaded
+
 ---Guard a public API entry point: raise a clear error — pointed at the caller —
----when `setup()` has not been called yet.
+---when `setup()` has not been called yet. Otherwise this *is* the demand that
+---brings the plugin up, so every entry point below can assume a loaded plugin.
 ---@param fn string  the API name, for the message
 local function _require_setup(fn)
-    if _setup_done then return end
-    error(("[ezdap] require('ezdap').setup() must be called before %s()"):format(fn), 3)
+    if not _setup_done then
+        error(("[ezdap] require('ezdap').setup() must be called before %s()"):format(fn), 3)
+    end
+    _ensure_loaded()
+end
+
+---Whether the current project has a state file on disk. Deliberately goes to
+---`project` rather than `store`: this runs while cold, and `store` would drag
+---the read/write machinery in behind it. Nothing is decoded.
+---@return boolean
+local function _has_saved_state()
+    local path = require("ezdap.project").data_path()
+    return path ~= nil and vim.uv.fs_stat(path) ~= nil
 end
 
 -- Persistence seam: the engine deals in absolute source paths; on-disk state
@@ -381,19 +400,29 @@ function M.complete(cmd, rest, arg_lead)
     return _debug_complete_subs(cmd, rest, arg_lead)
 end
 
--- Autocmd handlers. The autocmds themselves are created by `setup()`, so they
--- only ever fire in a session that has loaded ezdap.
+-- Autocmd handlers. `setup()` creates the autocmds, so these fire from startup
+-- on — including in a session that never brought the plugin up. Each one is a
+-- no-op while cold: there are no breakpoints, expressions or sessions yet.
 
 ---Persist the current project's breakpoints and expressions.
 function M.save_state()
+    if not _loaded then return end
     _save()
 end
 
 ---Re-resolve the project root after a cwd change and restore that project's
 ---state (or clear it, when the new cwd is not inside a project).
 function M.reload_state()
-    require("ezdap.store").invalidate()
+    require("ezdap.project").invalidate()
     _warned_rootless = false
+
+    -- Still cold: the new project's state file is the trigger, exactly as at
+    -- `setup()`. Without one there is nothing to restore and nothing to clear.
+    if not _loaded then
+        if _has_saved_state() then _ensure_loaded() end
+        return
+    end
+
     _load()
     -- The reloaded state belongs to another project; undoing into it would
     -- resurrect the old one's breakpoints.
@@ -404,16 +433,15 @@ end
 ---`disconnect` orphans its debuggee, and nvim SIGKILLs adapter jobs as it exits.
 ---vim.wait pumps the loop for the responses; the timeout caps a hung adapter.
 function M.shutdown()
+    if not _loaded then return end
     local client = require("ezdap.dap.client")
     local done = false
     client.quit(function() done = true end)
     vim.wait(10000, function() return done end, 20)
 end
 
+---Wire up the UI and DAP subscriptions. Called once, via `_ensure_loaded`.
 local function _init()
-    if _initialized then return end
-    _initialized = true
-
     require("ezdap.dap.breakpoints").on_change:subscribe(_warn_if_unpersisted)
     require("ezdap.ui.expressions").on_change:subscribe(_warn_if_unpersisted)
 
@@ -434,6 +462,16 @@ local function _init()
     client.on_session_added:subscribe(function()
         vim.schedule(function() M.debug_view():show() end)
     end)
+end
+
+---Bring the plugin proper up, once. The two demands that reach here are a
+---`:Debug` invocation (or any public API call) and a project state file found
+---by `setup()` or a cwd change.
+function _ensure_loaded()
+    if _loaded then return end
+    _loaded = true
+    _init()
+    _load()
 end
 
 -- adapters table is Lazily loaded on first access
@@ -627,10 +665,14 @@ function M.is_setup()
     return _setup_done
 end
 
----Initialise the plugin. Nothing — the user command, the autocmds, the UI or
----the restored project state — exists before this runs, so options that decide
+---Initialise the plugin. Nothing exists before this runs, so options deciding
 ---what gets read off disk (`root_markers`, `data_filename`) or what the command
 ---is called (`command`) are in place by the time they are first used.
+---
+---Only the command and the autocmds are installed here. The plugin proper waits
+---for demand — a `:Debug` invocation or an API call — or for a project that has
+---saved breakpoints to restore.
+---
 ---Calling it a second time is a no-op: the later `opts` are dropped rather
 ---than half-applied over a plugin that is already wired up.
 ---@param opts? ezdap.Config
@@ -655,8 +697,11 @@ function M.setup(opts)
     _setup_done = true
     _register_command(config.command)
     _create_autocmds()
-    _init()
-    _load()
+
+    -- Everything past this point is deferred to the first `:Debug` or API call
+    -- — except when the project has saved breakpoints, which have to show up as
+    -- signs without being asked for.
+    if _has_saved_state() then _ensure_loaded() end
 end
 
 return M
