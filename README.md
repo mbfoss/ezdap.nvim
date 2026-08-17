@@ -11,7 +11,7 @@ without leaving the editor. It implements the Debug Adapter Protocol directly,
 so it drives the same debuggers VS Code and other editors use — Python, Go,
 C/C++, Rust, JavaScript and anything else with a DAP adapter.
 
-It is self-contained: no required plugins, and no per-language glue plugins.
+It is self-contained: no required dependency plugins, and no per-language glue plugins.
 Each debugger is described by a single file, and ready-made ones for the common
 debuggers are kept in
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters).
