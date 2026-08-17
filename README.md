@@ -56,7 +56,7 @@ the REPL, watch expressions, parallel sessions, persistence.
   variables, watch expressions and breakpoints in one navigable view.
 - **Inline variable values** — see values right in the source while stopped,
   in several placement styles (requires treesitter parser).
-- **Run buffers on the session** — REPL, program output, adapter terminal and an
+- **Special buffers provided for each session** — REPL, program output, adapter terminal and an
   optional raw-DAP-message log.
 - **Power moves** — jump-to-cursor, restart frame, step-into-targets,
   exception info, disassembly view and instruction-level stepping.
