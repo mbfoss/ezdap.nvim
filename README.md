@@ -109,8 +109,9 @@ git clone https://github.com/mbfoss/ezdap.nvim \
 ```
 </details>
 
-Calling `setup()` is required — it registers the `:Debug` command, wires up
-persistence, and initialises the UI.
+Calling `setup()` is required — nothing exists until it runs. It registers the
+`:Debug` command (rename it with the `command` option), wires up persistence,
+and initialises the UI.
 
 ## Quick start
 
@@ -501,6 +502,8 @@ Pass options to `setup()`. Defaults shown:
 
 ```lua
 require("ezdap").setup({
+  -- Name of the user command every subcommand lives under, e.g. "Dbg" for `:Dbg run`.
+  command             = "Debug",
   -- Project detection: the nearest ancestor holding one of these marks the root.
   root_markers        = { ".git" },
   -- Per-project state file, written at the project root.
@@ -554,6 +557,8 @@ require("ezdap").setup({
 ## Command reference
 
 Everything is under the `:Debug` command, with completion for every subcommand.
+Set `command` in `setup()` to register it under another name; the subcommands
+below are unchanged.
 
 <details>
 <summary><b><code>:Debug</code> subcommands</b></summary>

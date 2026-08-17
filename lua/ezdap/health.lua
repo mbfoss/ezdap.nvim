@@ -18,7 +18,7 @@ local function _exe_of(command)
     return nil
 end
 
----Check the Neovim version against the plugin's minimum (see plugin/ezdap.lua).
+---Check the Neovim version against the plugin's minimum (see `ezdap.setup`).
 local function _check_requirements()
     health.start("ezdap: requirements")
     if vim.fn.has("nvim-0.10") == 1 then
@@ -32,8 +32,12 @@ end
 local function _check_setup()
     health.start("ezdap: setup")
 
-    if vim.fn.exists(":Debug") == 2 then
-        health.ok("setup() has been called (:Debug is registered)")
+    -- Read through package.loaded rather than requiring: an unloaded ezdap is
+    -- itself the answer, and loading it here would not have run setup anyway.
+    local ezdap = package.loaded["ezdap"]
+    if ezdap and ezdap.is_setup() then
+        health.ok(("setup() has been called (:%s is registered)")
+            :format(require("ezdap.config").command))
     else
         health.warn("setup() has not been called", {
             "Add require('ezdap').setup() to your config",

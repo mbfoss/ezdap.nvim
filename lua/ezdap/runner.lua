@@ -362,7 +362,8 @@ function M.run_profile(adapter, profile_name, inputs)
     local schema = require("ezdap.schema")
 
     if not adapter or adapter == "" then
-        _warn("run: usage: :Debug run <adapter> <profile> [input=value]…")
+        _warn(("run: usage: :%s run <adapter> <profile> [input=value]…")
+            :format(require("ezdap.config").command))
         return
     end
     if not require("ezdap.adapters")[adapter] then
@@ -371,7 +372,8 @@ function M.run_profile(adapter, profile_name, inputs)
         return
     end
     if not profile_name or profile_name == "" then
-        _warn("run: usage: :Debug run " .. adapter .. " <profile> [input=value]…"
+        _warn("run: usage: :" .. require("ezdap.config").command
+            .. " run " .. adapter .. " <profile> [input=value]…"
             .. " (profiles: " .. table.concat(schema.profile_names(adapter), ", ") .. ")")
         return
     end

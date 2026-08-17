@@ -79,9 +79,9 @@ local function _warn_if_unpersisted()
         vim.log.levels.WARN)
 end
 
--- The `:Debug` surface. `plugin/ezdap.lua` registers the command at startup and
--- routes it here through `M.command`/`M.complete`, so nothing below is read
--- until the command is first run or completed.
+-- The user-command surface. `setup()` registers the command — under whatever
+-- name `config.command` gives — and routes it here through
+-- `M.command`/`M.complete`.
 
 ---@type table?
 local _command_mod
@@ -198,8 +198,8 @@ local _debug_subs = {
 local function _parse_run_args(args)
     local adapter, profile = args[1], args[2]
     if (adapter and adapter:find("=", 1, true)) or (profile and profile:find("=", 1, true)) then
-        vim.notify("[ezdap] run: usage: :Debug run <adapter> <profile> [input=value]…",
-            vim.log.levels.WARN)
+        vim.notify(("[ezdap] run: usage: :%s run <adapter> <profile> [input=value]…")
+            :format(require("ezdap.config").command), vim.log.levels.WARN)
         return
     end
     local inputs = {}
@@ -367,12 +367,11 @@ local function _debug_complete_subs(_, rest, arg_lead)
     return {}
 end
 
----Run a `:Debug …` invocation. `plugin/ezdap.lua` registers the command at
----startup, so this may be the first thing to touch the plugin -- `setup()` with
----defaults stands in when the user never called it.
+---Run a `:Debug …` invocation. Only reachable once `setup()` has registered the
+---command.
 ---@type ezdap.util.usercmd.run_fn
 function M.command(cmd, args, opts)
-    if not _setup_done then M.setup() end
+    _require_setup("command")
     _debug_run(cmd, args, opts)
 end
 
@@ -382,9 +381,8 @@ function M.complete(cmd, rest, arg_lead)
     return _debug_complete_subs(cmd, rest, arg_lead)
 end
 
--- Autocmd handlers. The autocmds themselves are created at startup in
--- `plugin/ezdap.lua`, which only calls in here once something has loaded this
--- module — a session that never touched ezdap has no state to keep.
+-- Autocmd handlers. The autocmds themselves are created by `setup()`, so they
+-- only ever fire in a session that has loaded ezdap.
 
 ---Persist the current project's breakpoints and expressions.
 function M.save_state()
@@ -574,8 +572,78 @@ function M.project_info()
     vim.api.nvim_echo(chunks, false, {})
 end
 
+---Register the `:Debug` command under `name`.
+---@param name string
+local function _register_command(name)
+    vim.api.nvim_create_user_command(name, function(opts)
+        require("ezdap.util.usercmd").handle(opts, function(cmd, args, cmd_opts)
+            return M.command(cmd, args, cmd_opts)
+        end)
+    end, {
+        nargs = "*",
+        range = true,
+        desc = "ezdap commands",
+        complete = function(arg_lead, cmd_line, _)
+            return require("ezdap.util.usercmd").complete(arg_lead, cmd_line,
+                function(cmd, rest, lead)
+                    return M.complete(cmd, rest, lead)
+                end)
+        end,
+    })
+end
+
+---Install the project-state autocmds.
+local function _create_autocmds()
+    local group = vim.api.nvim_create_augroup("ezdap", { clear = true })
+
+    -- Persist before leaving the current project (cwd change) and on exit.
+    vim.api.nvim_create_autocmd({ "DirChangedPre", "VimLeavePre" }, {
+        group    = group,
+        callback = function() M.save_state() end,
+        desc     = "ezdap: persist breakpoints and expressions",
+    })
+
+    -- Gracefully stop active sessions on exit: an adapter killed without a
+    -- completed `disconnect` orphans its debuggee, and nvim SIGKILLs adapter
+    -- jobs as it exits.
+    vim.api.nvim_create_autocmd("VimLeavePre", {
+        group    = group,
+        callback = function() M.shutdown() end,
+        desc     = "ezdap: disconnect sessions so debuggees are terminated on exit",
+    })
+
+    -- After a cwd change, re-resolve the project root and restore its state
+    -- (or clear it, when the new cwd is not inside a project).
+    vim.api.nvim_create_autocmd("DirChanged", {
+        group    = group,
+        callback = function() M.reload_state() end,
+        desc     = "ezdap: restore project state after cwd change",
+    })
+end
+
+---Whether `setup()` has run.
+---@return boolean
+function M.is_setup()
+    return _setup_done
+end
+
+---Initialise the plugin. Nothing — the user command, the autocmds, the UI or
+---the restored project state — exists before this runs, so options that decide
+---what gets read off disk (`root_markers`, `data_filename`) or what the command
+---is called (`command`) are in place by the time they are first used.
+---Calling it a second time is a no-op: the later `opts` are dropped rather
+---than half-applied over a plugin that is already wired up.
 ---@param opts? ezdap.Config
 function M.setup(opts)
+    if _setup_done then
+        vim.notify("[ezdap] setup() already called; ignoring this call", vim.log.levels.ERROR)
+        return
+    end
+
+    if vim.fn.has("nvim-0.10") ~= 1 then
+        error("[ezdap] ezdap.nvim requires Neovim >= 0.10")
+    end
+
     local config = require("ezdap.config")
     local tmp = vim.tbl_deep_extend("force", config or {}, opts or {})
     for k, v in pairs(tmp) do
@@ -583,8 +651,10 @@ function M.setup(opts)
     end
 
     -- Set first: the wiring below reaches guarded entry points (a session added
-    -- during `_init` opens the debug view), and `:Debug` may be what called in here.
+    -- during `_init` opens the debug view).
     _setup_done = true
+    _register_command(config.command)
+    _create_autocmds()
     _init()
     _load()
 end

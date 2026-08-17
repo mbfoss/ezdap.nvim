@@ -30,6 +30,7 @@
 ---@alias ezdap.DebugViewPosition "left"|"right"
 
 ---@class ezdap.Config
+---@field command              string    name of the user command every subcommand lives under, e.g. "Dbg" for `:Dbg run`
 ---@field root_markers         string[]  filenames/dirs whose presence identifies a project root
 ---@field data_filename string
 ---@field stack_trace_limit    integer   max number of call-stack frames shown in DebugView; extended when the current frame is deeper so it stays visible
@@ -47,6 +48,7 @@
 
 ---@type ezdap.Config
 local M = {
+	command                = "Debug",
 	root_markers           = { ".git" },
 	data_filename          = ".ezdap.json",
 	stack_trace_limit      = 10,

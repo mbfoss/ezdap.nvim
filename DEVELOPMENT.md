@@ -8,10 +8,13 @@ Internals and contributor notes for ezdap.nvim. For user-facing usage, see the
 ezdap is a Neovim DAP client that speaks the Debug Adapter Protocol directly —
 no `nvim-dap` dependency. It manages adapter processes, tracks debug
 sessions/breakpoints, and renders a tree-based debug UI. Requires Neovim >= 0.10
-(guarded in [plugin/ezdap.lua](plugin/ezdap.lua)).
+(guarded in `setup()`).
 
 The entry point is [lua/ezdap/init.lua](lua/ezdap/init.lua): `setup(opts)`
-merges config, wires autocmds/signals, and registers the `:Debug` user command.
+merges config, wires autocmds/signals, and registers the user command. Nothing
+is installed before `setup()` runs — there is no `plugin/` script — so options
+that decide what is read off disk (`root_markers`, `data_filename`) or what the
+command is called (`command`, default `Debug`) are always in place first.
 
 ## Architecture
 
@@ -23,8 +26,8 @@ for the UI and commands — prefer it over importing `dap/client` or
 
 **Public API** — [lua/ezdap/init.lua](lua/ezdap/init.lua)
 `setup`, the run entry points (`run`, `run_profile`, `run_file`, `new_run_file`,
-`rerun`), the debug/disassembly view accessors, and registration of the `:Debug`
-user command (dispatching to the command surface).
+`rerun`), the debug/disassembly view accessors, and registration of the user
+command (`config.command`, dispatching to the command surface).
 
 **Active session / programmatic API** — [lua/ezdap/manager.lua](lua/ezdap/manager.lua)
 Owns the "which session is active" concept that keymaps and UI subscribe to.
