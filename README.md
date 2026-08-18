@@ -41,6 +41,7 @@ the REPL, watch expressions, parallel sessions, persistence.
 - [Health check](#health-check)
 - [Keymaps example](#keymaps-example)
 - [Adding a custom adapter](#adding-a-custom-adapter)
+- [Writing an adapter definition](WRITING-DEFINITIONS.md)
 - [Contributing](#contributing)
 
 ---
@@ -727,145 +728,18 @@ Everything but `request` is sent to the adapter as the DAP launch/attach body
 verbatim — ezdap never rewrites the keys, so use whatever the adapter's own
 documentation calls them.
 
-### The adapter definition
+### The definition, and adding profiles
 
-Every field is optional except a way to reach the adapter — either a `command`
-to spawn or a `host`/`port` to connect to.
+Every field of a definition is optional except a way to reach the adapter — a `command` to
+spawn or a `host`/`port` to connect to — and a bare definition like the one above already
+runs. What it cannot do is be *asked* for: nothing completes and nothing can be scaffolded
+until the definition declares `profiles`, each naming the `inputs` it accepts and a `build`
+that turns them into the native DAP body.
 
-| Field                 | Meaning                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------- |
-| `command`             | Executable (string) or argv (list) for a stdio adapter.                                    |
-| `cwd`, `env`          | Working directory and environment for that process.                                        |
-| `host`, `port`        | Connect over TCP instead of stdio. A task's own `host`/`port` override these.               |
-| `type`                | DAP `adapterID` sent in `initialize`; defaults to the adapter's key.                        |
-| `defer_launch_attach` | Send `launch`/`attach` only after `initialized`, for adapters that require that ordering.   |
-| `setup` / `teardown`  | Hooks around the connection — see below.                                                   |
-| `profiles`            | Named launch/attach descriptions, the subject of the next section.                          |
-
-`setup(config, ctx, callback)` runs before ezdap connects, and may mutate
-`config` — most usefully `config.host`/`config.port`, which is how an adapter
-that is really a TCP server gets started and then connected to. It reports
-progress with `ctx.report(msg)`, registers any terminal buffers it spawns with
-`ctx.add_bufnr(bufnr, opts)` so they are listed under the session, and must call
-`callback(err, state)` exactly once — an `err` string aborts the run. Whatever
-`state` it passes comes back as the second argument to `teardown`, which is
-where whatever `setup` started gets stopped.
-
-`ctx.profile` is the name of the profile the run was resolved from — the config
-itself does not record it — so a `setup` can gate one profile rather than the
-whole adapter, e.g. refusing a profile whose feature the installed binary is too
-old for. A raw task (a run file's `configuration`, or `run()` called directly)
-names no profile, so treat `nil` as "none of mine" and let the run proceed.
-
-```lua
-adapters.myserver = {
-  setup = function(config, ctx, callback)
-    local handle = start_the_server()          -- e.g. via ezdap.tk.term.spawn
-    ctx.add_bufnr(handle.bufnr, { label = "my-dap server" })
-    ctx.report("waiting for server port")
-    wait_for_port(handle, function(port)
-      config.host, config.port = "127.0.0.1", port
-      callback(nil, { handle = handle })
-    end)
-  end,
-  teardown = function(_, state)
-    if state and state.handle then state.handle.stop() end
-  end,
-}
-```
-
-Note that when an adapter defines `setup`, ezdap leaves `config.host`/`port`
-entirely to it and ignores the task's — the adapter knows where it put the
-server. A `delve`-style adapter is the canonical example: it spawns `dlv dap`,
-scrapes the "DAP server listening at:" line, and points the connection there.
-
-### Adding profiles
-
-A bare definition is runnable but not *askable*: nothing completes, and nothing
-can be scaffolded, because a raw DAP body describes nothing about itself (see
-[Why inputs](#why-inputs-and-not-just-raw-dap-parameters)). Adding `profiles`
-fixes that. Each profile declares the `inputs` it accepts and a `build` that
-turns supplied values into the native body:
-
-```lua
-adapters.myadapter = {
-  command = { "my-dap-adapter", "--stdio" },
-  profiles = {
-    launch_program = {
-      description = "debug an executable",
-      request     = "launch",
-      inputs = {
-        command       = { type = "string",  format = "command", required = true, description = "command line to debug" },
-        cwd           = { type = "string",  format = "dir",     description = "working directory" },
-        env           = { type = "map",                         description = "environment variables" },
-        stop_on_entry = { type = "boolean",                      description = "break at program entry" },
-      },
-      build = function(params, connect, inputs)
-        params.program, params.args = require("ezdap.shared").split_command(inputs.command)
-        params.cwd         = inputs.cwd
-        params.env         = inputs.env
-        params.stopOnEntry = inputs.stop_on_entry
-      end,
-    },
-  },
-}
-```
-
-The profile is now everywhere it should be, with no further wiring:
-
-```vim
-:Debug run myadapter launch_program command=./a.out cwd=/src stop_on_entry=true
-:Debug new_run_file myadapter launch_program
-```
-
-How the pieces fit:
-
-- **`inputs`** — one entry per accepted value, keyed by the name typed on the
-  command line or written in a run file's `parameters`. `type` is what `build`
-  receives (`string`, `boolean`, `integer`, `number`, and the two collections
-  `list` — `a,b` — and `map` — `A=1,B=2`, string keys). `type` alone says everything
-  for a plain value; the optional `format` **extends** one type with a narrower
-  reading of the same value — `file`/`dir` (a string, normalized and completed as a
-  path), `command` (a string taken verbatim, its program and each argument completed
-  as paths), `port` (an integer, range-checked). The value stays the type's, so
-  naming a `type` the format doesn't extend is an error — but the two are one flat
-  vocabulary to write in, so `{ type = "port" }` and `{ format = "port" }` both say
-  a range-checked integer. A `list`/`map`
-  declares one *element* the same way, under `item_type`/`item_format`: `{ type =
-  "list", item_format = "dir" }` is a list of directories, `{ type = "map",
-  item_type = "integer" }` a map of integers, and a collection that declares neither
-  holds strings.
-  The full vocabulary is one row per type and per format in
-  [inputs.lua](lua/ezdap/inputs.lua) — every consumer reads those rows, so a new
-  format is a single addition there, never a `if format == …` anywhere else.
-- **`choices`** — the values an input is normally written with, when the adapter
-  names them itself (`console`, `terminal`, `backend`, …). Completion offers them
-  and a typed file's schema lists them as `examples`, but nothing rejects a value
-  outside them. A boolean input completes as `true`/`false` on its own.
-- **`required`** — an unset required input is a resolve error naming the input.
-  Leave it off and an unset input simply arrives as `nil`; since Lua drops
-  nil-valued keys, `params.cwd = inputs.cwd` omits `cwd` entirely. Assign
-  unconditionally and optional fields take care of themselves.
-- **`build(params, connect, inputs)`** — fills both tables in place. `params` is
-  the native DAP body (write the adapter's own key names, plus any identity
-  fields it pins, as literals). `connect` is for adapters whose *connection*
-  is what an input configures — set `connect.host`/`connect.port` and leave it
-  alone otherwise, so the definition's own values stay in force. `inputs`
-  arrives already read into each declared `type`, whichever form the caller
-  authored it in. Return nothing on success, or an **error string** to abort.
-- **Asking the user** — `build` runs on a coroutine, so it may yield. That is how
-  an attach profile with no `pid` opens a process picker rather than sending a
-  meaningless body: `local pid, err = shared.resolve_pid(inputs.pid); if not pid
-  then return err end`. It must always resume — return a value or an error
-  string — so the caller waiting on it hears back.
-
-Because `:Debug run`, `:Debug new_run_file` and profile-based run files all resolve
-through the same `inputs` → `build` path, a profile is described in exactly one
-place and the three cannot drift apart. The shipped `remote` adapter in
-[adapters.lua](lua/ezdap/adapters.lua) is a compact reference for a profile that
-configures `connect` (a task-level `host`/`port`) instead of `params`; for a
-spawn-then-connect adapter that starts a server and points the connection at it,
-see the `setup`/`teardown` example [above](#the-adapter-definition).
+The full contract — every `ezdap.AdapterDef`, `ezdap.Profile` and `ezdap.Input` field, the
+`setup`/`teardown` hooks for adapters that must be started as a server first, the input
+type and format vocabulary, and the helpers for locating an adapter binary — is in
+[WRITING-DEFINITIONS.md](WRITING-DEFINITIONS.md).
 
 Added adapters are picked up by `:checkhealth ezdap` too — it reports whether
 each definition's `command` is present on the current machine.
