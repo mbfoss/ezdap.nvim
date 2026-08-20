@@ -78,6 +78,45 @@ mkdir -p "$work/doc"
         --treesitter true
 ) >/dev/null
 
+# Tags are built from the heading text, so punctuation such as ":", "(" or "&"
+# ends up inside them. Strip it from every tag and link, then right-align the
+# heading and contents lines again.
+awk -v proj="$project" -v width=78 '
+function clean(t,   s) {
+    s = tolower(t)
+    gsub(/[^a-z0-9_.-]/, "", s)
+    gsub(/-+/, "-", s)
+    sub(/^-/, "", s)
+    sub(/-$/, "", s)
+    sub("^" proj "-the-", proj "-", s)   # a leading article adds nothing
+    return s
+}
+BEGIN { tag = "[*|]" proj "-[^*|]*[*|]" }
+{
+    line = $0
+    out = ""
+    while (match(line, tag)) {
+        t = substr(line, RSTART, RLENGTH)
+        d = substr(t, 1, 1)
+        out = out substr(line, 1, RSTART - 1) d clean(substr(t, 2, length(t) - 2)) d
+        line = substr(line, RSTART + RLENGTH)
+    }
+    out = out line
+    # Re-pad only the plain-ASCII lines that end in a right-aligned tag.
+    if (out ~ ("  +" tag "$") && out !~ /[^ -~]/) {
+        match(out, tag "$")
+        t = substr(out, RSTART)
+        left = substr(out, 1, RSTART - 1)
+        sub(/ +$/, "", left)
+        pad = width - length(left) - length(t)
+        if (pad < 1)
+            pad = 1
+        out = left sprintf("%" pad "s", "") t
+    }
+    print out
+}' "$work/doc/$project.txt" > "$work/doc/$project.tagged"
+mv "$work/doc/$project.tagged" "$work/doc/$project.txt"
+
 if [ "${1:-}" = "--check" ]; then
     if cmp -s "$work/doc/$project.txt" "$out"; then
         echo "$out is up to date"

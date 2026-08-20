@@ -9,26 +9,26 @@ Table of Contents                                    *ezdap-table-of-contents*
 4. Quick start                                             |ezdap-quick-start|
 5. Adapters                                                   |ezdap-adapters|
 6. Starting a debug session                   |ezdap-starting-a-debug-session|
-  - Launch or attach with :Debug run  |ezdap-launch-or-attach-with-:debug-run|
-  - Versionable run files                        |ezdap-versionable-run-files|
+  - Launch or attach                                  |ezdap-launch-or-attach|
+  - Run files                                                |ezdap-run-files|
   - Why inputs and not raw DAP              |ezdap-why-inputs-and-not-raw-dap|
-  - :Debug new_run_file                            |ezdap-:debug-new_run_file|
+  - :Debug new_run_file                             |ezdap-debug-new_run_file|
   - From Lua                                                  |ezdap-from-lua|
 7. Breakpoints                                             |ezdap-breakpoints|
-8. The debug UI                                           |ezdap-the-debug-ui|
-  - Debug panel (:Debug view)                |ezdap-debug-panel-(:debug-view)|
-  - Output window (:Debug output)        |ezdap-output-window-(:debug-output)|
+8. The debug UI                                               |ezdap-debug-ui|
+  - Debug panel                                            |ezdap-debug-panel|
+  - Output window                                        |ezdap-output-window|
   - Inline variable values                      |ezdap-inline-variable-values|
   - Run buffers                                            |ezdap-run-buffers|
-  - Inspect, disassembly & REPL            |ezdap-inspect,-disassembly-&-repl|
-9. Stepping & execution control           |ezdap-stepping-&-execution-control|
+  - Inspect, disassembly & REPL               |ezdap-inspect-disassembly-repl|
+9. Stepping & execution control             |ezdap-stepping-execution-control|
 10. Configuration                                        |ezdap-configuration|
 11. Command reference                                |ezdap-command-reference|
 12. Persistence                                            |ezdap-persistence|
 13. Health check                                          |ezdap-health-check|
 14. Keymaps example                                    |ezdap-keymaps-example|
 15. Adding a custom adapter                    |ezdap-adding-a-custom-adapter|
-  - The definition and profiles            |ezdap-the-definition-and-profiles|
+  - The definition and profiles                |ezdap-definition-and-profiles|
 16. Contributing                                          |ezdap-contributing|
 
   **Status:** ezdap is under active development. The core is usable day to day,
@@ -171,7 +171,7 @@ Set a breakpoint on the current line and step through the program:
 <
 
 The debug panel opens automatically when a session starts, showing the call
-stack, variables and breakpoints. See |ezdap-the-debug-ui| and
+stack, variables and breakpoints. See |ezdap-debug-ui| and
 |ezdap-keymaps-example| to make this comfortable.
 
 
@@ -215,7 +215,7 @@ ezdap offers several ways to launch or attach, from one-liners to
 version-controlled run files.
 
 
-LAUNCH OR ATTACH WITH :DEBUG RUN      *ezdap-launch-or-attach-with-:debug-run*
+LAUNCH OR ATTACH                                      *ezdap-launch-or-attach*
 
 Each adapter declares one or more named **profiles** (`launch_program`,
 `attach_process`, `remote`, …), each declaring the **inputs** it accepts.
@@ -246,7 +246,7 @@ paths for the path-like ones, `true`/`false` for a boolean, and the fixed set
 an input like `console` or `backend` names.
 
 
-VERSIONABLE RUN FILES                            *ezdap-versionable-run-files*
+RUN FILES                                                    *ezdap-run-files*
 
 A run file is a Lua file that returns a single task table. Keep it in the
 project and run it on demand. Two shapes are accepted, told apart by whether a
@@ -344,7 +344,7 @@ profile is outgrown, `configuration` takes a hand-written body instead; the two
 shapes produce the same task.
 
 
-:DEBUG NEW_RUN_FILE                                *ezdap-:debug-new_run_file*
+:DEBUG NEW_RUN_FILE                                 *ezdap-debug-new_run_file*
 
 Generate a ready-to-edit, profile-based run file from one of the adapter’s
 profiles. Required inputs are written active; every other input is listed
@@ -414,14 +414,15 @@ off instead.
 
 Gutter signs distinguish each kind (verified or pending, conditional, logpoint,
 disabled, exception). The full list of subcommands is in the
-|ezdap-command-reference|, and the sign glyphs are |ezdap-configurable|.
+|ezdap-command-reference|, and the sign glyphs are set in
+|ezdap-configuration|.
 
 
 ==============================================================================
-8. The debug UI                                           *ezdap-the-debug-ui*
+8. The debug UI                                               *ezdap-debug-ui*
 
 
-DEBUG PANEL (:DEBUG VIEW)                    *ezdap-debug-panel-(:debug-view)*
+DEBUG PANEL                                                *ezdap-debug-panel*
 
 The main panel is a tree of **sessions → threads → stack frames → scopes
 → variables**, plus **watch expressions** and **breakpoints**. It opens
@@ -458,7 +459,7 @@ Inside the panel:
   zC     
   -------------------------------------------------------------------------
 
-OUTPUT WINDOW (:DEBUG OUTPUT)            *ezdap-output-window-(:debug-output)*
+OUTPUT WINDOW                                            *ezdap-output-window*
 
 A run spawns several buffers — Terminal, Output, REPL, its progress Log, DAP
 messages. They share one bottom split, which holds whichever of them has the
@@ -506,7 +507,7 @@ spawned, the request fails rather than falling back to an integrated terminal.
 <
 
 
-INSPECT, DISASSEMBLY & REPL                *ezdap-inspect,-disassembly-&-repl*
+INSPECT, DISASSEMBLY & REPL                   *ezdap-inspect-disassembly-repl*
 
 >vim
     :Debug inspect          " hover the word under the cursor (or, in visual
@@ -523,7 +524,7 @@ instruction-level while it is focused.
 
 
 ==============================================================================
-9. Stepping & execution control           *ezdap-stepping-&-execution-control*
+9. Stepping & execution control             *ezdap-stepping-execution-control*
 
 >vim
     :Debug continue         " continue the active session
@@ -838,7 +839,7 @@ verbatim — ezdap never rewrites the keys, so use whatever the adapter’s own
 documentation calls them.
 
 
-THE DEFINITION AND PROFILES                *ezdap-the-definition-and-profiles*
+THE DEFINITION AND PROFILES                    *ezdap-definition-and-profiles*
 
 Every field of a definition is optional except a way to reach the adapter — a
 `command` to spawn or a `host`/`port` to connect to — and a bare definition

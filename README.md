@@ -87,7 +87,7 @@ Optional:
 
 - [dock.nvim](https://github.com/mbfoss/dock.nvim) — if installed, ezdap routes
   its terminal, output, REPL and log buffers into dock's shared panel, one
-  tab per run (see [Output window](#output-window-debug-output)). No configuration
+  tab per run (see [Output window](#output-window)). No configuration
   needed.
 
 ## Installation
@@ -210,7 +210,7 @@ available on the current machine.
 ezdap offers several ways to launch or attach, from one-liners to
 version-controlled run files.
 
-### Launch or attach with `:Debug run`
+### Launch or attach
 
 Each adapter declares one or more named **profiles** (`launch_program`,
 `attach_process`, `remote`, …), each declaring the **inputs** it accepts. Supply them as
@@ -240,7 +240,7 @@ available for the chosen profile — and, after an `=`, the values that
 input can take: paths for the path-like ones, `true`/`false` for a boolean,
 and the fixed set an input like `console` or `backend` names.
 
-### Versionable run files
+### Run files
 
 A run file is a Lua file that returns a single task table. Keep it in the
 project and run it on demand. Two shapes are accepted, told apart by
@@ -403,12 +403,12 @@ off instead.
 
 Gutter signs distinguish each kind (verified or pending, conditional,
 logpoint, disabled, exception). The full list of subcommands is in the
-[command reference](#command-reference), and the sign glyphs are
-[configurable](#configuration).
+[Command reference](#command-reference), and the sign glyphs are set in
+[Configuration](#configuration).
 
 ## The debug UI
 
-### Debug panel (`:Debug view`)
+### Debug panel
 
 The main panel is a tree of **sessions → threads → stack frames → scopes →
 variables**, plus **watch expressions** and **breakpoints**. It opens
@@ -429,7 +429,7 @@ Inside the panel:
 | `g?`  | Show this keymap cheatsheet                                                  |
 | `zo` `zc` `za` `zO` `zC` | Fold controls (expand / collapse / toggle / all)          |
 
-### Output window (`:Debug output`)
+### Output window
 
 A run spawns several buffers — Terminal, Output, REPL, its progress Log, DAP
 messages. They share one bottom split, which holds whichever of them has the
@@ -734,7 +734,7 @@ adapters.myadapter = {
 
 Either way, that bare definition is already enough to run — from a run file,
 using the raw shape (`adapter` + `configuration`) described in
-[Run files](#versionable-run-files):
+[Run files](#run-files):
 
 ```lua
 -- debug.lua
