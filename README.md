@@ -16,9 +16,11 @@ Each debugger is described by a single file, and ready-made ones for the common
 debuggers are kept in
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters).
 
+<!-- panvimdoc-ignore-start -->
+
 ![Breakpoints and stepping](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/01-breakpoint-step.gif)
 
-**[More demos →](DEMO.md)** — conditions and logpoints, exception breakpoints,
+[**More demos**](DEMO.md) → conditions and logpoints, exception breakpoints,
 the REPL, watch expressions, parallel sessions, persistence.
 
 ---
@@ -46,22 +48,27 @@ the REPL, watch expressions, parallel sessions, persistence.
 
 ---
 
+<!-- panvimdoc-ignore-end -->
+
 ## Highlights
 
 - **Easy to install** — builtin DAP client and debugging UI.
-- **Any DAP adapter** — to use a particular debugger, an adapter definition file is needed (see [Adapters](#adapters)).
+- **Any DAP adapter** — to use a particular debugger, an adapter
+  definition file is needed (see [Adapters](#adapters)).
 - **Full breakpoint palette** — line, conditional, hit-count, **logpoints**,
   **column**, **function**, **exception** (filters and named types) and
   **data breakpoints / watchpoints**.
-- **Tree-based debug panel** — Single side-panel window showing sessions, threads, call stacks, scopes,
-  variables, watch expressions and breakpoints in one navigable view.
+- **Tree-based debug panel** — single side-panel window showing sessions,
+  threads, call stacks, scopes, variables, watch expressions and breakpoints
+  in one navigable view.
 - **Inline variable values** — see values right in the source while stopped,
   in several placement styles (requires treesitter parser).
-- **Special buffers provided for each session** — REPL, program output, adapter terminal and an
-  optional raw-DAP-message log.
+- **Special buffers for each session** — REPL, program output, adapter
+  terminal and an optional raw-DAP-message log.
 - **Power moves** — jump-to-cursor, restart frame, step-into-targets,
   exception info, disassembly view and instruction-level stepping.
-- **Parallel sessions** — run several debuggees at once and switch between them.
+- **Parallel sessions** — run several debuggees at once and switch
+  between them.
 - **Project-scoped persistence** — breakpoints and watch expressions are saved
   per project and restored automatically.
 - **`:checkhealth ezdap`** — verifies the Neovim version and adapter tooling.
@@ -69,18 +76,18 @@ the REPL, watch expressions, parallel sessions, persistence.
 ## Requirements
 
 - **Neovim >= 0.10**
-- A debug adapter for the target languague (gdb, debugpy...), plus am ezdap adapter definition file that
-  points at it — copied from
+- A debug adapter for the target language (gdb, debugpy...), plus an ezdap
+  adapter definition file that points at it — copied from
   [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) or hand-written
-  (see [Adapters](#adapters)). Many debug adapters are trivially installed via
-  [mason.nvim](https://github.com/williamboman/mason.nvim); an adapter file can
-  resolve its executable from Mason's install path.
+  (see [Adapters](#adapters)). Many debug adapters are trivially installed
+  via [mason.nvim](https://github.com/williamboman/mason.nvim); an adapter
+  file can resolve its executable from Mason's install path.
 
 Optional:
 
 - [dock.nvim](https://github.com/mbfoss/dock.nvim) — if installed, ezdap routes
-  its terminal, output, REPL and log buffers into dock's shared panel, one tab
-  per run (see [Output window](#output-window-debug-output)). No configuration
+  its terminal, output, REPL and log buffers into dock's shared panel, one
+  tab per run (see [Output window](#output-window-debug-output)). No configuration
   needed.
 
 ## Installation
@@ -131,9 +138,11 @@ First tell ezdap about an adapter — one small file per adapter under
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters):
 
 ```sh
-mkdir -p ~/.config/nvim/lua/ezdap-adapters
-curl -o ~/.config/nvim/lua/ezdap-adapters/debugpy.lua \
-  https://raw.githubusercontent.com/mbfoss/ezdap-adapters/main/adapters/debugpy.lua
+dir=~/.config/nvim/lua/ezdap-adapters
+url=https://raw.githubusercontent.com/mbfoss/ezdap-adapters/main/adapters
+
+mkdir -p "$dir"
+curl -o "$dir/debugpy.lua" "$url/debugpy.lua"
 ```
 
 With, say, `codelldb` and `debugpy` files in place, start debugging.
@@ -201,7 +210,7 @@ available on the current machine.
 ezdap offers several ways to launch or attach, from one-liners to
 version-controlled run files.
 
-### `:Debug run` — one-shot launch/attach
+### Launch or attach with `:Debug run`
 
 Each adapter declares one or more named **profiles** (`launch_program`,
 `attach_process`, `remote`, …), each declaring the **inputs** it accepts. Supply them as
@@ -212,7 +221,7 @@ words:
 :Debug run <adapter> <profile> [input=value ...]
 ```
 
-Inputs are specific to each adapter/profile — e.g. every `launch_program`
+Inputs are specific to each adapter/profile — for instance, every `launch_program`
 profile takes `command` (a full shell command line, split into the
 adapter's own program/args fields) plus `cwd` and `env`; an `attach_process`
 profile takes `pid`, and a `remote` one takes `host`/`port`. Each input
@@ -231,7 +240,7 @@ available for the chosen profile — and, after an `=`, the values that
 input can take: paths for the path-like ones, `true`/`false` for a boolean,
 and the fixed set an input like `console` or `backend` names.
 
-### Run files — versionable debug configs
+### Versionable run files
 
 A run file is a Lua file that returns a single task table. Keep it in the
 project and run it on demand. Two shapes are accepted, told apart by
@@ -262,7 +271,7 @@ DAP parameters that includes `request`, forwarded to the adapter verbatim:
 return {
   name          = "debug app",
   adapter       = "codelldb",
-  configuration = {                 -- raw DAP body; `request` selects launch/attach
+  configuration = {              -- raw DAP body; `request` picks the verb
     request = "launch",             -- "launch" or "attach"
     program = "./build/app",
     args    = { "--verbose" },
@@ -275,14 +284,14 @@ Run either — pass a file, or a **directory** to pick from its `.lua` files:
 
 ```vim
 :Debug run_file debug.lua
-:Debug run_file ./debug/         " opens a picker over the folder's run files
-:Debug rerun                     " re-launch the most recently run task
+:Debug run_file ./debug/   " picker over the folder's run files
+:Debug rerun               " re-launch the most recently run task
 ```
 
 For the native shape, see each adapter's upstream documentation for the
 `parameters` fields it accepts.
 
-### Why inputs, and not just raw DAP parameters?
+### Why inputs and not raw DAP
 
 The raw shape above is always available, and nothing is hidden behind the
 profile one — so why do profiles declare `inputs` at all?
@@ -300,23 +309,24 @@ A declared input fixes that by adding the one thing the raw body lacks — a
 description of itself:
 
 - **Completion knows what to offer.** `:Debug run lldb launch_program <Tab>`
-  lists that profile's inputs, and `command=<Tab>` completes paths, because the
-  input said it was path-like. A raw table can only be completed by guessing.
+  lists that profile's inputs, and `command=<Tab>` completes paths, because
+  the input said it was path-like. A raw table can only be completed by
+  guessing.
 - **Errors arrive before the adapter starts.** A required input left unset, a
-  port outside 0–65535, a malformed `A=1,B=2` — all are caught while resolving,
+  port outside 0–65535, a malformed `A=1,B=2` — all caught while resolving,
   where the message can name the input. A bad raw body surfaces as whatever
   the adapter says on stderr, if anything.
 - **Scaffolding is derived, not templated.** `:Debug new_run_file` writes a run
-  file straight from `inputs` — every field with its description — so there is no
+  file straight from `inputs` — every field with its description — so no
   template to drift out of sync with what the adapter accepts.
 - **One value, two places to write it.** An input can be answered on a command
   line or in a typed run file, and both land at the same `build` (`env` is
-  `A=1,B=2` in one and a table in the other). That is why `:Debug run` and a run
-  file can't disagree: they resolve through the same declaration.
-- **A profile can answer on its own.** Inputs are declarations, so a profile can do
-  something smarter than "omit the field" when one is missing — every attach
-  profile with no `pid` opens a process picker. A raw body has nowhere to put
-  that behaviour.
+  `A=1,B=2` in one and a table in the other). That is why `:Debug run` and
+  a run file can't disagree: they resolve through the same declaration.
+- **A profile can answer on its own.** Inputs are declarations, so a profile
+  can do something smarter than "omit the field" when one is missing —
+  every attach profile with no `pid` opens a process picker. A raw body
+  has nowhere to put that behaviour.
 
 What ezdap deliberately does **not** do is invent a portable vocabulary on top.
 There is no generic `stopOnEntry`-for-everyone field that gets translated per
@@ -326,7 +336,7 @@ askable — not to hide it behind a lowest common denominator. Once a profile is
 outgrown, `configuration` takes a hand-written body instead; the two shapes
 produce the same task.
 
-### `:Debug new_run_file` — scaffold a run file
+### `:Debug new_run_file`
 
 Generate a ready-to-edit, profile-based run file from one of the adapter's
 profiles. Required inputs are written active; every other input is listed
@@ -349,7 +359,11 @@ Everything above is available programmatically:
 local ezdap = require("ezdap")
 
 -- Run a task table directly
-ezdap.run_task({ adapter = "delve", request = "launch", parameters = { mode = "test" } })
+ezdap.run_task({
+  adapter = "delve",
+  request = "launch",
+  parameters = { mode = "test" },
+})
 
 -- The run_profile / run_file / new_run_file / rerun entry points, too
 ezdap.run_profile("debugpy", "launch", { command = "./main.py" })
@@ -363,23 +377,23 @@ All breakpoint operations live under `:Debug breakpoint <sub>`. Breakpoints work
 before a session starts and are synced live to running sessions.
 
 ```vim
-:Debug breakpoint                 " toggle a line breakpoint at the cursor
-:Debug breakpoint condition       " set a condition + hit condition on the cursor line
-:Debug breakpoint logpoint        " turn the breakpoint into a logpoint (log, don't stop)
-:Debug breakpoint column          " set a column breakpoint (picks a valid column when live)
-:Debug breakpoint fn <name>       " function breakpoint by name
-:Debug breakpoint data            " watchpoint on a variable/expression (running session)
-:Debug breakpoint exception_filter" toggle an adapter exception filter
-:Debug breakpoint exception_type <name> [mode]  " break on a named exception type
-:Debug breakpoint list            " fuzzy-pick and jump to any breakpoint
+:Debug breakpoint             " toggle a line breakpoint at the cursor
+:Debug breakpoint condition   " condition + hit condition on that line
+:Debug breakpoint logpoint    " make it a logpoint (log, don't stop)
+:Debug breakpoint column      " column breakpoint (picks a valid column)
+:Debug breakpoint fn <name>   " function breakpoint by name
+:Debug breakpoint data        " watchpoint on a variable/expression
+:Debug breakpoint exception_filter        " toggle an adapter filter
+:Debug breakpoint exception_type <name> [mode]  " named exception type
+:Debug breakpoint list        " fuzzy-pick and jump to any breakpoint
 ```
 
 Enable/disable without removing, and clear in bulk:
 
 ```vim
-:Debug breakpoint toggle_enabled  " enable/disable the breakpoint at the cursor
+:Debug breakpoint toggle_enabled  " enable/disable the one at the cursor
 :Debug breakpoint disable_all
-:Debug breakpoint clear_file      " remove every breakpoint in the current file
+:Debug breakpoint clear_file      " remove every breakpoint in the file
 :Debug breakpoint clear_all       " remove every breakpoint everywhere
 ```
 
@@ -387,7 +401,7 @@ Enable/disable without removing, and clear in bulk:
 every file. Adapter exception filters have no removed state, so they are turned
 off instead.
 
-Gutter signs distinguish each kind (verified vs. pending, conditional,
+Gutter signs distinguish each kind (verified or pending, conditional,
 logpoint, disabled, exception). The full list of subcommands is in the
 [command reference](#command-reference), and the sign glyphs are
 [configurable](#configuration).
@@ -463,8 +477,10 @@ spawned, the request fails rather than falling back to an integrated terminal.
 ### Inspect, disassembly & REPL
 
 ```vim
-:Debug inspect          " hover the value of the word under the cursor (or selected expression in visual mode)
-:Debug value            " same target, but shows the full value straight away instead of the expandable tree
+:Debug inspect          " hover the word under the cursor (or, in visual
+                        " mode, the selected expression)
+:Debug value            " same target, but shows the full value straight
+                        " away instead of the expandable tree
 :Debug disassemble      " open the disassembly view for the current frame
 :Debug exception_info   " details of the exception at the current stop
 ```
@@ -509,45 +525,50 @@ Pass options to `setup()`. Defaults shown:
 
 ```lua
 require("ezdap").setup({
-  -- Name of the user command every subcommand lives under, e.g. "Dbg" for `:Dbg run`.
+  -- Name of the user command every subcommand lives under, e.g. "Dbg"
+  -- for `:Dbg run`.
   command             = "Debug",
-  -- Project detection: the nearest ancestor holding one of these marks the root.
+  -- Project detection: the nearest ancestor holding one of these is
+  -- the root.
   root_markers        = { ".git" },
   -- Per-project state file, written at the project root.
   data_filename       = ".ezdap.json",
 
-  -- Max call-stack frames shown (extended when the current frame is deeper).
+  -- Max call-stack frames shown (extended when the frame is deeper).
   stack_trace_limit   = 10,
   -- Delay (ms) before clearing stale UI, to avoid flicker while stepping.
   antiflicker_delay   = 200,
   -- Max lines kept in Output / DAP-message buffers (0 = unlimited).
   output_max_lines    = 10000,
-  -- Open the bottom output window as soon as a run registers its first buffer.
+  -- Open the bottom output window as soon as a run registers a buffer.
   panel_auto_open = true,
-  -- Height of the bottom output window, as a fraction of the editor's lines.
+  -- Height of the bottom output window, as a fraction of the editor.
   panel_height_ratio = 0.25,
-  -- Width of the debug panel on first open, as a fraction of the editor's columns.
+  -- Width of the debug panel on first open, as a fraction of the
+  -- editor's columns.
   debug_view_width_ratio = 0.2,
   -- Side the debug panel splits off on: "left" | "right".
   debug_view_position = "left",
 
-  -- Inline value placement: "inline" | "eol" | "eol_right_align" | "right_align" | "off"
+  -- Inline value placement: "inline" | "eol" | "eol_right_align"
+  -- | "right_align" | "off"
   inline_vars         = "eol",
 
   -- Log every DAP message to a "dap" buffer. For debugging ezdap or an
   -- adapter; leave off otherwise.
   raw_messages        = false,
 
-  -- Terminal emulator (command + args) used when an adapter asks to run the
-  -- debuggee in an external terminal; its command line is appended. Unset, an
-  -- integrated terminal is used instead. E.g. { "alacritty", "-e" }.
+  -- Terminal emulator (command + args) used when an adapter asks to
+  -- run the debuggee in an external terminal; its command line is
+  -- appended. Unset, an integrated terminal is used instead.
+  -- E.g. { "alacritty", "-e" }.
   -- external_terminal = { "wezterm", "start", "--" },
 
   -- Gutter sign glyphs.
   signs = {
     debug_frame              = "▶",   -- current execution position
     active_breakpoint        = "●",   -- enabled + verified
-    inactive_breakpoint      = "○",   -- enabled, not yet verified by the adapter
+    inactive_breakpoint      = "○",   -- enabled, not yet verified
     cond_breakpoint          = "■",   -- conditional, verified
     inactive_cond_breakpoint = "□",
     logpoint                 = "◆",
@@ -600,8 +621,8 @@ below are unchanged.
 <details>
 <summary><b><code>:Debug breakpoint</code> subcommands</b></summary>
 
-| Subcommand           | Description                                         |
-| -------------------- | -------------------------------------------------- |
+| Subcommand           | Description                            |
+| -------------------- | -------------------------------------- |
 | `toggle` (default)   | Toggle a line breakpoint at the cursor             |
 | `add [condition]`    | Add a breakpoint (optionally conditional)          |
 | `remove`             | Remove the breakpoint at the cursor                |
@@ -611,7 +632,7 @@ below are unchanged.
 | `enable` / `disable` / `toggle_enabled` | Per-breakpoint enable state     |
 | `enable_all` / `disable_all` | Bulk enable/disable                        |
 | `clear_file` / `clear_fn` | Clear the current file / function breakpoints |
-| `clear_all`          | Clear every breakpoint; disables exception filters |
+| `clear_all`          | Clear all; disable exception filters |
 | `fn [name]`          | Toggle a function breakpoint                        |
 | `exception_filter`   | Toggle an adapter exception filter                 |
 | `exception_type [name] [mode]` | Break on a named exception type          |
@@ -657,20 +678,23 @@ started:
 ```lua
 local map = vim.keymap.set
 
-map("n", "<F5>",   "<Cmd>Debug continue<CR>",          { desc = "Debug: continue" })
-map("n", "<F10>",  "<Cmd>Debug step_over<CR>",         { desc = "Debug: step over" })
-map("n", "<F11>",  "<Cmd>Debug step_in<CR>",           { desc = "Debug: step in" })
-map("n", "<F12>",  "<Cmd>Debug step_out<CR>",          { desc = "Debug: step out" })
-map("n", "<F9>",   "<Cmd>Debug breakpoint<CR>",        { desc = "Debug: toggle breakpoint" })
+map("n", "<F5>", "<Cmd>Debug continue<CR>", { desc = "Debug: continue" })
+map("n", "<F10>", "<Cmd>Debug step_over<CR>", { desc = "Debug: over" })
+map("n", "<F11>", "<Cmd>Debug step_in<CR>", { desc = "Debug: step in" })
+map("n", "<F12>", "<Cmd>Debug step_out<CR>", { desc = "Debug: step out" })
+map("n", "<F9>", "<Cmd>Debug breakpoint<CR>", { desc = "Debug: bp" })
 
-map("n", "<leader>dc", "<Cmd>Debug breakpoint condition<CR>", { desc = "Debug: conditional breakpoint" })
-map("n", "<leader>dl", "<Cmd>Debug breakpoint logpoint<CR>",  { desc = "Debug: logpoint" })
-map("n", "<leader>dr", "<Cmd>Debug rerun<CR>",                { desc = "Debug: re-run last" })
-map("n", "<leader>du", "<Cmd>Debug view<CR>",                 { desc = "Debug: focus debug view" })
-map("n", "<leader>dq", "<Cmd>Debug stop<CR>",                 { desc = "Debug: stop" })
+local d = "<leader>d"
+map("n", d .. "c", "<Cmd>Debug breakpoint condition<CR>",
+  { desc = "Debug: conditional breakpoint" })
+map("n", d .. "l", "<Cmd>Debug breakpoint logpoint<CR>",
+  { desc = "Debug: logpoint" })
+map("n", d .. "r", "<Cmd>Debug rerun<CR>", { desc = "Debug: re-run" })
+map("n", d .. "u", "<Cmd>Debug view<CR>",  { desc = "Debug: focus view" })
+map("n", d .. "q", "<Cmd>Debug stop<CR>",  { desc = "Debug: stop" })
 
-map("n", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: inspect" })
-map("x", "<leader>di", "<Cmd>Debug inspect<CR>",              { desc = "Debug: inspect selection" })
+map("n", d .. "i", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
+map("x", d .. "i", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
 ```
 
 ## Adding a custom adapter
@@ -691,7 +715,8 @@ definition. ezdap globs these at load and keys each by its filename stem, so
 -- ~/.config/nvim/lua/ezdap-adapters/myadapter.lua
 ---@type ezdap.AdapterDef
 return {
-  command = { "my-dap-adapter", "--stdio" },  -- stdio adapter: spawned, framed over its pipes
+  command = { "my-dap-adapter", "--stdio" },  -- stdio: spawned, framed
+                                              -- over its own pipes
 }
 ```
 
@@ -709,7 +734,7 @@ adapters.myadapter = {
 
 Either way, that bare definition is already enough to run — from a run file,
 using the raw shape (`adapter` + `configuration`) described in
-[Run files](#run-files--versionable-debug-configs):
+[Run files](#versionable-run-files):
 
 ```lua
 -- debug.lua
@@ -728,7 +753,7 @@ Everything but `request` is sent to the adapter as the DAP launch/attach body
 verbatim — ezdap never rewrites the keys, so use whatever the adapter's own
 documentation calls them.
 
-### The definition, and adding profiles
+### The definition and profiles
 
 Every field of a definition is optional except a way to reach the adapter — a `command` to
 spawn or a `host`/`port` to connect to — and a bare definition like the one above already
