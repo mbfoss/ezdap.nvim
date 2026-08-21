@@ -205,7 +205,7 @@ subject of [Adding a custom adapter](#adding-a-custom-adapter).
 Run `:checkhealth ezdap` to see which registered adapters have their tooling
 available on the current machine.
 
-## Starting a debug session
+## Starting a debug session <!-- tag: sessions -->
 
 ezdap offers several ways to launch or attach, from one-liners to
 version-controlled run files.
@@ -291,7 +291,7 @@ Run either — pass a file, or a **directory** to pick from its `.lua` files:
 For the native shape, see each adapter's upstream documentation for the
 `parameters` fields it accepts.
 
-### Why inputs and not raw DAP
+### Why inputs and not raw DAP <!-- tag: inputs -->
 
 The raw shape above is always available, and nothing is hidden behind the
 profile one — so why do profiles declare `inputs` at all?
@@ -336,7 +336,7 @@ askable — not to hide it behind a lowest common denominator. Once a profile is
 outgrown, `configuration` takes a hand-written body instead; the two shapes
 produce the same task.
 
-### `:Debug new_run_file`
+### `:Debug new_run_file` <!-- tag: new-run-file -->
 
 Generate a ready-to-edit, profile-based run file from one of the adapter's
 profiles. Required inputs are written active; every other input is listed
@@ -351,7 +351,7 @@ Fill in the `parameters`, then `:Debug run_file` it. It resolves through the sam
 path as `:Debug run`. (Prefer the raw shape above instead? Just drop the
 `profile`/`parameters` keys and write a `configuration` table by hand.)
 
-### From Lua
+### From Lua <!-- tag: lua-api -->
 
 Everything above is available programmatically:
 
@@ -406,9 +406,9 @@ logpoint, disabled, exception). The full list of subcommands is in the
 [Command reference](#command-reference), and the sign glyphs are set in
 [Configuration](#configuration).
 
-## The debug UI
+## The debug UI <!-- tag: ui -->
 
-### Debug panel
+### Debug panel <!-- tag: panel -->
 
 The main panel is a tree of **sessions → threads → stack frames → scopes →
 variables**, plus **watch expressions** and **breakpoints**. It opens
@@ -429,7 +429,7 @@ Inside the panel:
 | `g?`  | Show this keymap cheatsheet                                                  |
 | `zo` `zc` `za` `zO` `zC` | Fold controls (expand / collapse / toggle / all)          |
 
-### Output window
+### Output window <!-- tag: output -->
 
 A run spawns several buffers — Terminal, Output, REPL, its progress Log, DAP
 messages. They share one bottom split, which holds whichever of them has the
@@ -449,7 +449,7 @@ rather than competing for one window, and `:Dock clean` sheds the finished ones.
 dock's own options (`auto_open`, `size`, position) govern the window there, so
 `panel_auto_open`/`panel_height_ratio` do not apply.
 
-### Inline variable values
+### Inline variable values <!-- tag: inline-values -->
 
 While stopped, ezdap renders variable values inline in the source. Choose the
 placement with the `inline_vars` option (`inline`, `eol`, `eol_right_align`,
@@ -474,7 +474,7 @@ spawned, the request fails rather than falling back to an integrated terminal.
 :Debug clean            " drop finished runs and wipe their buffers
 ```
 
-### Inspect, disassembly & REPL
+### Inspect, disassembly & REPL <!-- tag: inspect-repl -->
 
 ```vim
 :Debug inspect          " hover the word under the cursor (or, in visual
@@ -489,7 +489,7 @@ In the disassembly view, `<CR>` opens the corresponding source line and `K`
 shows the instruction reference. Breakpoints and stepping become
 instruction-level while it is focused.
 
-## Stepping & execution control
+## Stepping & execution control <!-- tag: stepping -->
 
 ```vim
 :Debug continue         " continue the active session
@@ -519,7 +519,7 @@ Switch what's active with pickers:
 :Debug frame            " choose the active stack frame
 ```
 
-## Configuration
+## Configuration <!-- tag: config -->
 
 Pass options to `setup()`. Defaults shown:
 
@@ -582,7 +582,7 @@ require("ezdap").setup({
 })
 ```
 
-## Command reference
+## Command reference <!-- tag: commands -->
 
 Everything is under the `:Debug` command, with completion for every subcommand.
 Set `command` in `setup()` to register it under another name; the subcommands
@@ -661,7 +661,7 @@ persisted. The current project is reported by:
 > Consider adding `.ezdap.json` to the project's `.gitignore`, or commit it to
 > share breakpoints across a team.
 
-## Health check
+## Health check <!-- tag: health -->
 
 ```vim
 :checkhealth ezdap
@@ -670,7 +670,7 @@ persisted. The current project is reported by:
 Reports the Neovim version, whether `setup()` has run, the resolved project
 state, and which registered adapters have their tooling installed.
 
-## Keymaps example
+## Keymaps example <!-- tag: keymaps -->
 
 ezdap ships no global keymaps — any layout works. A function-key one to get
 started:
@@ -697,7 +697,7 @@ map("n", d .. "i", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
 map("x", d .. "i", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
 ```
 
-## Adding a custom adapter
+## Adding a custom adapter <!-- tag: custom-adapters -->
 
 For a debugger already covered by
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters), copy its file rather
@@ -753,7 +753,7 @@ Everything but `request` is sent to the adapter as the DAP launch/attach body
 verbatim — ezdap never rewrites the keys, so use whatever the adapter's own
 documentation calls them.
 
-### The definition and profiles
+### The definition and profiles <!-- tag: definitions -->
 
 Every field of a definition is optional except a way to reach the adapter — a `command` to
 spawn or a `host`/`port` to connect to — and a bare definition like the one above already

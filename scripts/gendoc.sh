@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
-# Generate doc/ezdap.txt from README.md with panvimdoc.
+# Generate doc/<project_name>.txt from README.md with panvimdoc.
 #
-#   scripts/gendoc.sh           # rewrite doc/ezdap.txt and doc/tags
+#   scripts/gendoc.sh           # rewrite doc/<project_name>.txt and doc/tags
 #   scripts/gendoc.sh --check   # exit 1 when the help file is out of date
 #
 # Needs pandoc (brew install pandoc). panvimdoc itself is fetched on first run
@@ -20,55 +20,73 @@ project=ezdap
 description="A Debug Adapter Protocol client for Neovim"
 vimversion="Neovim >= 0.10"
 
-# README constraints the generator cannot paper over: headings must be ASCII
-# (panvimdoc byte-uppercases them) and short, code blocks stay under 74 columns,
-# and table widths follow the header separator row.
-
 out="$root/doc/$project.txt"
 work="${TMPDIR:-/tmp}/$project-doc.$$"
 trap 'rm -rf "$work"' EXIT INT TERM
 
-command -v pandoc >/dev/null || {
-    echo "gendoc: pandoc not found (brew install pandoc)" >&2
+die() {
+    echo "gendoc: $*" >&2
     exit 1
 }
 
-# Fetch panvimdoc at the pinned commit, once, into the user's cache. A plain
-# clone cannot name a commit, so fetch that object and check it out directly.
-cache="${XDG_CACHE_HOME:-$HOME/.cache}/panvimdoc-$PANVIMDOC_COMMIT"
-panvimdoc="${PANVIMDOC_DIR:-$cache}"
+command -v pandoc >/dev/null || die "pandoc not found (brew install pandoc)"
+
+# Resolve panvimdoc: either a caller-supplied checkout, or the pinned commit in
+# the user's cache. A plain clone cannot name a commit, so fetch that object and
+# check it out directly, then confirm a reused cache is still at that commit.
 if [ -n "${PANVIMDOC_DIR:-}" ]; then
-    [ -f "$panvimdoc/panvimdoc.sh" ] || {
-        echo "gendoc: no panvimdoc.sh in PANVIMDOC_DIR=$PANVIMDOC_DIR" >&2
-        exit 1
-    }
-elif [ ! -f "$cache/panvimdoc.sh" ]; then
-    echo "fetching panvimdoc $PANVIMDOC_COMMIT into $cache"
-    rm -rf "$cache"
-    mkdir -p "$cache"
-    git -C "$cache" init --quiet
-    git -C "$cache" fetch --quiet --depth 1 "$PANVIMDOC_URL" "$PANVIMDOC_COMMIT"
-    git -c advice.detachedHead=false -C "$cache" checkout --quiet FETCH_HEAD
+    panvimdoc=$PANVIMDOC_DIR
+    [ -f "$panvimdoc/panvimdoc.sh" ] || die "no panvimdoc.sh in PANVIMDOC_DIR=$panvimdoc"
+else
+    panvimdoc="${XDG_CACHE_HOME:-$HOME/.cache}/panvimdoc-$PANVIMDOC_COMMIT"
+    if [ ! -f "$panvimdoc/panvimdoc.sh" ]; then
+        echo "fetching panvimdoc $PANVIMDOC_COMMIT into $panvimdoc"
+        rm -rf "$panvimdoc"
+        mkdir -p "$panvimdoc"
+        git -C "$panvimdoc" init --quiet
+        git -C "$panvimdoc" fetch --quiet --depth 1 "$PANVIMDOC_URL" "$PANVIMDOC_COMMIT"
+        git -c advice.detachedHead=false -C "$panvimdoc" checkout --quiet FETCH_HEAD
+    fi
+    have=$(git -C "$panvimdoc" rev-parse HEAD)
+    [ "$have" = "$PANVIMDOC_COMMIT" ] ||
+        die "$panvimdoc is at $have, expected $PANVIMDOC_COMMIT; remove it and re-run"
 fi
 
-# Make sure a reused cache really is the pinned commit.
-if [ -z "${PANVIMDOC_DIR:-}" ]; then
-    have=$(git -C "$cache" rev-parse HEAD)
-    [ "$have" = "$PANVIMDOC_COMMIT" ] || {
-        echo "gendoc: $cache is at $have, expected $PANVIMDOC_COMMIT" >&2
-        echo "gendoc: remove that directory and re-run" >&2
-        exit 1
+# Help tags come from a hidden comment at the end of a section heading. The
+# project name is prefixed automatically, so this yields *<project_name>-sources*:
+#
+#   ## Custom sources <!-- tag: sources -->
+#
+# Without one, panvimdoc derives the tag from the heading text. Collect
+# "derived-tag<TAB>wanted-tag" pairs and strip the comments from the copy
+# panvimdoc reads; the derived tags are rewritten in the output below.
+mkdir -p "$work/doc"
+awk -v project="$project" -v md="$work/README.md" '
+    /^##+[ \t].*<!--[ \t]*tag:[^>]*-->[ \t]*$/ {
+        tag = $0
+        sub(/^.*<!--[ \t]*tag:[ \t]*/, "", tag)
+        sub(/[ \t]*-->[ \t]*$/, "", tag)
+        sub(/[ \t]*<!--[ \t]*tag:[^>]*-->[ \t]*$/, "")
+        if (tag !~ /^[A-Za-z0-9_-]+$/) {
+            print "gendoc: bad help tag \"" tag "\" on " $0 > "/dev/stderr"
+            exit 1
+        }
+        heading = $0
+        sub(/^#+[ \t]*/, "", heading)
+        gsub(/`/, "", heading)   # panvimdoc drops inline-code markers
+        gsub(/[ \t]+/, "-", heading)
+        print project "-" tolower(heading) "\t" project "-" tag
     }
-fi
+    { print > md }
+' "$root/README.md" > "$work/tagmap"
 
 # panvimdoc writes to doc/<project>.txt relative to the working directory, so
 # run it in a scratch tree and compare from there.
-mkdir -p "$work/doc"
 (
     cd "$work"
     sh "$panvimdoc/panvimdoc.sh" \
         --project-name "$project" \
-        --input-file "$root/README.md" \
+        --input-file "$work/README.md" \
         --vim-version "$vimversion" \
         --description "$description" \
         --toc true \
@@ -78,69 +96,49 @@ mkdir -p "$work/doc"
         --treesitter true
 ) >/dev/null
 
-# Tags are built from the heading text, so punctuation such as ":", "(" or "&"
-# ends up inside them. Strip it from every tag and link, then right-align the
-# heading and contents lines again.
-awk -v proj="$project" -v width=78 '
-function clean(t,   s) {
-    s = tolower(t)
-    gsub(/[^a-z0-9_.-]/, "", s)
-    gsub(/-+/, "-", s)
-    sub(/^-/, "", s)
-    sub(/-$/, "", s)
-    sub("^" proj "-the-", proj "-", s)   # a leading article adds nothing
-    return s
-}
-BEGIN { tag = "[*|]" proj "-[^*|]*[*|]" }
-{
-    line = $0
-    out = ""
-    while (match(line, tag)) {
-        t = substr(line, RSTART, RLENGTH)
-        d = substr(t, 1, 1)
-        out = out substr(line, 1, RSTART - 1) d clean(substr(t, 2, length(t) - 2)) d
-        line = substr(line, RSTART + RLENGTH)
+# Swap in the tags declared in README.md, keeping the trailing tag right-aligned
+# and the |links| to it in sync.
+awk '
+    FILENAME == ARGV[1] {   # NR == FNR would swallow file 2 on an empty tagmap
+        i = index($0, "\t")
+        map[substr($0, 1, i - 1)] = substr($0, i + 1)
+        next
     }
-    out = out line
-    # Re-pad only the plain-ASCII lines that end in a right-aligned tag.
-    if (out ~ ("  +" tag "$") && out !~ /[^ -~]/) {
-        match(out, tag "$")
-        t = substr(out, RSTART)
-        left = substr(out, 1, RSTART - 1)
-        sub(/ +$/, "", left)
-        pad = width - length(left) - length(t)
-        if (pad < 1)
-            pad = 1
-        out = left sprintf("%" pad "s", "") t
+    {
+        line = $0
+        for (k in map) {
+            gsub("\\*" k "\\*", "*" map[k] "*", line)
+            gsub("\\|" k "\\|", "|" map[k] "|", line)
+        }
+        if (line != $0 && match(line, /[*|][^ *|]+[*|]$/)) {
+            token = substr(line, RSTART)
+            head = substr(line, 1, RSTART - 1)
+            sub(/[ \t]+$/, "", head)
+            pad = length($0) - length(head) - length(token)
+            if (pad < 1) pad = 1
+            line = head sprintf("%" pad "s", "") token
+        }
+        print line
     }
-    print out
-}' "$work/doc/$project.txt" > "$work/doc/$project.tagged"
-mv "$work/doc/$project.tagged" "$work/doc/$project.txt"
+' "$work/tagmap" "$work/doc/$project.txt" > "$work/$project.txt"
 
 if [ "${1:-}" = "--check" ]; then
-    if cmp -s "$work/doc/$project.txt" "$out"; then
+    cmp -s "$work/$project.txt" "$out" && {
         echo "$out is up to date"
         exit 0
-    fi
+    }
     echo "$out is out of date; run: scripts/gendoc.sh" >&2
-    [ "${2:-}" = "--diff" ] && diff -u "$out" "$work/doc/$project.txt" || true
+    [ "${2:-}" = "--diff" ] && diff -u "$out" "$work/$project.txt" || true
     exit 1
 fi
 
-mkdir -p "$root/doc"
-cp "$work/doc/$project.txt" "$out"
+cp "$work/$project.txt" "$out"
 echo "wrote $out"
 
-# helptags reports duplicate or malformed tags on stderr but still exits 0, so
-# treat any output as a failure -- a silent one leaves doc/tags stale.
-if command -v nvim >/dev/null; then
-    err=$(nvim --clean --headless -c "helptags $root/doc" -c qa 2>&1 >/dev/null)
-    if [ -n "$err" ]; then
-        echo "gendoc: helptags failed, doc/tags not updated:" >&2
-        echo "$err" >&2
-        exit 1
-    fi
-    echo "wrote $root/doc/tags"
-else
+command -v nvim >/dev/null || {
     echo "nvim not found; run :helptags doc to refresh tags" >&2
-fi
+    exit 0
+}
+nvim --headless -c "helptags $root/doc" -c qa >/dev/null 2>&1 && [ -f "$root/doc/tags" ] ||
+    die "helptags failed; run :helptags doc by hand"
+echo "wrote $root/doc/tags"
