@@ -469,7 +469,7 @@ function Picker:init(opts, callback)
     end
     _active_picker = self
 
-    self:relayout()
+    self:create_windows()
     self:setup_input()
 
     assert(self.pwin)
@@ -522,116 +522,117 @@ function Picker:_lwin_config()
     }
 end
 
-function Picker:relayout()
-    if self.closed then return end
-    local opts        = self.opts
-    local has_preview = self.preview_enabled
-
-    self.layout       = _get_horizontal_layout {
-        has_preview  = has_preview,
-        height_ratio = opts.height_ratio,
-        width_ratio  = opts.width_ratio,
+---The preview window's full config, for creating and moving the window.
+---@return table
+function Picker:_vwin_config()
+    return {
+        relative = "editor",
+        style    = "minimal",
+        row      = self.layout.preview_row,
+        col      = self.layout.preview_col,
+        width    = self.layout.preview_width,
+        height   = self.layout.preview_height,
+        border   = _BORDER_FULL,
     }
+end
 
-    local base_cfg    = { relative = "editor", style = "minimal" }
-    local winhl       = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title," ..
-        "WinBar:Normal,WinBarNC:Normal"
+---Shared window highlights: the picker floats read as plain windows.
+local _WINHL = "NormalFloat:Normal,FloatBorder:Normal,FloatTitle:Title," ..
+    "WinBar:Normal,WinBarNC:Normal"
+
+---Recompute `self.layout` from the current editor size and the picker's ratios.
+function Picker:_compute_layout()
+    self.layout = _get_horizontal_layout {
+        has_preview  = self.preview_enabled,
+        height_ratio = self.opts.height_ratio,
+        width_ratio  = self.opts.width_ratio,
+    }
+end
+
+---Create the picker's buffers and windows. Called once, at open; afterwards the
+---windows are only moved and resized, by `relayout()`.
+function Picker:create_windows()
+    if self.closed then return end
+    self:_compute_layout()
 
     -- Prompt window
-    if not self.pwin then
-        if not self.pbuf then
-            self.pbuf = ui_util.create_scratch_buffer(false, { modifiable = true }, function()
-                self.pbuf = nil
-                if not self.closed then vim.schedule(function() self:close() end) end
-            end)
-        end
-        local pwin_augroup
-        self.pwin, pwin_augroup = ui_util.create_window(self.pbuf, true, self:_pwin_config(), function()
-            self.pwin = nil
-            if not self.closed then vim.schedule(function() self:close() end) end
-        end)
-        vim.wo[self.pwin].winhighlight = winhl
-        vim.wo[self.pwin].wrap = false
+    self.pbuf = ui_util.create_scratch_buffer(false, { modifiable = true }, function()
+        self.pbuf = nil
+        if not self.closed then vim.schedule(function() self:close() end) end
+    end)
+    local pwin_augroup
+    self.pwin, pwin_augroup = ui_util.create_window(self.pbuf, true, self:_pwin_config(), function()
+        self.pwin = nil
+        if not self.closed then vim.schedule(function() self:close() end) end
+    end)
+    vim.wo[self.pwin].winhighlight = _WINHL
+    vim.wo[self.pwin].wrap = false
 
-        assert(type(pwin_augroup) == "number")
-        vim.api.nvim_create_autocmd("WinEnter", {
-            group = pwin_augroup,
-            callback = function()
-                if self.closed then return end
-                local win      = vim.api.nvim_get_current_win()
-                local cfg      = vim.api.nvim_win_get_config(win)
-                local is_float = cfg.relative and cfg.relative ~= ""
-                if not is_float and win ~= self.pwin and win ~= self.lwin and win ~= self.vwin then
-                    vim.schedule(function() self:close() end)
-                end
-            end,
-        })
-        vim.api.nvim_create_autocmd("VimResized", {
-            group = pwin_augroup,
-            callback = function()
-                if self.closed then return end
-                vim.schedule(function() self:relayout() end)
-            end,
-        })
-    else
-        vim.api.nvim_win_set_config(self.pwin, self:_pwin_config())
-    end
+    assert(type(pwin_augroup) == "number")
+    vim.api.nvim_create_autocmd("WinEnter", {
+        group = pwin_augroup,
+        callback = function()
+            if self.closed then return end
+            local win      = vim.api.nvim_get_current_win()
+            local cfg      = vim.api.nvim_win_get_config(win)
+            local is_float = cfg.relative and cfg.relative ~= ""
+            if not is_float and win ~= self.pwin and win ~= self.lwin and win ~= self.vwin then
+                vim.schedule(function() self:close() end)
+            end
+        end,
+    })
+    vim.api.nvim_create_autocmd("VimResized", {
+        group = pwin_augroup,
+        callback = function()
+            if self.closed then return end
+            vim.schedule(function() self:relayout() end)
+        end,
+    })
 
     -- List window
-    if not self.lwin then
-        if not self.lbuf then
-            self.lbuf = ui_util.create_scratch_buffer(false, { modifiable = false }, function()
-                self.lbuf = nil
-                if not self.closed then vim.schedule(function() self:close() end) end
-            end)
-        end
-        self.lwin = ui_util.create_window(self.lbuf, false, self:_lwin_config(), function()
-            self.lwin = nil
-            if not self.closed then vim.schedule(function() self:close() end) end
-        end)
-        vim.wo[self.lwin].winhighlight = winhl
-        vim.wo[self.lwin].wrap = self.opts.list_wrap ~= false
-        vim.wo[self.lwin].cursorline = false
-        vim.wo[self.lwin].breakindent = true
-        -- `wbr` is what `%=` stretches across the winbar; `eob` comes with the
-        -- window's `style = "minimal"`, and setting 'fillchars' here drops it.
-        vim.wo[self.lwin].fillchars = "eob: ,wbr:" .. _RULE
-        vim.wo[self.lwin].winbar = _lwin_winbar(self._position_text)
-    else
-        vim.api.nvim_win_set_config(self.lwin, self:_lwin_config())
-    end
+    self.lbuf = ui_util.create_scratch_buffer(false, { modifiable = false }, function()
+        self.lbuf = nil
+        if not self.closed then vim.schedule(function() self:close() end) end
+    end)
+    self.lwin = ui_util.create_window(self.lbuf, false, self:_lwin_config(), function()
+        self.lwin = nil
+        if not self.closed then vim.schedule(function() self:close() end) end
+    end)
+    vim.wo[self.lwin].winhighlight = _WINHL
+    vim.wo[self.lwin].wrap = self.opts.list_wrap ~= false
+    vim.wo[self.lwin].cursorline = false
+    vim.wo[self.lwin].breakindent = true
+    -- `wbr` is what `%=` stretches across the winbar; `eob` comes with the
+    -- window's `style = "minimal"`, and setting 'fillchars' here drops it.
+    vim.wo[self.lwin].fillchars = "eob: ,wbr:" .. _RULE
+    vim.wo[self.lwin].winbar = _lwin_winbar(self._position_text)
 
     -- Preview window (optional)
-    if has_preview then
-        if not self.vwin then
-            if not self.vbuf then
-                self.vbuf = ui_util.create_scratch_buffer(false, { modifiable = false }, function()
-                    self.vbuf = nil
-                end)
-                local vkey = { buffer = self.vbuf, nowait = true, silent = true }
-                vim.keymap.set("n", "<CR>", function() self:confirm() end, vkey)
-                vim.keymap.set("n", "<Esc>", function() self:close() end, vkey)
-            end
-            self.vwin = ui_util.create_window(self.vbuf, false, vim.tbl_extend("force", base_cfg, {
-                row    = self.layout.preview_row,
-                col    = self.layout.preview_col,
-                width  = self.layout.preview_width,
-                height = self.layout.preview_height,
-                border = _BORDER_FULL,
-            }), function()
-                self.vwin = nil
-            end)
-            vim.wo[self.vwin].wrap = true
-            vim.wo[self.vwin].winhighlight = winhl
-        else
-            vim.api.nvim_win_set_config(self.vwin, vim.tbl_extend("force", base_cfg, {
-                row    = self.layout.preview_row,
-                col    = self.layout.preview_col,
-                width  = self.layout.preview_width,
-                height = self.layout.preview_height,
-                border = _BORDER_FULL,
-            }))
-        end
+    if self.preview_enabled then
+        self.vbuf = ui_util.create_scratch_buffer(false, { modifiable = false }, function()
+            self.vbuf = nil
+        end)
+        local vkey = { buffer = self.vbuf, nowait = true, silent = true }
+        vim.keymap.set("n", "<CR>", function() self:confirm() end, vkey)
+        vim.keymap.set("n", "<Esc>", function() self:close() end, vkey)
+
+        self.vwin = ui_util.create_window(self.vbuf, false, self:_vwin_config(), function()
+            self.vwin = nil
+        end)
+        vim.wo[self.vwin].wrap = true
+        vim.wo[self.vwin].winhighlight = _WINHL
+    end
+end
+
+---Move and resize the existing windows for the current editor size.
+function Picker:relayout()
+    if self.closed then return end
+    self:_compute_layout()
+
+    if self.pwin then vim.api.nvim_win_set_config(self.pwin, self:_pwin_config()) end
+    if self.lwin then vim.api.nvim_win_set_config(self.lwin, self:_lwin_config()) end
+    if self.vwin then
+        vim.api.nvim_win_set_config(self.vwin, self:_vwin_config())
         self:update_preview()
     end
 
