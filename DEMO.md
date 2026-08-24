@@ -6,8 +6,7 @@ full (`:Debug …`) to show what each step does; map them to keys for daily use 
 see [Keymaps example](README.md#keymaps-example).
 
 The editor is Neovim with ezdap,
-[dock.nvim](https://github.com/mbfoss/dock.nvim) for the bottom panel and
-[keystone.nvim](https://github.com/mbfoss/keystone.nvim)'s statusline.
+[dock.nvim](https://github.com/mbfoss/dock.nvim) for the bottom panel.
 
 ## Breakpoints, stepping and the debug panel
 

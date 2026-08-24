@@ -42,9 +42,10 @@ so it drives the same debuggers VS Code and other editors use — Python, Go,
 C/C++, Rust, JavaScript and anything else with a DAP adapter.
 
 It is self-contained: no required dependency plugins, and no per-language glue
-plugins. Each debugger is described by a single file, and ready-made ones for
-the common debuggers are kept in ezdap-adapters
-<https://github.com/mbfoss/ezdap-adapters>.
+plugins. Each debugger is described by a single file. Install the companion
+plugin ezdap-adapters <https://github.com/mbfoss/ezdap-adapters> to get
+ready-made definitions for the common debuggers all at once, or drop in a
+single file of your own.
 
 
 ==============================================================================
@@ -77,9 +78,9 @@ the common debuggers are kept in ezdap-adapters
 
 - **Neovim >= 0.10**
 - A debug adapter for the target language (gdb, debugpy…), plus an ezdap
-    adapter definition file that points at it — copied from
-    ezdap-adapters <https://github.com/mbfoss/ezdap-adapters> or hand-written
-    (see |ezdap-adapters|). Many debug adapters are trivially installed
+    adapter definition that points at it — from the
+    ezdap-adapters <https://github.com/mbfoss/ezdap-adapters> plugin or
+    hand-written (see |ezdap-adapters|). Many debug adapters are trivially installed
     via mason.nvim <https://github.com/williamboman/mason.nvim>; an adapter
     file can resolve its executable from Mason’s install path.
 
@@ -95,13 +96,19 @@ Optional:
 3. Installation                                           *ezdap-installation*
 
 ezdap has no required plugin dependencies. Install it with any plugin manager
-and call `setup()`.
+and call `setup()`. Install ezdap-adapters
+<https://github.com/mbfoss/ezdap-adapters> alongside it to register ready-made
+definitions for the common debuggers — recommended, and assumed by the
+examples below.
 
 Native packages / vim.pack ~
 
 >lua
     -- Neovim 0.12+
-    vim.pack.add({ "https://github.com/mbfoss/ezdap.nvim" })
+    vim.pack.add({
+      "https://github.com/mbfoss/ezdap.nvim",
+      "https://github.com/mbfoss/ezdap-adapters",  -- ready-made adapter definitions
+    })
     require("ezdap").setup()
 <
 
@@ -118,7 +125,8 @@ lazy.nvim ~
 >lua
     {
       "mbfoss/ezdap.nvim",
-      opts = {},           -- passed to require("ezdap").setup()
+      dependencies = { "mbfoss/ezdap-adapters" },  -- ready-made adapter definitions
+      opts = {},                                   -- passed to require("ezdap").setup()
     }
 <
 
@@ -134,19 +142,23 @@ persistence, and initialises the UI.
     require("ezdap").setup()
 <
 
-First tell ezdap about an adapter — one small file per adapter under
-`lua/ezdap-adapters/` on the runtimepath, most easily copied from
-ezdap-adapters <https://github.com/mbfoss/ezdap-adapters>:
+First tell ezdap about an adapter. With the ezdap-adapters
+<https://github.com/mbfoss/ezdap-adapters> plugin installed, this is already
+done — every definition it ships is registered, `debugpy` and `codelldb`
+among them.
+
+Without it, an adapter is one small file under `lua/ezdap-adapters/` on the
+runtimepath, which can be copied one at a time:
 
 >sh
     dir=~/.config/nvim/lua/ezdap-adapters
-    url=https://raw.githubusercontent.com/mbfoss/ezdap-adapters/main/adapters
+    url=https://raw.githubusercontent.com/mbfoss/ezdap-adapters/main/lua/ezdap-adapters
     
     mkdir -p "$dir"
     curl -o "$dir/debugpy.lua" "$url/debugpy.lua"
 <
 
-With, say, `codelldb` and `debugpy` files in place, start debugging.
+Either way, once `codelldb` and `debugpy` are known, start debugging.
 
 The fastest path is `:Debug run`, which launches (or attaches to) an adapter
 using one of its named modes, filled in with a few `input=value` arguments:
@@ -179,21 +191,25 @@ stack, variables and breakpoints. See |ezdap-ui| and
 5. Adapters                                                   *ezdap-adapters*
 
 ezdap ships **one** adapter — `remote`, a generic TCP attach that connects to
-a DAP server already listening on `host:port`. Every language adapter is added
-locally: a small file that says how to reach the debug adapter and what its
-launch/attach modes accept. Writing one from scratch is rarely necessary —
-ezdap-adapters <https://github.com/mbfoss/ezdap-adapters> keeps ready-made
-definitions for the common debuggers (debugpy, codelldb, delve, js-debug,
-netcoredbg, rdbg and more); copy the file in and it registers itself.
+a DAP server already listening on `host:port`. Every language adapter comes
+from the runtimepath: a small file that says how to reach the debug adapter and
+what its launch/attach modes accept. Writing one from scratch is rarely
+necessary — the ezdap-adapters <https://github.com/mbfoss/ezdap-adapters>
+plugin carries ready-made definitions for the common debuggers (debugpy,
+codelldb, delve, js-debug, netcoredbg, rdbg and more). Install it and they all
+register at once; the files are self-contained, so a single one can equally be
+copied into your own config instead.
 
 Adapters live in `require("ezdap.adapters")` as a plain `name → definition`
 table. It is assembled at load time from two sources:
 
 - the shipped `remote` entry, and
 - every `lua/ezdap-adapters/*.lua` file found on the runtimepath — one
-    `AdapterDef` per file, keyed by its filename stem. Drop
-    `~/.config/nvim/lua/ezdap-adapters/debugpy.lua` and a `debugpy` adapter
-    appears; a file named `remote.lua` overrides the shipped one.
+    `AdapterDef` per file, keyed by its filename stem. This is how the
+    ezdap-adapters plugin registers its definitions, and it works just the same
+    for your own: drop `~/.config/nvim/lua/ezdap-adapters/debugpy.lua` and a
+    `debugpy` adapter appears. Earlier runtimepath entries win, so a file in your
+    config overrides the plugin’s; a `remote.lua` overrides the shipped one.
 
 The table is also writable at runtime, so an entry can be added or overridden
 straight from a config file (`require("ezdap.adapters").foo = { … }`).
@@ -783,11 +799,11 @@ started:
 15. Adding a custom adapter                            *ezdap-custom-adapters*
 
 For a debugger already covered by ezdap-adapters
-<https://github.com/mbfoss/ezdap-adapters>, copy its file rather than writing
-one. This section is for the rest — a new debugger, or a local variant of a
-shipped definition. There are two ways to register one, and they build the same
-`name → definition` table — there is no registration call and no `adapters`
-option in `setup()`.
+<https://github.com/mbfoss/ezdap-adapters>, install that plugin (or copy the
+single file you need) rather than writing one. This section is for the rest —
+a new debugger, or a local variant of a shipped definition. There are two ways
+to register one, and they build the same `name → definition` table — there
+is no registration call and no `adapters` option in `setup()`.
 
 **Drop a file (recommended).** Put one file per adapter under
 `lua/ezdap-adapters/` anywhere on the runtimepath, returning a single
