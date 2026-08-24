@@ -308,48 +308,35 @@ For the native shape, see each adapter's upstream documentation for the
 
 ### Why inputs and not raw DAP <!-- tag: inputs -->
 
-The raw shape above is always available, and nothing is hidden behind the
-mode one, so why do modes declare `inputs` at all?
+The raw shape is always available, so why do modes declare `inputs`?
 
-Because **raw DAP parameters are not a thing anyone can be asked for.** The DAP
-spec deliberately says nothing about the body of a `launch` or `attach` request:
-it is whatever that adapter decided. `lldb-dap` wants `program` + `args`;
-`debugpy` wants `module` or `program` and spells its environment `env`; delve
-wants a `mode`; js-debug nests half of it. There is no field list to complete
-against, no way to know which combination is valid, and no way to tell that
-`waitFor` is meaningless except when attaching by name. A raw table is the
-right thing to *send* and the wrong thing to *type*.
+DAP does not specify the body of a `launch` or `attach` request; each adapter
+defines its own. Field names, required fields, and nesting differ per adapter,
+and some fields are only meaningful in combination with others. The protocol
+provides no listing of them, so a raw table is suitable to send but not to
+author by hand.
 
-A declared input fixes that by adding the one thing the raw body lacks, a
-description of itself:
+A declared input supplies what the raw body lacks: a description of itself.
 
-- **Completion knows what to offer.** `:Debug run lldb binary <Tab>`
-  lists that mode's inputs, and `command=<Tab>` completes paths, because
-  the input said it was path-like. A raw table can only be completed by
-  guessing.
-- **Errors arrive before the adapter starts.** A required input left unset, a
-  port outside 0–65535, a malformed `A=1,B=2`: all caught while resolving,
-  where the message can name the input. A bad raw body surfaces as whatever
-  the adapter says on stderr, if anything.
-- **Scaffolding is derived, not templated.** `:Debug new_run_file` writes a run
-  file straight from `inputs`, every field with its description, so no
-  template to drift out of sync with what the adapter accepts.
-- **One value, two places to write it.** An input can be answered on a command
-  line or in a typed run file, and both land at the same `build` (`env` is
-  `A=1,B=2` in one and a table in the other). That is why `:Debug run` and
-  a run file can't disagree: they resolve through the same declaration.
-- **A mode can answer on its own.** Inputs are declarations, so a mode
-  can do something smarter than "omit the field" when one is missing:
-  every attach mode with no `pid` opens a process picker. A raw body
-  has nowhere to put that behaviour.
+- **Completion.** `:Debug run lldb binary <Tab>` lists that mode's inputs, and
+  `command=<Tab>` completes paths because the input is declared path-like.
+- **Validation before launch.** Missing required inputs, a port outside
+  0–65535, or a malformed `A=1,B=2` are reported during resolution, with the
+  input named, instead of as adapter stderr.
+- **Derived scaffolding.** `:Debug new_run_file` generates a run file from
+  `inputs`, including each field's description, so no template can diverge from
+  what the adapter accepts.
+- **One value, two entry points.** An input can be supplied on the command line
+  or in a run file (`env` as `A=1,B=2` or as a table); both resolve through the
+  same declaration into the same `build`.
+- **Mode-supplied defaults.** A mode can act on a missing input instead of
+  omitting the field: every attach mode with no `pid` opens a process picker.
 
-What ezdap deliberately does **not** do is invent a portable vocabulary on top.
-There is no generic `stopOnEntry`-for-everyone field that gets translated per
-adapter; each mode's `build` writes that adapter's own native keys, and the
-input names sit close to them. The goal is to make the adapter's real interface
-askable, not to hide it behind a lowest common denominator. Once a mode is
-outgrown, `configuration` takes a hand-written body instead; the two shapes
-produce the same task.
+ezdap defines no portable vocabulary on top. No input is a cross-adapter alias
+subject to translation; each mode's `build` writes that adapter's own keys, and
+input names mirror them. The intent is to make the adapter's interface
+completable and validated, not to abstract it. Beyond that, `configuration`
+accepts a hand-written body; both shapes produce the same task.
 
 ### `:Debug new_run_file` <!-- tag: new-run-file -->
 
