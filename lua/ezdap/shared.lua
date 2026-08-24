@@ -81,7 +81,7 @@ function M.is_executable(path) return vim.fn.executable(path) == 1 end
 function M.is_directory(path) return vim.fn.isdirectory(path) == 1 end
 
 ---The process id to attach to: the one already given, or one picked interactively.
----What an attach profile's `build` calls for its `pid` input, which is why no adapter
+---What an attach mode's `build` calls for its `pid` input, which is why no adapter
 ---marks it `required`. Yields (see `select_process`) only when `pid` is nil.
 ---@param pid integer?  the pid supplied as an input, if any
 ---@param prompt? string  select prompt

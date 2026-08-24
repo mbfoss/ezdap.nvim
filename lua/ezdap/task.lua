@@ -8,7 +8,7 @@ local ui_util      = require "ezdap.util.ui"
 ---@class ezdap.Task
 ---@field name?         string                     run group name (defaults to "debug")
 ---@field adapter       string                     name of an entry in `ezdap.adapters`
----@field profile?      string                     the profile this was resolved from, for the adapter's `setup`; unset for a raw task
+---@field mode?         string                     the mode this was resolved from, for the adapter's `setup`; unset for a raw task
 ---@field request?      "launch"|"attach"          defaults to "launch"
 ---@field parameters?   table                      native DAP launch/attach body (the adapter's own keys), sent verbatim
 ---@field host?         string                     attach/TCP connection target
@@ -124,7 +124,7 @@ M.start            = function(task, callbacks)
     local unsub_progress ---@type fun()
 
     ---@type ezdap.AdapterSetupCtx
-    local _setup_ctx    = { add_bufnr = add_bufnr, report = report, profile = task.profile }
+    local _setup_ctx    = { add_bufnr = add_bufnr, report = report, mode = task.mode }
 
     local function _run_setup(cb)
         if not base.setup then return cb(nil) end

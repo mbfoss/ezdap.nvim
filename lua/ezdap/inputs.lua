@@ -153,7 +153,7 @@ M.formats = {
 ---@field choices string[]?
 
 ---A mistake in how an input was *declared*, not in the value answering it: the
----profile's `inputs` table says something that can't be read. Said so, because it
+---mode's `inputs` table says something that can't be read. Said so, because it
 ---reaches the user down the same path as "expected an integer, got …".
 ---@param msg string
 ---@param ... any

@@ -1,14 +1,14 @@
 ---@brief DAP adapter registry.
 
----`profile` names the profile the run was resolved from, which the config itself
----does not record — it is how a `setup` gates one profile rather than the whole
+---`mode` names the mode the run was resolved from, which the config itself
+---does not record — it is how a `setup` gates one mode rather than the whole
 ---adapter (e.g. a feature only a newer binary supports). A raw task (a run file's
----`configuration`, or `runner.run` called directly) names no profile, so a `setup`
+---`configuration`, or `runner.run` called directly) names no mode, so a `setup`
 ---must treat nil as "not one of mine" and let the run proceed.
 ---@class ezdap.AdapterSetupCtx
 ---@field add_bufnr fun(bufnr: integer, opts?: ezdap.AddBufOpts)
 ---@field report    fun(message: string)
----@field profile?  string
+---@field mode?      string
 
 ---What an input's value *is*. A collection holds entries read as scalars, which its
 ---`item_type`/`item_format` name.
@@ -41,10 +41,10 @@
 ---@field choices?     string[]  suggested values for the input
 ---@field description? string   a few words on what the input means
 
----@class ezdap.Profile
+---@class ezdap.Mode
 ---@field description  string
 ---@field request      "launch"|"attach"
----@field inputs?      table<string, ezdap.Input>  the profile's declared inputs
+---@field inputs?      table<string, ezdap.Input>  the mode's declared inputs
 ---@field build?       fun(params: table, connect: table, inputs: table<string, any>): string?  assemble body + connection in place; return an error string to abort
 
 ---@class ezdap.AdapterDef
@@ -55,7 +55,7 @@
 ---@field port?                  integer
 ---@field type?                  string   DAP adapterID override (defaults to the adapter name)
 ---@field defer_launch_attach?   boolean
----@field profiles?               table<string, ezdap.Profile>
+---@field modes?                 table<string, ezdap.Mode>
 ---@field setup?                 fun(config: ezdap.dap.Config, ctx: ezdap.AdapterSetupCtx, callback: fun(err?: string, state?: any))
 ---@field teardown?              fun(config: ezdap.dap.Config, ctx: any)
 
@@ -66,7 +66,7 @@
 local remote = {
     host     = "127.0.0.1",
     port     = 0,
-    profiles = {
+    modes    = {
         connect = {
             description = "attach to a DAP server listening on host:port",
             request     = "attach",

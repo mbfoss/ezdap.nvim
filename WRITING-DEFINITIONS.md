@@ -25,8 +25,8 @@ Each file returns one `ezdap.AdapterDef`:
 return {
     command  = { "gdb", "--interpreter=dap" }, -- how to spawn the adapter; or host/port to connect
     setup    = function(config, ctx, callback) end, -- optional, see below
-    profiles = {
-        launch_program = {
+    modes    = {
+        binary = {
             description = "debug a native executable",
             request     = "launch", -- or "attach"
             inputs      = {
@@ -54,16 +54,16 @@ the adapter is reached and what it can run.
 | `env` | `table<string,string>` | Environment for the spawned adapter — the adapter's own environment, not the debuggee's (`local-lua-debugger.lua` sets `LUA_PATH` this way). |
 | `type` | `string` | DAP `adapterID` override. Defaults to the adapter's name, i.e. the filename stem. |
 | `defer_launch_attach` | `boolean` | Send `launch`/`attach` after `configurationDone` rather than straight after `initialize`, for adapters that require that order. |
-| `profiles` | `table<string, ezdap.Profile>` | The named profiles this definition offers, keyed by the name `:Debug run <adapter> <profile>` takes. |
+| `modes` | `table<string, ezdap.Mode>` | The named modes this definition offers, keyed by the name `:Debug run <adapter> <mode>` takes. |
 | `setup` | `fun(config, ctx, callback)` | Runs before the session; see below. |
 | `teardown` | `fun(config, state)` | Runs after the session, with whatever `setup` passed as its `state`. |
 
-An `ezdap.Profile` is one runnable configuration:
+An `ezdap.Mode` is one runnable configuration:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `description` | `string` | A line shown in pickers and `:Debug new_run_file` output. |
-| `request` | `"launch"` \| `"attach"` | Which DAP request the profile issues. |
+| `request` | `"launch"` \| `"attach"` | Which DAP request the mode issues. |
 | `inputs` | `table<string, ezdap.Input>` | What the user is asked for, keyed by the name used as `key=value` on the command line. |
 | `build` | `fun(params, connect, inputs): string?` | Turns answered inputs into the DAP request body. Mutates `params` (the body) and `connect` (`host`/`port`, overriding the definition's own) in place. Return a string to abort with that error. It runs in a coroutine, so it may yield — a `vim.ui.select` picker inside `build` is fine. |
 
@@ -78,18 +78,18 @@ An `ezdap.Input` describes one value:
 | `choices` | `string[]` | Suggested values, offered in completion. |
 | `description` | `string` | A few words on what the input means — this is what `:Debug new_run_file` and `quick_run` completion show. |
 
-## Profiles
+## Modes
 
-A definition without `profiles` is runnable but not *askable*: nothing completes, and
+A definition without `modes` is runnable but not *askable*: nothing completes, and
 nothing can be scaffolded, because a raw DAP body describes nothing about itself (see
-[Why inputs](README.md#why-inputs-and-not-just-raw-dap-parameters)). Each profile declares
+[Why inputs](README.md#why-inputs-and-not-just-raw-dap-parameters)). Each mode declares
 the `inputs` it accepts and a `build` that turns supplied values into the native body:
 
 ```lua
 return {
     command  = { "my-dap-adapter", "--stdio" },
-    profiles = {
-        launch_program = {
+    modes    = {
+        binary = {
             description = "debug an executable",
             request     = "launch",
             inputs      = {
@@ -109,11 +109,11 @@ return {
 }
 ```
 
-The profile is now everywhere it should be, with no further wiring:
+The mode is now everywhere it should be, with no further wiring:
 
 ```vim
-:Debug run myadapter launch_program command=./a.out cwd=/src stop_on_entry=true
-:Debug new_run_file myadapter launch_program
+:Debug run myadapter binary command=./a.out cwd=/src stop_on_entry=true
+:Debug new_run_file myadapter binary
 ```
 
 How the pieces fit:
@@ -150,15 +150,15 @@ How the pieces fit:
   form the caller authored it in. Return nothing on success, or an **error string** to
   abort.
 - **Asking the user** — `build` runs on a coroutine, so it may yield. That is how an
-  attach profile with no `pid` opens a process picker rather than sending a meaningless
+  attach mode with no `pid` opens a process picker rather than sending a meaningless
   body: `local pid, err = shared.resolve_pid(inputs.pid); if not pid then return err end`.
   It must always resume — return a value or an error string — so the caller waiting on it
   hears back.
 
-Because `:Debug run`, `:Debug new_run_file` and profile-based run files all resolve through
-the same `inputs` → `build` path, a profile is described in exactly one place and the three
+Because `:Debug run`, `:Debug new_run_file` and mode-based run files all resolve through
+the same `inputs` → `build` path, a mode is described in exactly one place and the three
 cannot drift apart. The shipped `remote` adapter in [adapters.lua](lua/ezdap/adapters.lua)
-is a compact reference for a profile that configures `connect` (a task-level `host`/`port`)
+is a compact reference for a mode that configures `connect` (a task-level `host`/`port`)
 instead of `params`; for a spawn-then-connect definition that starts a server and points
 the connection at it, see the `setup`/`teardown` example below.
 
@@ -174,9 +174,9 @@ once, so the run either proceeds or aborts.
 `setup` may edit `config` in place — most usefully `config.host`/`config.port`, which is
 how an adapter that is really a TCP server gets started and then connected to. Its `ctx`
 carries `report(msg)` for progress lines, `add_bufnr(bufnr, opts?)` to attach a buffer it
-created to the run so it is listed under the session, and `profile` — the profile name
-this run resolved from, or `nil` for a raw run file, so a `setup` can gate one profile
-rather than the whole definition (refusing a profile whose feature the installed binary is
+created to the run so it is listed under the session, and `mode` — the mode name
+this run resolved from, or `nil` for a raw run file, so a `setup` can gate one mode
+rather than the whole definition (refusing a mode whose feature the installed binary is
 too old for, say). Treat `nil` as "none of mine" and let the run proceed.
 
 ```lua
@@ -222,7 +222,7 @@ directory (`debugpy.lua` maps a venv to its `bin/python`).
 [`bash-debug-adapter.lua`](adapters/bash-debug-adapter.lua) is the smallest,
 [`netcoredbg.lua`](adapters/netcoredbg.lua) adds a binary lookup,
 [`debugpy.lua`](adapters/debugpy.lua) shows shared input groups and a spawned server. The
-full contract is in the `ezdap.AdapterDef` and `ezdap.Profile` annotations in
+full contract is in the `ezdap.AdapterDef` and `ezdap.Mode` annotations in
 `lua/ezdap/adapters.lua`.
 
 Contributions of new definitions are welcome. Please follow the structure and comment style

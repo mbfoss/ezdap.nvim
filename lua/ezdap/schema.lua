@@ -1,11 +1,11 @@
 ---@brief Schema engine behind `:Debug new_run_file` and `:Debug run`.
 ---
 ---Adapters carry no launch/attach schema of their own — each adapter's
----`profiles` (named `ezdap.Profile` entries, in `ezdap.adapters`)
----are wholly self-describing. A profile declares its inputs up front in an
+---`modes` (named `ezdap.Mode` entries, in `ezdap.adapters`)
+---are wholly self-describing. A mode declares its inputs up front in an
 ---`inputs` table — `name -> ezdap.Input` — which both `:Debug run` and a
 ---scaffolded run file read, then resolve the same way: `resolve_task` runs the
----profile's `build` over the supplied values to assemble a runnable task.
+---mode's `build` over the supplied values to assemble a runnable task.
 ---
 
 local inputs_registry = require("ezdap.inputs")
@@ -14,93 +14,93 @@ local M = {}
 
 -- Introspection
 
----An adapter's declared `profiles`, or an empty table.
+---An adapter's declared `modes`, or an empty table.
 ---@param adapter string
----@return table<string, ezdap.Profile>
-function M.profiles(adapter)
+---@return table<string, ezdap.Mode>
+function M.modes(adapter)
     local def = require("ezdap.adapters")[adapter]
-    return (def and def.profiles) or {}
+    return (def and def.modes) or {}
 end
 
----A single named profile, or nil.
+---A single named mode, or nil.
 ---@param adapter string
 ---@param name string
----@return ezdap.Profile?
-function M.profile(adapter, name)
-    return M.profiles(adapter)[name]
+---@return ezdap.Mode?
+function M.mode(adapter, name)
+    return M.modes(adapter)[name]
 end
 
----An adapter's profile names, sorted.
+---An adapter's mode names, sorted.
 ---@param adapter string
 ---@return string[]
-function M.profile_names(adapter)
+function M.mode_names(adapter)
     local out = {}
-    for name in pairs(M.profiles(adapter)) do out[#out + 1] = name end
+    for name in pairs(M.modes(adapter)) do out[#out + 1] = name end
     table.sort(out)
     return out
 end
 
----The inputs a profile declares (`name -> ezdap.Input`), or an empty table. Hand an
+---The inputs a mode declares (`name -> ezdap.Input`), or an empty table. Hand an
 ---entry to `ezdap.inputs` to learn how to read, describe, seed or complete it; read
 ---the table once rather than looking entries up name-by-name.
 ---@param adapter string
----@param profile_name string
+---@param mode_name string
 ---@return table<string, ezdap.Input>
-function M.profile_inputs(adapter, profile_name)
-    local profile = M.profile(adapter, profile_name)
-    return (profile and profile.inputs) or {}
+function M.mode_inputs(adapter, mode_name)
+    local mode = M.mode(adapter, mode_name)
+    return (mode and mode.inputs) or {}
 end
 
----The input names a profile declares, sorted. These are the `name=value`
+---The input names a mode declares, sorted. These are the `name=value`
 ---tokens `:Debug run` accepts, and the `parameters` keys a tasks file may set.
 ---@param adapter string
----@param profile_name string
+---@param mode_name string
 ---@return string[]
-function M.profile_input_names(adapter, profile_name)
+function M.mode_input_names(adapter, mode_name)
     local out = {}
-    for name in pairs(M.profile_inputs(adapter, profile_name)) do
+    for name in pairs(M.mode_inputs(adapter, mode_name)) do
         out[#out + 1] = name
     end
     table.sort(out)
     return out
 end
 
----The input names a profile marks `required = true`, sorted — the ones
+---The input names a mode marks `required = true`, sorted — the ones
 ---`resolve_task` errors on when left unset.
 ---@param adapter string
----@param profile_name string
+---@param mode_name string
 ---@return string[]
-function M.profile_required(adapter, profile_name)
+function M.mode_required(adapter, mode_name)
     local out = {}
-    for name, spec in pairs(M.profile_inputs(adapter, profile_name)) do
+    for name, spec in pairs(M.mode_inputs(adapter, mode_name)) do
         if spec.required then out[#out + 1] = name end
     end
     table.sort(out)
     return out
 end
 
----Adapter names a profile-driven front end can offer — those declaring at
----least one profile — sorted.
+---Adapter names a mode-driven front end can offer — those declaring at
+---least one mode — sorted.
 ---@return string[]
-function M.profiled_adapters()
+function M.adapters_with_modes()
     local out = {}
     for name, def in pairs(require("ezdap.adapters")) do
-        if def.profiles and next(def.profiles) then out[#out + 1] = name end
+        if def.modes and next(def.modes) then out[#out + 1] = name end
     end
     table.sort(out)
     return out
 end
 
----The distinct `request` values ("launch"/"attach") an adapter's profiles use,
+---The distinct `request` values ("launch"/"attach") an adapter's modes use,
 ---sorted.
 ---@param adapter string
 ---@return string[]
 function M.requests(adapter)
     local seen, out = {}, {}
-    for _, profile in pairs(M.profiles(adapter)) do
-        if not seen[profile.request] then
-            seen[profile.request] = true
-            out[#out + 1] = profile.request
+    for _, mode in pairs(M.modes(adapter)) do
+        if not seen[mode.request] then
+            seen[mode.request] = true
+            out[#out + 1] = mode.request
         end
     end
     table.sort(out)
@@ -112,12 +112,12 @@ end
 ---Read every declared input from `values`, in whichever form it was authored: a
 ---string is the string form and is `parse`d, any other Lua value is the typed form
 ---and is `read`. Unset inputs are absent (recorded in `missing` when `required`).
----@param profile ezdap.Profile
+---@param mode ezdap.Mode
 ---@param values table<string, any>  input name → a value in either authoring form
 ---@return table<string, any> inputs, string[] missing, string[] errs
-local function _read_inputs(profile, values)
+local function _read_inputs(mode, values)
     local inputs, missing, errs = {}, {}, {}
-    for name, spec in pairs(profile.inputs or {}) do
+    for name, spec in pairs(mode.inputs or {}) do
         local raw = values[name]
         -- An input cleared rather than answered (`:Debug run … cwd=`) is one that was
         -- not supplied: `build` assigns it unconditionally, and only nil drops the field.
@@ -143,17 +143,17 @@ local function _read_inputs(profile, values)
     return inputs, missing, errs
 end
 
----What to resolve: an adapter's named profile, the values for its inputs, and
+---What to resolve: an adapter's named mode, the values for its inputs, and
 ---the name the resulting task should run under.
 ---@class ezdap.ResolveSpec
 ---@field adapter       string
----@field profile string
+---@field mode string
 ---@field name?         string              run group name for the resolved task
 ---@field values?       table<string, any>  input name → a value in either authoring form
 
----Resolve one of an adapter's named profiles, plus values for its inputs, into a
+---Resolve one of an adapter's named modes, plus values for its inputs, into a
 ---runnable `ezdap.Task` — request kind and any task-level connection already in
----place. This is the single seam between a profile and a front end.
+---place. This is the single seam between a mode and a front end.
 ---@param spec ezdap.ResolveSpec
 ---@param done fun(task: ezdap.Task?, err: string?)
 ---@return fun() cancel
@@ -170,15 +170,15 @@ function M.resolve_task(spec, done)
 
     local function cancel() cancelled = true end
 
-    local profile = M.profile(spec.adapter, spec.profile)
-    if not profile then
-        finish(nil, ("adapter %s has no profile %q (available: %s)")
-            :format(spec.adapter, tostring(spec.profile),
-                table.concat(M.profile_names(spec.adapter), ", ")))
+    local mode = M.mode(spec.adapter, spec.mode)
+    if not mode then
+        finish(nil, ("adapter %s has no mode %q (available: %s)")
+            :format(spec.adapter, tostring(spec.mode),
+                table.concat(M.mode_names(spec.adapter), ", ")))
         return cancel
     end
 
-    local inputs, missing, errs = _read_inputs(profile, spec.values or {})
+    local inputs, missing, errs = _read_inputs(mode, spec.values or {})
     if #errs > 0 then
         finish(nil, table.concat(errs, "; "))
         return cancel
@@ -199,21 +199,21 @@ function M.resolve_task(spec, done)
         finish({
             name       = spec.name,
             adapter    = spec.adapter,
-            profile    = spec.profile,
-            request    = profile.request,
+            mode       = spec.mode,
+            request    = mode.request,
             parameters = body,
             host       = has_connect and connect.host or nil,
             port       = has_connect and connect.port or nil,
         })
     end
 
-    if not profile.build then
+    if not mode.build then
         deliver()
         return cancel
     end
 
     local co = coroutine.create(function()
-        local ok, berr = xpcall(profile.build, debug.traceback, body, connect, inputs)
+        local ok, berr = xpcall(mode.build, debug.traceback, body, connect, inputs)
         if not ok then return finish(nil, berr) end
         -- `build` gave up — a cancelled picker.
         if berr then return finish(nil, berr) end

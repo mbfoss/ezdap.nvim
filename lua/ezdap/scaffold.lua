@@ -1,12 +1,12 @@
 ---@brief run_file scaffolding for `:Debug new_run_file`.
 ---
----Writes a runnable Lua run_file for an adapter + one of its `profiles`. The
----generated file is profile-based, exactly like `:Debug run`: it names the
----`adapter` and `profile` and lists that profile's declared inputs under
+---Writes a runnable Lua run_file for an adapter + one of its `modes`. The
+---generated file is mode-based, exactly like `:Debug run`: it names the
+---`adapter` and `mode` and lists that mode's declared inputs under
 ---`parameters`, each seeded with a starting value (`ezdap.inputs`' `seed`) and
 ---annotated with its `description`. `:Debug run_file` resolves it through the
----profile's `build` (see `ezdap.schema`), so a run file and `:Debug run`
----share one description of a profile — its `inputs` — and never drift.
+---mode's `build` (see `ezdap.schema`), so a run file and `:Debug run`
+---share one description of a mode — its `inputs` — and never drift.
 
 local schema = require("ezdap.schema")
 local inputs_registry = require("ezdap.inputs")
@@ -46,16 +46,16 @@ local function _lua_literal(v)
     return "nil"
 end
 
----Build the `parameters = { … }` lines for a profile: one `name = <seed>,` entry per
+---Build the `parameters = { … }` lines for a mode: one `name = <seed>,` entry per
 ---declared input, sorted, each trailed by a `-- description`. Required inputs are
 ---written active, the rest commented out. Returns nil when no inputs are declared.
 ---@param adapter string
----@param profile_name string
+---@param mode_name string
 ---@return string[]?  the interior lines, already indented to sit inside `parameters`
-local function _input_lines(adapter, profile_name)
-    local names = schema.profile_input_names(adapter, profile_name)
+local function _input_lines(adapter, mode_name)
+    local names = schema.mode_input_names(adapter, mode_name)
     if #names == 0 then return nil end
-    local specs = schema.profile_inputs(adapter, profile_name)
+    local specs = schema.mode_inputs(adapter, mode_name)
 
     -- Two passes: build each input's code — a `name = <seed>,` assignment, commented
     -- out unless the input is required — then pad them all to a common width so the
@@ -85,56 +85,56 @@ local function _input_lines(adapter, profile_name)
     return lines
 end
 
----Scaffold a run_file for an `adapter` + one of its `profiles` and open it for
+---Scaffold a run_file for an `adapter` + one of its `modes` and open it for
 ---editing; run it with `:Debug run_file`. `assignments` is positional: adapter, then
----optional profile (defaults to the sole one) and path. Fails if the path exists.
----@param assignments string[]  positional adapter, profile, path, e.g. { "codelldb", "launch", "./foo.lua" }
+---optional mode (defaults to the sole one) and path. Fails if the path exists.
+---@param assignments string[]  positional adapter, mode, path, e.g. { "codelldb", "binary", "./foo.lua" }
 ---@return string? path  the file that was created
 function M.new_run_file(assignments)
-    -- Every argument is positional: `new_run_file <adapter> [profile] [path]`.
-    local adapter, profile_name, path
+    -- Every argument is positional: `new_run_file <adapter> [mode] [path]`.
+    local adapter, mode_name, path
     for _, tok in ipairs(assignments or {}) do
         if not adapter then
             adapter = tok
-        elseif not profile_name then
-            profile_name = tok
+        elseif not mode_name then
+            mode_name = tok
         elseif not path then
             path = tok
         else
             _warn("new_run_file: unexpected argument '" .. tok ..
-                "' (usage: new_run_file <adapter> [profile] [path])")
+                "' (usage: new_run_file <adapter> [mode] [path])")
             return
         end
     end
 
     if not adapter or adapter == "" then
-        _warn("new_run_file: usage: new_run_file <adapter> [profile] [path]")
+        _warn("new_run_file: usage: new_run_file <adapter> [mode] [path]")
         return
     end
     local base = require("ezdap.adapters")[adapter]
     if not base then
         _err("new_run_file: unknown adapter: " .. adapter ..
-            " (available: " .. table.concat(schema.profiled_adapters(), ", ") .. ")")
+            " (available: " .. table.concat(schema.adapters_with_modes(), ", ") .. ")")
         return
     end
 
-    -- Resolve the profile: given, else the adapter's sole profile — reject an
+    -- Resolve the mode: given, else the adapter's sole mode — reject an
     -- adapter that declares none, or an ambiguous choice among several.
-    local names = schema.profile_names(adapter)
+    local names = schema.mode_names(adapter)
     if #names == 0 then
-        _err("new_run_file: adapter " .. adapter .. " declares no profiles")
+        _err("new_run_file: adapter " .. adapter .. " declares no modes")
         return
     end
-    if profile_name and profile_name ~= "" then
-        if not vim.tbl_contains(names, profile_name) then
-            _err(("new_run_file: adapter %s has no profile %q (available: %s)")
-                :format(adapter, profile_name, table.concat(names, ", ")))
+    if mode_name and mode_name ~= "" then
+        if not vim.tbl_contains(names, mode_name) then
+            _err(("new_run_file: adapter %s has no mode %q (available: %s)")
+                :format(adapter, mode_name, table.concat(names, ", ")))
             return
         end
     elseif #names == 1 then
-        profile_name = names[1]
+        mode_name = names[1]
     else
-        _err(("new_run_file: adapter %s has multiple profiles, pick one (available: %s)")
+        _err(("new_run_file: adapter %s has multiple modes, pick one (available: %s)")
             :format(adapter, table.concat(names, ", ")))
         return
     end
@@ -142,7 +142,7 @@ function M.new_run_file(assignments)
     -- Resolve the destination; fail rather than clobber or rename an existing file.
     local root = require("ezdap.store").root() or vim.fn.getcwd()
     local dest = (path and path ~= "") and vim.fn.fnamemodify(vim.fn.expand(path), ":p")
-        or vim.fs.joinpath(root, adapter .. "_" .. profile_name .. ".lua")
+        or vim.fs.joinpath(root, adapter .. "_" .. mode_name .. ".lua")
     if not dest:match("%.lua$") then dest = dest .. ".lua" end
     if vim.uv.fs_stat(dest) then
         _err("new_run_file: file already exists: " .. dest)
@@ -154,12 +154,12 @@ function M.new_run_file(assignments)
         "return {",
         ("    name       = %q,"):format(adapter),
         ("    adapter    = %q,"):format(adapter),
-        ("    profile    = %q,"):format(profile_name),
+        ("    mode       = %q,"):format(mode_name),
     }
-    -- The profile's declared inputs are answered under `parameters`. A profile with
+    -- The mode's declared inputs are answered under `parameters`. A mode with
     -- no inputs gets an empty `parameters` rather than a `{` / blank line / `}`
     -- sandwich.
-    local input_lines = _input_lines(adapter, profile_name)
+    local input_lines = _input_lines(adapter, mode_name)
     if not input_lines then
         lines[#lines + 1] = "    parameters = {},"
     else

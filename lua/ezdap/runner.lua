@@ -263,7 +263,7 @@ local function _run_from_dir(dir)
 end
 
 ---Run a task from a path: a directory opens a picker of its Lua files, a Lua file is
----loaded and the value it returns is run — either profile-based (`adapter`/`profile`/
+---loaded and the value it returns is run — either mode-based (`adapter`/`mode`/
 ---`parameters`, resolved via `build`) or raw (`adapter`/`configuration`, sent verbatim).
 ---@param path string
 function M.run_file(path)
@@ -308,14 +308,14 @@ function M.run_file(path)
         return
     end
 
-    -- A profile-based run file names a profile and answers its inputs under
-    -- `parameters`; resolve it through the profile's `build`, as `:Debug run` does.
+    -- A mode-based run file names a mode and answers its inputs under
+    -- `parameters`; resolve it through the mode's `build`, as `:Debug run` does.
     -- It may open a picker, so the run starts from the callback.
-    if type(spec.profile) == "string" then
+    if type(spec.mode) == "string" then
         local name = vim.fn.fnamemodify(resolved, ":t")
         require("ezdap.schema").resolve_task({
             adapter = spec.adapter,
-            profile = spec.profile,
+            mode = spec.mode,
             name    = spec.name,
             values  = spec.parameters,
         }, function(task, err)
@@ -347,46 +347,46 @@ function M.run_file(path)
     end
 
     _err("run: " .. vim.fn.fnamemodify(resolved, ":t") ..
-        " must set either `profile` (a named profile) or `configuration` (a raw DAP table)")
+        " must set either `mode` (a named mode) or `configuration` (a raw DAP table)")
 end
 
----Launch or attach under an adapter's named profile, resolving `inputs` — the
----answers to the profile's declared inputs, in either authoring form — through
+---Launch or attach under an adapter's named mode, resolving `inputs` — the
+---answers to the mode's declared inputs, in either authoring form — through
 ---`schema.resolve_task`.
 ---Returns nil when `build` stops to ask the user something — the run starts on answer.
 ---@param adapter string  adapter name, e.g. "codelldb"
----@param profile_name string  profile name, e.g. "launch"
+---@param mode_name string  mode name, e.g. "binary"
 ---@param inputs? table<string, string>  input name -> value, e.g. { command = "./a.out" }
 ---@return ezdap.runner.Run?
-function M.run_profile(adapter, profile_name, inputs)
+function M.run_mode(adapter, mode_name, inputs)
     local schema = require("ezdap.schema")
 
     if not adapter or adapter == "" then
-        _warn(("run: usage: :%s run <adapter> <profile> [input=value]…")
+        _warn(("run: usage: :%s run <adapter> <mode> [input=value]…")
             :format(require("ezdap.config").command))
         return
     end
     if not require("ezdap.adapters")[adapter] then
         _err("run: unknown adapter: " .. adapter ..
-            " (available: " .. table.concat(schema.profiled_adapters(), ", ") .. ")")
+            " (available: " .. table.concat(schema.adapters_with_modes(), ", ") .. ")")
         return
     end
-    if not profile_name or profile_name == "" then
+    if not mode_name or mode_name == "" then
         _warn("run: usage: :" .. require("ezdap.config").command
-            .. " run " .. adapter .. " <profile> [input=value]…"
-            .. " (profiles: " .. table.concat(schema.profile_names(adapter), ", ") .. ")")
+            .. " run " .. adapter .. " <mode> [input=value]…"
+            .. " (modes: " .. table.concat(schema.mode_names(adapter), ", ") .. ")")
         return
     end
 
     local values = inputs or {}
 
-    -- A profile whose `build` asks the user something (an attach resolving an unset
+    -- A mode whose `build` asks the user something (an attach resolving an unset
     -- `pid`) resolves only once they answer, so the run starts from the callback.
-    -- Every other profile resolves synchronously, assigning `run` before we return.
+    -- Every other mode resolves synchronously, assigning `run` before we return.
     local run
     schema.resolve_task({
         adapter = adapter,
-        profile = profile_name,
+        mode = mode_name,
         name    = adapter,
         values  = values,
     }, function(task, err)

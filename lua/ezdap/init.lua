@@ -210,14 +210,14 @@ local _debug_subs = {
     "project", "clean",
 }
 
----Read `:Debug run <adapter> <profile> [input=value]…`: the adapter and profile are
+---Read `:Debug run <adapter> <mode> [input=value]…`: the adapter and mode are
 ---strictly the first two positionals, every later token an `input=value` assignment.
 ---@param args string[]  the command-line tokens from the adapter on
----@return string? adapter, string? profile, table<string, string>? inputs
+---@return string? adapter, string? mode, table<string, string>? inputs
 local function _parse_run_args(args)
-    local adapter, profile = args[1], args[2]
-    if (adapter and adapter:find("=", 1, true)) or (profile and profile:find("=", 1, true)) then
-        vim.notify(("[ezdap] run: usage: :%s run <adapter> <profile> [input=value]…")
+    local adapter, mode = args[1], args[2]
+    if (adapter and adapter:find("=", 1, true)) or (mode and mode:find("=", 1, true)) then
+        vim.notify(("[ezdap] run: usage: :%s run <adapter> <mode> [input=value]…")
             :format(require("ezdap.config").command), vim.log.levels.WARN)
         return
     end
@@ -231,7 +231,7 @@ local function _parse_run_args(args)
         end
         inputs[tok:sub(1, eq - 1)] = tok:sub(eq + 1)
     end
-    return adapter, profile, inputs
+    return adapter, mode, inputs
 end
 
 ---@type ezdap.util.usercmd.run_fn
@@ -241,8 +241,8 @@ local function _debug_run(_, args, opts)
     if sub == "run_file" then
         M.run_file(args[2])
     elseif sub == "run" then
-        local adapter, profile, inputs = _parse_run_args({ unpack(args, 2) })
-        if inputs then M.run_profile(adapter or "", profile or "", inputs) end
+        local adapter, mode, inputs = _parse_run_args({ unpack(args, 2) })
+        if inputs then M.run_mode(adapter or "", mode or "", inputs) end
     elseif sub == "new_run_file" then
         M.new_run_file({ unpack(args, 2) })
     elseif sub == "rerun" then
@@ -309,14 +309,14 @@ local function _debug_run(_, args, opts)
 end
 
 ---Completion for `:Debug run …` tokens: the adapter (1st bare positional),
----then the profile name (2nd), then input names not yet supplied (as `name=`),
+---then the mode name (2nd), then input names not yet supplied (as `name=`),
 ---or a value once `=` has been typed (file paths for a path-like input).
 ---@param schema table
 ---@param used string[]     already-typed tokens preceding the one being completed
 ---@param arg_lead string   the token being completed
 ---@return string[]
 local function _run_complete(schema, used, arg_lead)
-    local adapter, profile_name
+    local adapter, mode_name
     local supplied = {}
     for _, tok in ipairs(used) do
         local e = tok:find("=", 1, true)
@@ -324,32 +324,32 @@ local function _run_complete(schema, used, arg_lead)
             supplied[tok:sub(1, e - 1)] = true
         elseif not adapter then
             adapter = tok
-        elseif not profile_name then
-            profile_name = tok
+        elseif not mode_name then
+            mode_name = tok
         end
     end
 
     local eq = arg_lead:find("=", 1, true)
     if eq then
-        if not adapter or not profile_name then return {} end
+        if not adapter or not mode_name then return {} end
         local name   = arg_lead:sub(1, eq - 1)
         local pfx    = arg_lead:sub(1, eq)
         local val    = arg_lead:sub(eq + 1)
         -- Completing an input's value: whatever the input itself can offer —
         -- paths, true/false, a fixed set of values, nothing for the rest.
-        local input  = schema.profile_inputs(adapter, profile_name)[name]
+        local input  = schema.mode_inputs(adapter, mode_name)[name]
         local values = require("ezdap.inputs").completion(input, val)
         return vim.tbl_map(function(v) return pfx .. v end, values)
     end
 
-    -- No `=` yet: complete the adapter, then the profile, then input names.
+    -- No `=` yet: complete the adapter, then the mode, then input names.
     if not adapter then
-        return schema.profiled_adapters()
-    elseif not profile_name then
-        return schema.profile_names(adapter)
+        return schema.adapters_with_modes()
+    elseif not mode_name then
+        return schema.mode_names(adapter)
     end
     local out = {}
-    for _, name in ipairs(schema.profile_input_names(adapter, profile_name)) do
+    for _, name in ipairs(schema.mode_input_names(adapter, mode_name)) do
         if not supplied[name] then out[#out + 1] = name .. "=" end
     end
     return out
@@ -366,20 +366,20 @@ local function _debug_complete_subs(_, rest, arg_lead)
         return vim.fn.getcompletion(arg_lead, "file")
     end
     if rest[1] == "run" then
-        -- <adapter> <profile> <input>=<value>…
+        -- <adapter> <mode> <input>=<value>…
         local schema = require("ezdap.schema")
         return _run_complete(schema, { unpack(rest, 2) }, arg_lead)
     end
     if rest[1] == "new_run_file" then
-        -- Positional: <adapter> [profile] [path]. The path names a new file to
+        -- Positional: <adapter> [mode] [path]. The path names a new file to
         -- create, so it has no completion.
         local schema = require("ezdap.schema")
         local used   = { unpack(rest, 2) }
         local pos    = #used + 1 -- 1-based position of the token being completed
         if pos == 1 then
-            return schema.profiled_adapters()
+            return schema.adapters_with_modes()
         elseif pos == 2 then
-            return schema.profile_names(used[1])
+            return schema.mode_names(used[1])
         end
         return {}
     end
@@ -524,29 +524,29 @@ function M.run_file(path)
     return runner.run_file(path)
 end
 
----Scaffold a run_file for one of an adapter's profiles — `adapter`/`profile`/
+---Scaffold a run_file for one of an adapter's modes — `adapter`/`mode`/
 ---`parameters`, seeded and commented — and open it for editing. `assignments` is
----positional: adapter, optional profile (defaults to the sole one), optional path.
----@param assignments string[]  positional adapter, profile, path, e.g. { "codelldb", "launch", "./foo.lua" }
+---positional: adapter, optional mode (defaults to the sole one), optional path.
+---@param assignments string[]  positional adapter, mode, path, e.g. { "codelldb", "binary", "./foo.lua" }
 function M.new_run_file(assignments)
     _require_setup("new_run_file")
     return require("ezdap.scaffold").new_run_file(assignments)
 end
 
----Launch or attach under an adapter using one of its declared `profiles`, assembling
----the request body from `inputs` — the answers to the profile's declared inputs, in
+---Launch or attach under an adapter using one of its declared `modes`, assembling
+---the request body from `inputs` — the answers to the mode's declared inputs, in
 ---either authoring form. The entry point behind `:Debug run`.
 ---@param adapter string  adapter name, e.g. "debugpy"
----@param profile string  profile name, e.g. "launch"
+---@param mode string  mode name, e.g. "binary"
 ---@param inputs? table<string, string>  input name -> value, e.g. { command = "./main.py" }
-function M.run_profile(adapter, profile, inputs)
-    _require_setup("run_profile")
+function M.run_mode(adapter, mode, inputs)
+    _require_setup("run_mode")
     M.clean()
-    return require("ezdap.runner").run_profile(adapter, profile, inputs)
+    return require("ezdap.runner").run_mode(adapter, mode, inputs)
 end
 
 ---Run a complete native task — `adapter`/`request`/`parameters` (plus optional
----`name`/`host`/`port`) — in ezdap's own run host, the same one `run_profile` and
+---`name`/`host`/`port`) — in ezdap's own run host, the same one `run_mode` and
 ---`run_file` end in. Returns nil when `task` is not a valid task table.
 ---@param task ezdap.Task
 ---@return ezdap.runner.Run?

@@ -25,7 +25,7 @@ for the UI and commands — prefer it over importing `dap/client` or
 `dap/breakpoints` directly.
 
 **Public API** — [lua/ezdap/init.lua](lua/ezdap/init.lua)
-`setup`, the run entry points (`run`, `run_profile`, `run_file`, `new_run_file`,
+`setup`, the run entry points (`run`, `run_mode`, `run_file`, `new_run_file`,
 `rerun`), the debug/disassembly view accessors, and registration of the user
 command (`config.command`, dispatching to the command surface).
 
@@ -59,10 +59,10 @@ its only path to the DAP layer.
 **Adapters & tasks**
 - [adapters.lua](lua/ezdap/adapters.lua) — the adapter registry: a plain
   `name → ezdap.AdapterDef` table of native DAP process/connection config plus
-  optional named `profiles`. Only the generic `remote` adapter ships here; every
+  optional named `modes`. Only the generic `remote` adapter ships here; every
   other adapter is user-supplied, one file per adapter under `lua/ezdap-adapters/`
   on the runtimepath, globbed and keyed by filename. Users add/override keys
-  directly. The DAP core never reads `profiles` — only `ezdap.schema` does.
+  directly. The DAP core never reads `modes` — only `ezdap.schema` does.
 - [task.lua](lua/ezdap/task.lua) — the task runner backend. Consumes a native
   task (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`) and
   sends `parameters` as the DAP request body verbatim.
@@ -79,12 +79,12 @@ its only path to the DAP layer.
   row.
 - [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug run`, the
   reader for `new_run_file`, and the seam easytasks' `debug` task type runs on.
-  `resolve_task` reads a profile's declared `inputs` from a table of values
+  `resolve_task` reads a mode's declared `inputs` from a table of values
   and calls its `build`, delivering a complete `ezdap.Task` to a `done` callback —
   a `build` may stop to ask the user something first, and the returned `cancel`
   drops the answer if the caller has given up by then.
 - [scaffold.lua](lua/ezdap/scaffold.lua) — `:Debug new_run_file`: writes a runnable
-  Lua run file naming the `adapter` and `profile` and listing that profile's
+  Lua run file naming the `adapter` and `mode` and listing that mode's
   declared inputs under `parameters`, each seeded via `ezdap.inputs` and commented
   with its `description`, then opens it.
 
@@ -120,20 +120,20 @@ ezdap's own utilities (`UndoStack`, `select`, `table`, …) sit in the same
 directory and are untouched by the vendor script — it copies only the files it
 lists.
 
-## The adapter profile format
+## The adapter definition format
 
 An `AdapterDef` describes how to launch a DAP adapter (`command`/`host`/`port`,
-optional `setup`/`teardown`, default `request`). Its optional `profiles` is
-a `table<string, ezdap.Profile>` — named launch/attach templates
-(`launch`, `attach`, `remote`, …) consumed only by `ezdap.schema`. Adapters carry
-no separate schema of their own: each profile is wholly self-describing.
+optional `setup`/`teardown`, default `request`). Its optional `modes` is
+a `table<string, ezdap.Mode>` — named launch/attach templates
+(`binary`, `attach`, `remote`, …) consumed only by `ezdap.schema`. Adapters carry
+no separate schema of their own: each mode is wholly self-describing.
 
-Each `ezdap.Profile`:
+Each `ezdap.Mode`:
 
 | Field         | Meaning                                                                         |
 | ------------- | ------------------------------------------------------------------------------- |
 | `request`     | `"launch"` or `"attach"`                                                        |
-| `inputs`      | what the profile accepts — `name -> ezdap.Input`; see below             |
+| `inputs`      | what the mode accepts — `name -> ezdap.Input`; see below             |
 | `build`       | `fun(params, connect, inputs)` — assembles the native request body, and any task-level TCP endpoint, in place |
 
 Each `ezdap.Input` declares one input up front:
@@ -181,7 +181,7 @@ argument list).
 
 ### One description, two entry points
 
-`inputs` is the only description of a profile, and both commands resolve through it:
+`inputs` is the only description of a mode, and both commands resolve through it:
 
 ```
 :Debug run     values     ─→ build ─→ body ─→ task
@@ -189,10 +189,10 @@ run_file       parameters ─→ build ─→ body ─→ task
 new_run_file   inputs ─→ seeded parameters ─→ (you edit it) ─→ run_file
 ```
 
-A scaffolded run file names the `adapter` and `profile` and lists that profile's
+A scaffolded run file names the `adapter` and `mode` and lists that mode's
 declared inputs under `parameters`, each seeded by its row and commented with its
 `description` — so it and `:Debug run` cannot drift, and there is no second field
-list to keep in step. (A run file may also skip profiles entirely: `adapter` plus a
+list to keep in step. (A run file may also skip modes entirely: `adapter` plus a
 `configuration` of raw DAP parameters is forwarded verbatim, never touching `build`.)
 
 - **`build(params, connect, inputs)`** assembles everything a run needs, in
@@ -209,7 +209,7 @@ list to keep in step. (A run file may also skip profiles entirely: `adapter` plu
   host/port in force.
 
   Omitting the field is only the *default* answer to an unset input; `build` is
-  where a profile decides otherwise, because it alone knows what the request
+  where a mode decides otherwise, because it alone knows what the request
   means. An attach body is nothing without a process, so every attach `build`
   resolves an unset `pid` by asking the user to pick one:
 
@@ -231,8 +231,8 @@ list to keep in step. (A run file may also skip profiles entirely: `adapter` plu
 
 An input's `description` is what explains the scaffolded file, since it becomes that
 field's comment — write it for someone reading the generated run file, not just the
-command line. Scaffold a profile after editing it
-(`:Debug new_run_file <adapter> <profile> /tmp/x.lua`) to see what it reads like.
+command line. Scaffold a mode after editing it
+(`:Debug new_run_file <adapter> <mode> /tmp/x.lua`) to see what it reads like.
 
 Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are ezdap's
 own user-facing vocabulary — the `name=value` tokens typed at `:Debug run` — not
@@ -240,13 +240,13 @@ the adapter's. The `params` keys they fill keep whatever casing the adapter's
 wire protocol uses, so pairings like `params.stopOnEntry = inputs.stop_on_entry`
 are normal and correct.
 
-Which names a profile takes is up to it — there is no portable role
-vocabulary across adapters — but by convention a `launch` profile takes one
+Which names a mode takes is up to it — there is no portable role
+vocabulary across adapters — but by convention a `launch` mode takes one
 `command` input (a `command`-format string) carrying the whole command line, and
 `build` splits it into that adapter's own program/args fields via
 `shared.split_command`. See each file under `lua/ezdap-adapters/` for worked examples
 of every shape, including custom-launch command strings (`codelldb`'s `core`), a
-`connect`-only profile (the shipped `remote`), and one input feeding both body and
+`connect`-only mode (the shipped `remote`), and one input feeding both body and
 connection (`java-debug-server`).
 
 ## Conventions
