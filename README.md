@@ -8,13 +8,15 @@ A full-featured **Debug Adapter Protocol (DAP) client for Neovim**.
 ezdap brings an interactive debugger to Neovim: pause a program on a
 breakpoint, inspect variables and the call stack, and step through execution
 without leaving the editor. It implements the Debug Adapter Protocol directly,
-so it drives the same debuggers VS Code and other editors use: Python, Go,
-C/C++, Rust, JavaScript and anything else with a DAP adapter.
+I can be used to debug Python, Go,
+C/C++, Rust, JavaScript and any other debugger DAP support.
 
-Each debugger is described by a single file. Install the companion plugin
-[ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) to get ready-made
-definitions for the common debuggers all at once, or drop in a single file of
-your own.
+This plugin only ship specific debuggers support by 
+Install the companion plugin
+[ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) to get a ready-made set pf
+definitions for some common debuggers.
+
+(Or use the guide below [Adding a custom adapter](#Adding a custom adapter) to define a custom adapter)
 
 <!-- panvimdoc-ignore-start -->
 
