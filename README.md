@@ -241,7 +241,7 @@ Pass a file, or a **directory** to pick from its `.lua` files:
 ```vim
 :Debug run_file debug.lua
 :Debug run_file ./debug/   " picker over the folder's run files
-:Debug rerun               " re-launch the most recently run task
+:Debug rerun               " re-launch the most recent run
 ```
 
 ### Why inputs and not raw DAP <!-- tag: inputs -->
@@ -296,7 +296,7 @@ Everything above is available programmatically:
 ```lua
 local ezdap = require("ezdap")
 
--- Run a task table directly
+-- Run a config table directly
 ezdap.run_task({
   adapter = "delve",
   request = "launch",
@@ -532,9 +532,9 @@ below are unchanged.
 | Subcommand            | Description                                        |
 | --------------------- | ------------------------------------------------- |
 | `run …`               | Launch/attach from `input=value` tokens           |
-| `run_file [path]`     | Run a Lua task file, or pick from a directory     |
+| `run_file [path]`     | Run a Lua run file, or pick from a directory     |
 | `new_run_file …`      | Scaffold a run file from a mode's inputs        |
-| `rerun`               | Re-launch the most recently run task              |
+| `rerun`               | Re-launch the most recent run                     |
 | `view`                | Open/focus the debug panel                        |
 | `output`              | Toggle the bottom output window                   |
 | `continue` / `continue_all` | Continue the active / every session         |
