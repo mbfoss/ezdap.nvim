@@ -64,7 +64,7 @@ the REPL, watch expressions, parallel sessions, persistence.
 - **Inline variable values**: see values right in the source while stopped,
   in several placement styles (requires treesitter parser).
 - **Special buffers for each session**: REPL, program output, adapter
-  terminal and an optional raw-DAP-message log.
+  terminal.
 - **Advanced execution control**: jump-to-cursor, restart frame, step-into-targets,
   exception info, disassembly view and instruction-level stepping.
 - **Parallel sessions**: run several debuggees at once and switch
@@ -79,9 +79,9 @@ the REPL, watch expressions, parallel sessions, persistence.
 - A debug adapter for the target language (gdb, debugpy...), plus the
   [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin, which
   provides the ezdap definition pointing at it (see [Adapters](#adapters)).
-  Many debug adapters are trivially installed via
-  [mason.nvim](https://github.com/williamboman/mason.nvim); an adapter
-  definition can resolve its executable from Mason's install path.
+  Many debug adapters can be installed via
+  [mason.nvim](https://github.com/williamboman/mason.nvim); 
+  although mason.nvim is not required
 
 Optional:
 
@@ -92,11 +92,11 @@ Optional:
 
 ## Installation
 
-ezdap has no required plugin dependencies. Install it with any plugin manager
-and call `setup()`. Install
-[ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) alongside it to
-register ready-made definitions for the common debuggers. This is recommended,
+Install it with any plugin manager and call `setup()` on startup. 
+Install [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) alongside it to
+register ready-made definitions for the common debuggers. This is the easiest way to start,
 and assumed by the examples below.
+Writing a [custom definition file](#adding-a-custom-adapter) to add support for an another debugger is also possible.
 
 <details open>
 <summary><b>Native packages / <code>vim.pack</code></b></summary>
@@ -108,13 +108,6 @@ vim.pack.add({
   "https://github.com/mbfoss/ezdap-adapters",  -- ready-made adapter definitions
 })
 require("ezdap").setup()
-```
-
-Or clone into a package directory and `require("ezdap").setup()` from the config:
-
-```sh
-git clone https://github.com/mbfoss/ezdap.nvim \
-  ~/.local/share/nvim/site/pack/plugins/start/ezdap.nvim
 ```
 </details>
 
@@ -131,7 +124,7 @@ git clone https://github.com/mbfoss/ezdap.nvim \
 </details>
 
 Calling `setup()` is required; nothing exists until it runs. It registers the
-`:Debug` command (rename it with the `command` option), configures persistence,
+`:Debug` command (rename it with the `command` setup option), configures persistence,
 and initialises the UI.
 
 ## Quick start
@@ -142,20 +135,10 @@ require("ezdap").setup()
 
 Adapters come from the
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin: with it
-installed, every definition it ships is registered, `debugpy` and `codelldb`
-among them. Single definitions can also be copied into the config one at a
+installed, every definition it ships is registered. 
+Single definitions can also be copied into the config one at a
 time, since each is a self-contained file under `lua/ezdap-adapters/` on the
-runtimepath:
-
-```sh
-dir=~/.config/nvim/lua/ezdap-adapters
-url=https://raw.githubusercontent.com/mbfoss/ezdap-adapters/main/lua/ezdap-adapters
-
-mkdir -p "$dir"
-curl -o "$dir/debugpy.lua" "$url/debugpy.lua"
-```
-
-Once `codelldb` and `debugpy` are registered, start debugging.
+runtimepath (for example, under `~/.config/nvim/lua/ezdap-adapters/`)
 
 The main entry point is `:Debug run`, which launches (or attaches to) an
 adapter using one of its named modes, filled in with a few `input=value`
@@ -163,13 +146,13 @@ arguments:
 
 ```vim
 " Launch a native binary under codelldb
-:Debug run codelldb binary command=./a.out\ --verbose
+:Debug run codelldb binary command=./program\ argument
 
 " Debug a Python file
-:Debug run debugpy script command=./main.py\ --verbose
+:Debug run debugpy script command=./main.py\ argument
 
-" Attach to a running process
-:Debug run debugpy attach pid=41234
+" Attach to a running process (opens process selector)
+:Debug run codelldb attach
 ```
 
 Set a breakpoint on the current line and step through the program:
@@ -206,51 +189,36 @@ precedence, so a file in your config overrides the plugin's.
 
 Each definition declares native process/connection config plus named **modes**
 that declare their inputs. From that one description, ezdap provides completion,
-scaffolding (`:Debug new_run_file`), and the resolve path for `:Debug run` and
-run files, with no per-adapter code.
+run file template (`:Debug new_run_file`).
 
 Run `:checkhealth ezdap` to see which registered adapters have their tooling
 available on the current machine.
 
 ## Starting a debug session <!-- tag: sessions -->
 
-ezdap offers several ways to launch or attach, from one-liners to
-version-controlled run files.
+ezdap offers 2 main ways to start debug sessions.
 
 ### Launch or attach
 
 Each adapter declares one or more named **modes** (`binary`, `script`,
 `attach`, `remote`, …), each declaring the **inputs** it accepts. Supply them as
-`input=value` tokens; the adapter and mode name come first as bare
-words:
+`input=value` tokens; example:
 
 ```vim
 :Debug run <adapter> <mode> [input=value ...]
 ```
-
-Inputs are specific to each adapter/mode. For instance, every `binary` or `script`
-mode takes `command` (a full shell command line, split into the
-adapter's own program/args fields) plus `cwd` and `env`; an `attach`
-mode takes `pid`, and a `remote` one takes `host`/`port`. Each input
-declares a **type** that decides how the value is read: `file`/`dir`/`cwd`
-(path expansion), `command` (a command line, completed path by path),
-`map` (`A=1,B=2`), `list` (`a,b`) and
-`integer`/`port`/`boolean`. An input left out is omitted from the
-request, unless the mode marks it required.
-
-Arguments split on whitespace the way Vim's own commands do (`:h <f-args>`):
-quotes are *not* special, and a value containing a space is written with a
-backslash: `command=./a.out\ --verbose`, `cwd=/tmp/my\ project`.
+Arguments split on whitespace(`:h <f-args>`): 
+quotes are *not* special, and a value containing a space is written with a backslash
+Example: `:Debug run debugpy script command=./main.py\ --verbose cwd=/tmp/my\ project`.
 
 Tab-completion offers adapters, then mode names, then the inputs
 available for the chosen mode and, after an `=`, the values that
-input can take: paths for the path-like ones, `true`/`false` for a boolean,
-and the fixed set an input like `console` or `backend` names.
+input can take: paths for the path-like ones, `true`/`false` for a boolean.
 
 ### Run files
 
-A run file is a Lua file that returns a single task table. Keep it in the
-project and run it on demand. It names a `mode` and answers that mode's
+A run file is a Lua file that returns a table defining a debug session parameters. 
+It names a `mode` and answers that mode's
 declared inputs under `parameters`, resolving exactly like `:Debug run` — so a
 required input left unset is an error and an attach with no `pid` opens a
 process picker:
