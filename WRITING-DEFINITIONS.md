@@ -80,9 +80,9 @@ An `ezdap.Input` describes one value:
 
 ## Modes
 
-A definition without `modes` is runnable but not *askable*: nothing completes, and
-nothing can be scaffolded, because a raw DAP body describes nothing about itself (see
-[Why inputs](README.md#why-inputs-and-not-just-raw-dap-parameters)). Each mode declares
+A definition without `modes` cannot be run at all: nothing completes, and nothing can be
+scaffolded, because a raw DAP body describes nothing about itself (see
+[Why inputs](README.md#why-inputs-and-not-raw-dap)). Each mode declares
 the `inputs` it accepts and a `build` that turns supplied values into the native body:
 
 ```lua
@@ -175,9 +175,9 @@ once, so the run either proceeds or aborts.
 how an adapter that is really a TCP server gets started and then connected to. Its `ctx`
 carries `report(msg)` for progress lines, `add_bufnr(bufnr, opts?)` to attach a buffer it
 created to the run so it is listed under the session, and `mode` — the mode name
-this run resolved from, or `nil` for a raw run file, so a `setup` can gate one mode
-rather than the whole definition (refusing a mode whose feature the installed binary is
-too old for, say). Treat `nil` as "none of mine" and let the run proceed.
+this run resolved from, so a `setup` can gate one mode rather than the whole definition
+(refusing a mode whose feature the installed binary is too old for, say). Treat an
+unrecognized name as "none of mine" and let the run proceed.
 
 ```lua
 return {

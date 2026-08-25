@@ -1,22 +1,20 @@
 # ezdap.nvim
 
 > **Status:** ezdap is under active development. The core is usable day to day,
-> but expect rough edges and occasional breaking changes.
+> but some areas are incomplete and breaking changes are still possible.
 
 A full-featured **Debug Adapter Protocol (DAP) client for Neovim**.
 
 ezdap brings an interactive debugger to Neovim: pause a program on a
 breakpoint, inspect variables and the call stack, and step through execution
-without leaving the editor. It implements the Debug Adapter Protocol directly,
-I can be used to debug Python, Go,
-C/C++, Rust, JavaScript and any other debugger DAP support.
+without leaving the editor. It implements the Debug Adapter Protocol
+directly, and can be used to debug Python, Go, C/C++, Rust, JavaScript and any
+other language with a DAP-capable debugger.
 
-This plugin only ship specific debuggers support by 
-Install the companion plugin
-[ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) to get a ready-made set pf
-definitions for some common debuggers.
-
-(Or use the guide below [Adding a custom adapter](#Adding a custom adapter) to define a custom adapter)
+This plugin ships no language-specific debugger support of its own. Install the
+companion plugin [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) for
+ready-made definitions covering the common debuggers, or see
+[Adding a custom adapter](#adding-a-custom-adapter) to define your own.
 
 <!-- panvimdoc-ignore-start -->
 
@@ -57,7 +55,7 @@ the REPL, watch expressions, parallel sessions, persistence.
 - **Easy to install**: builtin DAP client and debugging UI.
 - **Any DAP adapter**: to use a particular debugger, an adapter
   definition file is needed (see [Adapters](#adapters)).
-- **Full breakpoint palette**: line, conditional, hit-count, **logpoints**,
+- **Full breakpoint support**: line, conditional, hit-count, **logpoints**,
   **column**, **function**, **exception** (filters and named types) and
   **data breakpoints / watchpoints**.
 - **Tree-based debug panel**: single side-panel window showing sessions,
@@ -67,7 +65,7 @@ the REPL, watch expressions, parallel sessions, persistence.
   in several placement styles (requires treesitter parser).
 - **Special buffers for each session**: REPL, program output, adapter
   terminal and an optional raw-DAP-message log.
-- **Power moves**: jump-to-cursor, restart frame, step-into-targets,
+- **Advanced execution control**: jump-to-cursor, restart frame, step-into-targets,
   exception info, disassembly view and instruction-level stepping.
 - **Parallel sessions**: run several debuggees at once and switch
   between them.
@@ -133,7 +131,7 @@ git clone https://github.com/mbfoss/ezdap.nvim \
 </details>
 
 Calling `setup()` is required; nothing exists until it runs. It registers the
-`:Debug` command (rename it with the `command` option), wires up persistence,
+`:Debug` command (rename it with the `command` option), configures persistence,
 and initialises the UI.
 
 ## Quick start
@@ -160,7 +158,7 @@ curl -o "$dir/debugpy.lua" "$url/debugpy.lua"
 
 Either way, once `codelldb` and `debugpy` are known, start debugging.
 
-The fastest path is `:Debug run`, which launches (or attaches to) an
+The main entry point is `:Debug run`, which launches (or attaches to) an
 adapter using one of its named modes, filled in with a few `input=value`
 arguments:
 
@@ -185,7 +183,7 @@ Set a breakpoint on the current line and step through the program:
 
 The debug panel opens automatically when a session starts, showing the call
 stack, variables and breakpoints. See [The debug UI](#the-debug-ui) and
-[Keymaps example](#keymaps-example) to make this comfortable.
+[Keymaps example](#keymaps-example) for a convenient setup.
 
 ## Adapters
 
@@ -199,16 +197,16 @@ js-debug, netcoredbg, rdbg and more). Install it and they all register at once;
 the files are self-contained, so a single one can equally be copied into your
 own config instead.
 
-Adapters live in `require("ezdap.adapters")` as a plain `name → definition`
-table. It is assembled at load time from two sources:
+Adapters are registered in `require("ezdap.adapters")` as a plain
+`name → definition` table. It is assembled at load time from two sources:
 
 - the shipped `remote` entry, and
 - every `lua/ezdap-adapters/*.lua` file found on the runtimepath, one
   `AdapterDef` per file, keyed by its filename stem. This is how the
-  ezdap-adapters plugin registers its definitions, and it works just the same
-  for your own: drop `~/.config/nvim/lua/ezdap-adapters/debugpy.lua` and a
-  `debugpy` adapter appears. Earlier runtimepath entries win, so a file in your
-  config overrides the plugin's; a `remote.lua` overrides the shipped one.
+  ezdap-adapters plugin registers its definitions, and the same applies to your
+  own: adding `~/.config/nvim/lua/ezdap-adapters/debugpy.lua` registers a
+  `debugpy` adapter. Earlier runtimepath entries take precedence, so a file in
+  your config overrides the plugin's; a `remote.lua` overrides the shipped one.
 
 The table is also writable at runtime, so an entry can be added or overridden
 straight from a config file (`require("ezdap.adapters").foo = { … }`).
@@ -216,7 +214,7 @@ straight from a config file (`require("ezdap.adapters").foo = { … }`).
 An adapter file is small and self-describing: native process/connection config
 plus named **modes** that declare their inputs. From that one description,
 ezdap wires completion, scaffolding (`:Debug new_run_file`), and the resolve
-path for `:Debug run` and run files, with no per-adapter glue. Writing one is the
+path for `:Debug run` and run files, with no per-adapter code. Writing one is the
 subject of [Adding a custom adapter](#adding-a-custom-adapter).
 
 Run `:checkhealth ezdap` to see which registered adapters have their tooling
@@ -245,7 +243,7 @@ mode takes `pid`, and a `remote` one takes `host`/`port`. Each input
 declares a **type** that decides how the value is read: `file`/`dir`/`cwd`
 (path expansion), `command` (a command line, completed path by path),
 `map` (`A=1,B=2`), `list` (`a,b`) and
-`integer`/`port`/`boolean`. An input left out is simply omitted from the
+`integer`/`port`/`boolean`. An input left out is omitted from the
 request, unless the mode marks it required.
 
 Arguments split on whitespace the way Vim's own commands do (`:h <f-args>`):
@@ -260,12 +258,10 @@ and the fixed set an input like `console` or `backend` names.
 ### Run files
 
 A run file is a Lua file that returns a single task table. Keep it in the
-project and run it on demand. Two shapes are accepted, told apart by
-whether a `mode` or a `configuration` field is present.
-
-**Mode-based**: names a `mode` and answers its declared inputs under
-`parameters`. It resolves exactly like `:Debug run`, so a required input
-left unset is an error and an attach with no `pid` pops a process picker:
+project and run it on demand. It names a `mode` and answers that mode's
+declared inputs under `parameters`, resolving exactly like `:Debug run` — so a
+required input left unset is an error and an attach with no `pid` opens a
+process picker:
 
 ```lua
 -- debug.lua
@@ -280,24 +276,7 @@ return {
 }
 ```
 
-**Raw**: no `mode`; instead an nvim-dap-like `configuration` table of raw
-DAP parameters that includes `request`, forwarded to the adapter verbatim:
-
-```lua
--- debug.lua
-return {
-  name          = "debug app",
-  adapter       = "codelldb",
-  configuration = {              -- raw DAP body; `request` picks the verb
-    request = "launch",             -- "launch" or "attach"
-    program = "./build/app",
-    args    = { "--verbose" },
-    cwd     = "${workspaceFolder}",
-  },
-}
-```
-
-Run either. Pass a file, or a **directory** to pick from its `.lua` files:
+Pass a file, or a **directory** to pick from its `.lua` files:
 
 ```vim
 :Debug run_file debug.lua
@@ -305,12 +284,9 @@ Run either. Pass a file, or a **directory** to pick from its `.lua` files:
 :Debug rerun               " re-launch the most recently run task
 ```
 
-For the native shape, see each adapter's upstream documentation for the
-`parameters` fields it accepts.
-
 ### Why inputs and not raw DAP <!-- tag: inputs -->
 
-The raw shape is always available, so why do modes declare `inputs`?
+Why do modes declare `inputs` rather than taking a raw DAP body?
 
 DAP does not specify the body of a `launch` or `attach` request; each adapter
 defines its own. Field names, required fields, and nesting differ per adapter,
@@ -337,8 +313,7 @@ A declared input supplies what the raw body lacks: a description of itself.
 ezdap defines no portable vocabulary on top. No input is a cross-adapter alias
 subject to translation; each mode's `build` writes that adapter's own keys, and
 input names mirror them. The intent is to make the adapter's interface
-completable and validated, not to abstract it. Beyond that, `configuration`
-accepts a hand-written body; both shapes produce the same task.
+completable and validated, not to abstract it.
 
 ### `:Debug new_run_file` <!-- tag: new-run-file -->
 
@@ -352,8 +327,7 @@ commented out with its description, ready to be uncommented as needed:
 ```
 
 Fill in the `parameters`, then `:Debug run_file` it. It resolves through the same
-path as `:Debug run`. (Prefer the raw shape above instead? Just drop the
-`mode`/`parameters` keys and write a `configuration` table by hand.)
+path as `:Debug run`.
 
 ### From Lua <!-- tag: lua-api -->
 
@@ -377,7 +351,7 @@ ezdap.rerun()
 
 ## Breakpoints
 
-All breakpoint operations live under `:Debug breakpoint <sub>`. Breakpoints work
+All breakpoint operations are grouped under `:Debug breakpoint <sub>`. Breakpoints work
 before a session starts and are synced live to running sessions.
 
 ```vim
@@ -437,19 +411,19 @@ Inside the panel:
 
 A run spawns several buffers: Terminal, Output, REPL, its progress Log, DAP
 messages. They share one bottom split, which holds whichever of them has the
-highest priority (the Terminal outranks the Output, which outranks the REPL,
-which outranks the Log). It opens on the run's first buffer, follows along as
+highest priority (the Terminal takes precedence over the Output, which takes
+precedence over the REPL, which takes precedence over the Log). It opens on the run's first buffer, follows along as
 higher-priority buffers appear or the shown one is deleted, and closes with the
 run's last buffer. `:Debug output` toggles it; `panel_auto_open` and
-`panel_height_ratio` tune it.
+`panel_height_ratio` adjust it.
 
 Each run keeps its own log, `ezdap://<run>-log`, wiped with the run, rather
 than appending to a shared one, so parallel runs never interleave.
 
 With [dock.nvim](https://github.com/mbfoss/dock.nvim) installed, ezdap uses it
 instead, with no configuration needed. Each run becomes a tab in dock's shared panel,
-one page per buffer, badged with the run's state; parallel runs get a tab each
-rather than competing for one window, and `:Dock clean` sheds the finished ones.
+one page per buffer, labelled with the run's state; parallel runs each get a tab
+rather than sharing one window, and `:Dock clean` removes the finished ones.
 dock's own options (`auto_open`, `size`, position) govern the window there, so
 `panel_auto_open`/`panel_height_ratio` do not apply.
 
@@ -471,7 +445,7 @@ opens it in a regular window:
 Adapters that offer an external console (`console = externalTerminal`,
 codelldb's `terminal = external`) launch the debuggee in a terminal emulator of
 its own instead, chosen by the `external_terminal` option; see
-[Configuration](#configuration). If that option is unset or the emulator can't be
+[Configuration](#configuration). If that option is unset or the emulator cannot be
 spawned, the request fails rather than falling back to an integrated terminal.
 
 ```vim
@@ -515,7 +489,7 @@ instruction-level while it is focused.
 Stepping granularity follows the focused window: line-wise everywhere, and
 instruction-wise while the disassembly view is current.
 
-Switch what's active with pickers:
+Switch the active target with pickers:
 
 ```vim
 :Debug session          " choose the active session
@@ -529,7 +503,7 @@ Pass options to `setup()`. Defaults shown:
 
 ```lua
 require("ezdap").setup({
-  -- Name of the user command every subcommand lives under, e.g. "Dbg"
+  -- Name of the user command every subcommand is registered under, e.g. "Dbg"
   -- for `:Dbg run`.
   command             = "Debug",
   -- Project detection: the nearest ancestor holding one of these is
@@ -655,7 +629,7 @@ that root (`.ezdap.json` by default), using project-relative paths so it stays
 portable.
 
 State is saved on leaving a project (cwd change) and on exit, and reloaded on
-entering one. Outside any project, ezdap warns once that state won't be
+entering one. Outside any project, ezdap warns once that state will not be
 persisted. The current project is reported by:
 
 ```vim
@@ -676,8 +650,8 @@ state, and which registered adapters have their tooling installed.
 
 ## Keymaps example <!-- tag: keymaps -->
 
-ezdap ships no global keymaps; any layout works. A function-key one to get
-started:
+ezdap ships no global keymaps; any layout works. An example based on the
+function keys:
 
 ```lua
 local map = vim.keymap.set
@@ -710,9 +684,9 @@ variant of a shipped definition. There are two ways to register one, and they
 build the same `name → definition` table; there is no registration call and no
 `adapters` option in `setup()`.
 
-**Drop a file (recommended).** Put one file per adapter under
+**Add a file (recommended).** Put one file per adapter under
 `lua/ezdap-adapters/` anywhere on the runtimepath, returning a single
-definition. ezdap globs these at load and keys each by its filename stem, so
+definition. ezdap collects these at load time and keys each by its filename stem, so
 `lua/ezdap-adapters/myadapter.lua` becomes the `myadapter` adapter:
 
 ```lua
@@ -736,34 +710,38 @@ adapters.myadapter = {
 }
 ```
 
-Either way, that bare definition is already enough to run, from a run file,
-using the raw shape (`adapter` + `configuration`) described in
-[Run files](#run-files):
+Either way, a definition must declare at least one `mode` before it can be run:
+a mode names the `inputs` it accepts and a `build` that turns them into the
+adapter's native DAP body.
 
 ```lua
--- debug.lua
-return {
-  name          = "my thing",
-  adapter       = "myadapter",
-  configuration = {
-    request     = "launch",
-    program     = "/path/to/thing",
-    stopOnEntry = true,
+adapters.myadapter = {
+  command = { "my-dap-adapter", "--stdio" },
+  modes   = {
+    binary = {
+      description = "debug an executable",
+      request     = "launch",
+      inputs      = {
+        program = { required = true, format = "file", description = "executable to debug" },
+      },
+      build = function(params, _, inputs)
+        params.program     = inputs.program
+        params.stopOnEntry = true
+      end,
+    },
   },
 }
 ```
 
-Everything but `request` is sent to the adapter as the DAP launch/attach body
-verbatim; ezdap never rewrites the keys, so use whatever the adapter's own
-documentation calls them.
+`build` writes the DAP launch/attach body directly; ezdap never rewrites the
+keys, so use whatever the adapter's own documentation calls them.
 
 ### The definition and modes <!-- tag: definitions -->
 
 Every field of a definition is optional except a way to reach the adapter (a `command` to
-spawn or a `host`/`port` to connect to), and a bare definition like the one above already
-runs. What it cannot do is be *asked* for: nothing completes and nothing can be scaffolded
-until the definition declares `modes`, each naming the `inputs` it accepts and a `build`
-that turns them into the native DAP body.
+spawn or a `host`/`port` to connect to) and `modes`. Without `modes` there is nothing to
+run, complete, or scaffold: each mode names the `inputs` it accepts and a `build` that
+turns them into the native DAP body.
 
 The full contract is in [WRITING-DEFINITIONS.md](WRITING-DEFINITIONS.md): every
 `ezdap.AdapterDef`, `ezdap.Mode` and `ezdap.Input` field, the `setup`/`teardown` hooks

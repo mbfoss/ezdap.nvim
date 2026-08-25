@@ -192,8 +192,7 @@ new_run_file   inputs ─→ seeded parameters ─→ (you edit it) ─→ run_f
 A scaffolded run file names the `adapter` and `mode` and lists that mode's
 declared inputs under `parameters`, each seeded by its row and commented with its
 `description` — so it and `:Debug run` cannot drift, and there is no second field
-list to keep in step. (A run file may also skip modes entirely: `adapter` plus a
-`configuration` of raw DAP parameters is forwarded verbatim, never touching `build`.)
+list to keep in step.
 
 - **`build(params, connect, inputs)`** assembles everything a run needs, in
   place. `params` and `connect` both start empty; assign into them from `inputs`,

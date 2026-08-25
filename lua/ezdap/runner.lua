@@ -13,7 +13,7 @@
 ---One task per file: a run file returns a single task (or a function
 ---returning one):
 ---  -- debug.lua
----  return { name = "debug app", adapter = "lldb", configuration = { request = "launch", program = "a.out" } }
+---  return { name = "debug app", adapter = "lldb", mode = "binary", parameters = { command = "a.out" } }
 
 local OutputBuffer = require "ezdap.ui.OutputBuffer"
 local ui_util      = require "ezdap.util.ui"
@@ -263,8 +263,8 @@ local function _run_from_dir(dir)
 end
 
 ---Run a task from a path: a directory opens a picker of its Lua files, a Lua file is
----loaded and the value it returns is run — either mode-based (`adapter`/`mode`/
----`parameters`, resolved via `build`) or raw (`adapter`/`configuration`, sent verbatim).
+---loaded and the value it returns is run — a mode-based task (`adapter`/`mode`/
+---`parameters`), resolved through the mode's `build`.
 ---@param path string
 function M.run_file(path)
     if type(path) ~= "string" or path == "" then
@@ -328,26 +328,7 @@ function M.run_file(path)
         return
     end
 
-    -- A raw run file carries an nvim-dap-like `configuration` table of raw DAP
-    -- parameters that includes `request`; lift `request` out and forward the rest
-    -- as the DAP body, an `ezdap.Task` sent to the adapter verbatim.
-    if type(spec.configuration) == "table" then
-        local body = vim.deepcopy(spec.configuration)
-        local request = body.request
-        body.request = nil
-        M.run({
-            name       = spec.name,
-            adapter    = spec.adapter,
-            request    = request,
-            parameters = body,
-            host       = spec.host,
-            port       = spec.port,
-        })
-        return
-    end
-
-    _err("run: " .. vim.fn.fnamemodify(resolved, ":t") ..
-        " must set either `mode` (a named mode) or `configuration` (a raw DAP table)")
+    _err("run: " .. vim.fn.fnamemodify(resolved, ":t") .. " must set `mode` (a named mode)")
 end
 
 ---Launch or attach under an adapter's named mode, resolving `inputs` — the

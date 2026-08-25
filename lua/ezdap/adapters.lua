@@ -2,9 +2,9 @@
 
 ---`mode` names the mode the run was resolved from, which the config itself
 ---does not record — it is how a `setup` gates one mode rather than the whole
----adapter (e.g. a feature only a newer binary supports). A raw task (a run file's
----`configuration`, or `runner.run` called directly) names no mode, so a `setup`
----must treat nil as "not one of mine" and let the run proceed.
+---adapter (e.g. a feature only a newer binary supports). A task built by hand and
+---passed to `runner.run` may name no mode, so a `setup` must treat nil as "not one
+---of mine" and let the run proceed.
 ---@class ezdap.AdapterSetupCtx
 ---@field add_bufnr fun(bufnr: integer, opts?: ezdap.AddBufOpts)
 ---@field report    fun(message: string)
