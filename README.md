@@ -12,9 +12,8 @@ directly, and can be used to debug Python, Go, C/C++, Rust, JavaScript and any
 other language with a DAP-capable debugger.
 
 This plugin ships no language-specific debugger support of its own. Install the
-companion plugin [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) for
-ready-made definitions covering the common debuggers, or see
-[Adding a custom adapter](#adding-a-custom-adapter) to define your own.
+companion plugin [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters)
+alongside it for ready-made definitions covering the common debuggers.
 
 <!-- panvimdoc-ignore-start -->
 
@@ -53,8 +52,9 @@ the REPL, watch expressions, parallel sessions, persistence.
 ## Highlights
 
 - **Easy to install**: builtin DAP client and debugging UI.
-- **Any DAP adapter**: to use a particular debugger, an adapter
-  definition file is needed (see [Adapters](#adapters)).
+- **Any DAP adapter**: the
+  [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin provides
+  definitions for the common debuggers (see [Adapters](#adapters)).
 - **Full breakpoint support**: line, conditional, hit-count, **logpoints**,
   **column**, **function**, **exception** (filters and named types) and
   **data breakpoints / watchpoints**.
@@ -76,12 +76,12 @@ the REPL, watch expressions, parallel sessions, persistence.
 ## Requirements
 
 - **Neovim >= 0.10**
-- A debug adapter for the target language (gdb, debugpy...), plus an ezdap
-  adapter definition that points at it, from the
-  [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin or
-  hand-written (see [Adapters](#adapters)). Many debug adapters are trivially installed
-  via [mason.nvim](https://github.com/williamboman/mason.nvim); an adapter
-  file can resolve its executable from Mason's install path.
+- A debug adapter for the target language (gdb, debugpy...), plus the
+  [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin, which
+  provides the ezdap definition pointing at it (see [Adapters](#adapters)).
+  Many debug adapters are trivially installed via
+  [mason.nvim](https://github.com/williamboman/mason.nvim); an adapter
+  definition can resolve its executable from Mason's install path.
 
 Optional:
 
@@ -140,13 +140,12 @@ and initialises the UI.
 require("ezdap").setup()
 ```
 
-First tell ezdap about an adapter. With the
-[ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin installed,
-this is already done: every definition it ships is registered, `debugpy` and
-`codelldb` among them.
-
-Without it, an adapter is one small file under `lua/ezdap-adapters/` on the
-runtimepath, which can be copied one at a time:
+Adapters come from the
+[ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin: with it
+installed, every definition it ships is registered, `debugpy` and `codelldb`
+among them. Single definitions can also be copied into the config one at a
+time, since each is a self-contained file under `lua/ezdap-adapters/` on the
+runtimepath:
 
 ```sh
 dir=~/.config/nvim/lua/ezdap-adapters
@@ -156,7 +155,7 @@ mkdir -p "$dir"
 curl -o "$dir/debugpy.lua" "$url/debugpy.lua"
 ```
 
-Either way, once `codelldb` and `debugpy` are known, start debugging.
+Once `codelldb` and `debugpy` are registered, start debugging.
 
 The main entry point is `:Debug run`, which launches (or attaches to) an
 adapter using one of its named modes, filled in with a few `input=value`
@@ -187,35 +186,28 @@ stack, variables and breakpoints. See [The debug UI](#the-debug-ui) and
 
 ## Adapters
 
-ezdap ships **one** adapter, `remote`, a generic TCP attach that connects to a
-DAP server already listening on `host:port`. Every language adapter comes from
-the runtimepath: a small file that says how to reach the debug adapter and what
-its launch/attach modes accept. Writing one from scratch is rarely necessary;
-the [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin carries
-ready-made definitions for the common debuggers (debugpy, codelldb, delve,
-js-debug, netcoredbg, rdbg and more). Install it and they all register at once;
-the files are self-contained, so a single one can equally be copied into your
-own config instead.
+To debug a given language, ezdap needs an **adapter definition**: a description
+of how to reach that language's debug adapter and what its launch/attach modes
+accept. These come from the
+[ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin, which
+provides ready-made definitions for the common debuggers (debugpy, codelldb,
+delve, js-debug, netcoredbg, rdbg and more). Install it and they all register at
+once; the files are self-contained, so a single one can equally be copied into
+your own config instead.
 
-Adapters are registered in `require("ezdap.adapters")` as a plain
-`name → definition` table. It is assembled at load time from two sources:
+ezdap itself ships **one** adapter, `remote`, a generic TCP attach that connects
+to a DAP server already listening on `host:port`.
 
-- the shipped `remote` entry, and
-- every `lua/ezdap-adapters/*.lua` file found on the runtimepath, one
-  `AdapterDef` per file, keyed by its filename stem. This is how the
-  ezdap-adapters plugin registers its definitions, and the same applies to your
-  own: adding `~/.config/nvim/lua/ezdap-adapters/debugpy.lua` registers a
-  `debugpy` adapter. Earlier runtimepath entries take precedence, so a file in
-  your config overrides the plugin's; a `remote.lua` overrides the shipped one.
+Registered adapters are exposed as `require("ezdap.adapters")`, a plain
+`name → definition` table assembled at load time from the shipped `remote` entry
+and every `lua/ezdap-adapters/*.lua` file found on the runtimepath, one
+definition per file, keyed by its filename stem. Earlier runtimepath entries take
+precedence, so a file in your config overrides the plugin's.
 
-The table is also writable at runtime, so an entry can be added or overridden
-straight from a config file (`require("ezdap.adapters").foo = { … }`).
-
-An adapter file is small and self-describing: native process/connection config
-plus named **modes** that declare their inputs. From that one description,
-ezdap wires completion, scaffolding (`:Debug new_run_file`), and the resolve
-path for `:Debug run` and run files, with no per-adapter code. Writing one is the
-subject of [Adding a custom adapter](#adding-a-custom-adapter).
+Each definition declares native process/connection config plus named **modes**
+that declare their inputs. From that one description, ezdap provides completion,
+scaffolding (`:Debug new_run_file`), and the resolve path for `:Debug run` and
+run files, with no per-adapter code.
 
 Run `:checkhealth ezdap` to see which registered adapters have their tooling
 available on the current machine.
@@ -679,43 +671,18 @@ map("x", d .. "i", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
 
 For a debugger already covered by
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters), install that plugin
-(or copy the single file you need) rather than writing one. This section is for the rest: a new debugger, or a local
-variant of a shipped definition. There are two ways to register one, and they
-build the same `name → definition` table; there is no registration call and no
-`adapters` option in `setup()`.
+(or copy the single file you need) rather than writing a definition. Writing one
+is for the rest: a new debugger, or a local variant of a shipped definition.
 
-**Add a file (recommended).** Put one file per adapter under
-`lua/ezdap-adapters/` anywhere on the runtimepath, returning a single
-definition. ezdap collects these at load time and keys each by its filename stem, so
-`lua/ezdap-adapters/myadapter.lua` becomes the `myadapter` adapter:
+A definition is a single Lua file under `lua/ezdap-adapters/` anywhere on the
+runtimepath, returning a table. It needs a way to reach the adapter (a `command`
+to spawn or a `host`/`port` to connect to) and `modes`, each naming the `inputs`
+it accepts and a `build` that turns them into the native DAP body:
 
 ```lua
 -- ~/.config/nvim/lua/ezdap-adapters/myadapter.lua
 ---@type ezdap.AdapterDef
 return {
-  command = { "my-dap-adapter", "--stdio" },  -- stdio: spawned, framed
-                                              -- over its own pipes
-}
-```
-
-**Assign at runtime.** `require("ezdap.adapters")` is a plain, writable table.
-Assigning a new key adds an adapter; assigning an existing one overrides it. Do
-it anywhere after the plugin loads:
-
-```lua
-local adapters = require("ezdap.adapters")
-
-adapters.myadapter = {
-  command = { "my-dap-adapter", "--stdio" },
-}
-```
-
-Either way, a definition must declare at least one `mode` before it can be run:
-a mode names the `inputs` it accepts and a `build` that turns them into the
-adapter's native DAP body.
-
-```lua
-adapters.myadapter = {
   command = { "my-dap-adapter", "--stdio" },
   modes   = {
     binary = {
@@ -733,20 +700,14 @@ adapters.myadapter = {
 }
 ```
 
-`build` writes the DAP launch/attach body directly; ezdap never rewrites the
-keys, so use whatever the adapter's own documentation calls them.
-
-### The definition and modes <!-- tag: definitions -->
-
-Every field of a definition is optional except a way to reach the adapter (a `command` to
-spawn or a `host`/`port` to connect to) and `modes`. Without `modes` there is nothing to
-run, complete, or scaffold: each mode names the `inputs` it accepts and a `build` that
-turns them into the native DAP body.
+`require("ezdap.adapters")` is also writable at runtime, so a definition can be
+assigned straight from a config file
+(`require("ezdap.adapters").myadapter = { … }`) instead.
 
 The full contract is in [WRITING-DEFINITIONS.md](WRITING-DEFINITIONS.md): every
-`ezdap.AdapterDef`, `ezdap.Mode` and `ezdap.Input` field, the `setup`/`teardown` hooks
-for adapters that must be started as a server first, the input type and format
-vocabulary, and the helpers for locating an adapter binary.
+`ezdap.AdapterDef`, `ezdap.Mode` and `ezdap.Input` field, the `setup`/`teardown`
+hooks for adapters that must be started as a server first, the input type and
+format vocabulary, and the helpers for locating an adapter binary.
 
 Added adapters are picked up by `:checkhealth ezdap` too; it reports whether
 each definition's `command` is present on the current machine.
