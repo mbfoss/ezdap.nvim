@@ -20,8 +20,8 @@ local function _add()
     -- opens, so the normal-mode entry inspects what was clicked. In visual mode
     -- the leading `:` supplies the `'<,'>` range `inspect` reads the selection from.
     -- Priority below the 500 every stock PopUp entry gets, so ours sorts first.
-    vim.cmd("silent! nnoremenu .100 " .. _ITEM .. " <Cmd>Debug inspect<CR>")
-    vim.cmd("silent! vnoremenu .100 " .. _ITEM .. " :Debug inspect<CR>")
+    vim.cmd(("silent! nnoremenu .100 %s <Cmd>%s inspect<CR>"):format(_ITEM, config.command))
+    vim.cmd(("silent! vnoremenu .100 %s :%s inspect<CR>"):format(_ITEM, config.command))
 end
 
 local function _remove()
