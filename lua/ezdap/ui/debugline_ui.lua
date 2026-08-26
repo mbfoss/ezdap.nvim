@@ -44,7 +44,7 @@ local function _show_exception(sess, path, lnum)
         if not text or not _line_group then return end
         if manager.context_id() ~= context then return end
         _line_group.set_file_extmark(_ex_id, path, lnum, 0, {
-            virt_text     = { { "  " .. config.signs.exception_breakpoint .. " " .. text, _EX_HL } },
+            virt_text     = { { "  " .. config.symbols.exception_breakpoint .. " " .. text, _EX_HL } },
             virt_text_pos = "eol",
             hl_mode       = "combine",
             priority      = 100,
@@ -64,7 +64,7 @@ local function _show_stopped(sess)
     -- what an extmark sign placed without an explicit priority gets (e.g. keystone
     -- bookmarks). The current frame must win the gutter cell against those.
     _sign_group.set_file_extmark(_sign_id, src.path, lnum, 0,
-        { sign_text = config.signs.debug_frame, sign_hl_group = _SIGN_HL, priority = 5000, hl_mode = "blend", }, nil)
+        { sign_text = config.symbols.debug_frame, sign_hl_group = _SIGN_HL, priority = 5000, hl_mode = "blend", }, nil)
     _line_group.set_file_extmark(_sign_id, src.path, lnum, 0, { line_hl_group = _LINE_HL, priority = 40 }, nil)
     if sess.state_reason == "function call" then
         return -- spurious stop triggered by gdp

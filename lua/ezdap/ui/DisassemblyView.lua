@@ -437,7 +437,7 @@ function DisassemblyView:_draw_pc(pc_row)
     if not pc_row then return end
     vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_pc, pc_row - 1, 0, {
         line_hl_group = _PC_HL,
-        sign_text     = config.signs.debug_frame,
+        sign_text     = config.symbols.debug_frame,
         sign_hl_group = _PC_HL,
         priority      = 100,
         hl_mode       = "blend",
@@ -476,7 +476,7 @@ function DisassemblyView:_draw_bps()
         if st then
             -- Instruction breakpoints carry no condition; only the verified flag
             -- picks the glyph and its highlight.
-            local sign, hl = format.breakpoint_sign({ verified = st.verified == true })
+            local sign, hl = format.breakpoint_symbol({ verified = st.verified == true })
             vim.api.nvim_buf_set_extmark(self._bufnr, self._ns_bp, lnum - 1, 0, {
                 sign_text = sign, sign_hl_group = hl,
             })

@@ -29,7 +29,7 @@ local function _refresh()
             -- when there is no session (st is nil) or it was not moved.
             local st    = manager.bp_status(bp.internal_id)
             local lnum  = (st and st.line) or bp.line
-            local glyph, hl, name = format.breakpoint_sign({
+            local glyph, hl, name = format.breakpoint_symbol({
                 kind          = "source",
                 disabled      = bp.disabled,
                 verified      = st and st.verified,

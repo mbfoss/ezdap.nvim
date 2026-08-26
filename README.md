@@ -341,8 +341,8 @@ off instead.
 
 Gutter signs distinguish each kind (verified or pending, conditional,
 logpoint, disabled, exception). The full list of subcommands is in the
-[Command reference](#command-reference), and the sign glyphs are set in
-[Configuration](#configuration).
+[Command reference](#command-reference), and the glyphs are set with the
+`symbols` option in [Configuration](#configuration).
 
 ## The debug UI <!-- tag: ui -->
 
@@ -427,6 +427,17 @@ In the disassembly view, `<CR>` opens the corresponding source line and `K`
 shows the instruction reference. Breakpoints and stepping become
 instruction-level while it is focused.
 
+### Right-click menu <!-- tag: popup-menu -->
+
+While a session is live, ezdap adds a **Debug Inspect** entry to the right-click
+menu, which inspects the word clicked on (or the selection, in visual mode). It
+appears with the first session and is removed with the last, so the stock menu
+is untouched when nothing is being debugged. Set `popup_menu = false` in
+[Configuration](#configuration) to leave the menu alone entirely.
+
+The entry needs a GUI or a terminal with mouse support, and `mousemodel` at its
+default `popup_setpos`.
+
 ## Stepping & execution control <!-- tag: stepping -->
 
 ```vim
@@ -502,8 +513,12 @@ require("ezdap").setup({
   -- E.g. { "alacritty", "-e" }.
   -- external_terminal = { "wezterm", "start", "--" },
 
-  -- Gutter sign glyphs.
-  signs = {
+  -- Add a "Debug Inspect" entry to the right-click menu while a session is
+  -- live (see Right-click menu).
+  popup_menu          = true,
+
+  -- Glyphs for each debug state, in the gutter and in the panels alike.
+  symbols = {
     debug_frame              = "▶",   -- current execution position
     active_breakpoint        = "●",   -- enabled + verified
     inactive_breakpoint      = "○",   -- enabled, not yet verified

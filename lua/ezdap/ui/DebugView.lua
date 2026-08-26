@@ -112,7 +112,7 @@ end
 local function _fmt_session(data, chunks)
     local info = data.session_info
     if not info then return end
-    local icon, hl      = format.session_sign(info)
+    local icon, hl      = format.session_symbol(info)
     chunks[#chunks + 1] = { icon, hl }
     chunks[#chunks + 1] = { " ", nil }
     chunks[#chunks + 1] = { data.name, data.is_current and "Special" or nil }
@@ -160,7 +160,7 @@ end
 ---@param data ezdap.DebugView.ItemData
 ---@param chunks ezdap.DebugView.Chunk[]
 local function _fmt_breakpoint(data, chunks)
-    local icon, hl      = format.breakpoint_sign({
+    local icon, hl      = format.breakpoint_symbol({
         kind          = data.bp_kind,
         disabled      = data.disabled,
         verified      = data.verified,

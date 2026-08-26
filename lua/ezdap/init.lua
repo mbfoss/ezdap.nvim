@@ -686,6 +686,16 @@ function M.setup(opts)
         error("[ezdap] ezdap.nvim requires Neovim >= 0.10")
     end
 
+    -- `signs` was renamed `symbols` (it names the panel glyphs too, not just
+    -- the gutter). Honoured rather than dropped, so an old config does not
+    -- silently lose its glyphs. Delete once nobody is on the old name.
+    if opts and opts.signs then
+        vim.notify("[ezdap] the `signs` option is now `symbols`", vim.log.levels.WARN)
+        opts = vim.deepcopy(opts)
+        opts.symbols = vim.tbl_deep_extend("force", opts.signs, opts.symbols or {})
+        opts.signs = nil
+    end
+
     local config = require("ezdap.config")
     local tmp = vim.tbl_deep_extend("force", config or {}, opts or {})
     for k, v in pairs(tmp) do

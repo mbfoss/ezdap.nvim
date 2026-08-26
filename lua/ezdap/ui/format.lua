@@ -1,5 +1,5 @@
 ---@brief Shared UI presentation: how debug state becomes glyphs, highlights and
----display strings. Every view resolves its icons here, so a `config.signs` glyph
+---display strings. Every view resolves its icons here, so a `config.symbols` glyph
 ---or an `Ezdap*` highlight override lands everywhere at once. Defining those
 ---groups is this module's only side effect; nothing else touches buffers,
 ---windows or state.
@@ -12,8 +12,8 @@ local M        = {}
 ---One piece of a rendered row: its text and an optional highlight group.
 ---@alias ezdap.ui.Chunk { [1]: string, [2]: string? }
 
----A key of `ezdap.Signs` naming one appearance.
----@alias ezdap.ui.SignName string
+---A key of `ezdap.Symbols` naming one appearance.
+---@alias ezdap.ui.SymbolName string
 
 -- Highlight groups
 
@@ -48,10 +48,10 @@ M.hl = {
     session_stopped  = "EzdapSessionStopped",
 }
 
----Highlight per sign name. Every breakpoint flavour — conditional, pending,
+---Highlight per symbol name. Every breakpoint flavour — conditional, pending,
 ---disabled, logpoint, exception, data — shares one highlight: its glyph already
 ---tells them apart. A name missing here falls back to `EzdapBreakpoint`.
----@type table<ezdap.ui.SignName, string>
+---@type table<ezdap.ui.SymbolName, string>
 local _HIGHLIGHTS = {
     debug_frame     = M.hl.debug_frame,
     session_running = M.hl.session_running,
@@ -59,13 +59,13 @@ local _HIGHLIGHTS = {
     session_stopped = M.hl.session_stopped,
 }
 
----@param name ezdap.ui.SignName
+---@param name ezdap.ui.SymbolName
 ---@param soft boolean?  use the muted breakpoint highlight (panels, not the gutter)
 ---@return string glyph
 ---@return string highlight
-local function _sign(name, soft)
+local function _symbol(name, soft)
     local fallback = soft and M.hl.breakpoint_soft or M.hl.breakpoint
-    return config.signs[name] or "●", _HIGHLIGHTS[name] or fallback
+    return config.symbols[name] or "●", _HIGHLIGHTS[name] or fallback
 end
 
 -- Breakpoints
@@ -82,8 +82,8 @@ end
 ---@field unsupported   boolean?  exception type the adapter does not support
 
 ---@param spec ezdap.ui.format.BreakpointSpec
----@return ezdap.ui.SignName
-function M.breakpoint_sign_name(spec)
+---@return ezdap.ui.SymbolName
+function M.breakpoint_symbol_name(spec)
     local kind     = spec.kind or "source"
     local pending  = spec.verified == false
     local has_cond = spec.condition or spec.hit_condition
@@ -115,10 +115,10 @@ end
 ---@param soft boolean?  muted highlight, for panel rows where the gutter red is too loud
 ---@return string glyph
 ---@return string highlight
----@return ezdap.ui.SignName name
-function M.breakpoint_sign(spec, soft)
-    local name = M.breakpoint_sign_name(spec)
-    local glyph, hl = _sign(name, soft)
+---@return ezdap.ui.SymbolName name
+function M.breakpoint_symbol(spec, soft)
+    local name = M.breakpoint_symbol_name(spec)
+    local glyph, hl = _symbol(name, soft)
     return glyph, hl, name
 end
 
@@ -154,8 +154,8 @@ function M.thread_status(status)
 end
 
 ---@param spec ezdap.ui.format.SessionSpec?
----@return ezdap.ui.SignName
-function M.session_sign_name(spec)
+---@return ezdap.ui.SymbolName
+function M.session_symbol_name(spec)
     local state = spec and spec.state
     if M.session_finished(state) then return "session_stopped" end
     if (spec and spec.is_paused) or state == "stopped" then return "session_paused" end
@@ -165,10 +165,10 @@ end
 ---@param spec ezdap.ui.format.SessionSpec?
 ---@return string glyph
 ---@return string highlight
----@return ezdap.ui.SignName name
-function M.session_sign(spec)
-    local name = M.session_sign_name(spec)
-    local glyph, hl = _sign(name)
+---@return ezdap.ui.SymbolName name
+function M.session_symbol(spec)
+    local name = M.session_symbol_name(spec)
+    local glyph, hl = _symbol(name)
     return glyph, hl, name
 end
 

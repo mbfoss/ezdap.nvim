@@ -453,7 +453,7 @@ function M.breakpoint.list()
     for i, bp in ipairs(all) do
         ---@cast bp ezdap.dap.SourceBreakpoint
         local st            = manager.bp_status(bp.internal_id)
-        local icon, icon_hl = format.breakpoint_sign({
+        local icon, icon_hl = format.breakpoint_symbol({
             kind          = "source",
             disabled      = bp.disabled,
             verified      = st and st.verified,

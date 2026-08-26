@@ -21,6 +21,7 @@ Table of Contents                                    *ezdap-table-of-contents*
   - Inline variable values                               |ezdap-inline-values|
   - Run buffers                                            |ezdap-run-buffers|
   - Inspect, disassembly & REPL                           |ezdap-inspect-repl|
+  - Right-click menu                                        |ezdap-popup-menu|
 9. Stepping & execution control                               |ezdap-stepping|
 10. Configuration                                               |ezdap-config|
 11. Command reference                                         |ezdap-commands|
@@ -61,13 +62,15 @@ alongside it for ready-made definitions covering the common debuggers.
 - **Inline variable values**: see values right in the source while stopped,
     in several placement styles (requires treesitter parser).
 - **Special buffers for each session**: REPL, program output, adapter
-    terminal and an optional raw-DAP-message log.
+    terminal.
 - **Advanced execution control**: jump-to-cursor, restart frame, step-into-targets,
     exception info, disassembly view and instruction-level stepping.
 - **Parallel sessions**: run several debuggees at once and switch
     between them.
 - **Project-scoped persistence**: breakpoints and watch expressions are saved
     per project and restored automatically.
+- **Right-click to inspect**: while a session is live, the mouse menu gains a
+    **Debug Inspect** entry for the value under the pointer.
 - **:checkhealth ezdap**: verifies the Neovim version and adapter tooling.
 
 
@@ -78,9 +81,9 @@ alongside it for ready-made definitions covering the common debuggers.
 - A debug adapter for the target language (gdb, debugpy…), plus the
     ezdap-adapters <https://github.com/mbfoss/ezdap-adapters> plugin, which
     provides the ezdap definition pointing at it (see |ezdap-adapters|).
-    Many debug adapters are trivially installed via
-    mason.nvim <https://github.com/williamboman/mason.nvim>; an adapter
-    definition can resolve its executable from Mason’s install path.
+    Many debug adapters can be installed via
+    mason.nvim <https://github.com/williamboman/mason.nvim>;
+    although mason.nvim is not required
 
 Optional:
 
@@ -93,11 +96,12 @@ Optional:
 ==============================================================================
 3. Installation                                           *ezdap-installation*
 
-ezdap has no required plugin dependencies. Install it with any plugin manager
-and call `setup()`. Install ezdap-adapters
-<https://github.com/mbfoss/ezdap-adapters> alongside it to register ready-made
-definitions for the common debuggers. This is recommended, and assumed by the
-examples below.
+Install it with any plugin manager and call `setup()` on startup. Install
+ezdap-adapters <https://github.com/mbfoss/ezdap-adapters> alongside it to
+register ready-made definitions for the common debuggers. This is the easiest
+way to start, and assumed by the examples below. Writing a
+|ezdap-custom-definition-file| to add support for an another debugger is also
+possible.
 
 Native packages / vim.pack ~
 
@@ -108,14 +112,6 @@ Native packages / vim.pack ~
       "https://github.com/mbfoss/ezdap-adapters",  -- ready-made adapter definitions
     })
     require("ezdap").setup()
-<
-
-Or clone into a package directory and `require("ezdap").setup()` from the
-config:
-
->sh
-    git clone https://github.com/mbfoss/ezdap.nvim \
-      ~/.local/share/nvim/site/pack/plugins/start/ezdap.nvim
 <
 
 lazy.nvim ~
@@ -129,8 +125,8 @@ lazy.nvim ~
 <
 
 Calling `setup()` is required; nothing exists until it runs. It registers the
-`:Debug` command (rename it with the `command` option), configures persistence,
-and initialises the UI.
+`:Debug` command (rename it with the `command` setup option), configures
+persistence, and initialises the UI.
 
 
 ==============================================================================
@@ -142,19 +138,10 @@ and initialises the UI.
 
 Adapters come from the ezdap-adapters
 <https://github.com/mbfoss/ezdap-adapters> plugin: with it installed, every
-definition it ships is registered, `debugpy` and `codelldb` among them. Single
-definitions can also be copied into the config one at a time, since each is a
-self-contained file under `lua/ezdap-adapters/` on the runtimepath:
-
->sh
-    dir=~/.config/nvim/lua/ezdap-adapters
-    url=https://raw.githubusercontent.com/mbfoss/ezdap-adapters/main/lua/ezdap-adapters
-    
-    mkdir -p "$dir"
-    curl -o "$dir/debugpy.lua" "$url/debugpy.lua"
-<
-
-Once `codelldb` and `debugpy` are registered, start debugging.
+definition it ships is registered. Single definitions can also be copied into
+the config one at a time, since each is a self-contained file under
+`lua/ezdap-adapters/` on the runtimepath (for example, under
+`~/.config/nvim/lua/ezdap-adapters/`)
 
 The main entry point is `:Debug run`, which launches (or attaches to) an
 adapter using one of its named modes, filled in with a few `input=value`
@@ -162,13 +149,13 @@ arguments:
 
 >vim
     " Launch a native binary under codelldb
-    :Debug run codelldb binary command=./a.out\ --verbose
+    :Debug run codelldb binary command=./program\ argument
     
     " Debug a Python file
-    :Debug run debugpy script command=./main.py\ --verbose
+    :Debug run debugpy script command=./main.py\ argument
     
-    " Attach to a running process
-    :Debug run debugpy attach pid=41234
+    " Attach to a running process (opens process selector)
+    :Debug run codelldb attach
 <
 
 Set a breakpoint on the current line and step through the program:
@@ -207,8 +194,7 @@ take precedence, so a file in your config overrides the plugin’s.
 
 Each definition declares native process/connection config plus named **modes**
 that declare their inputs. From that one description, ezdap provides
-completion, scaffolding (`:Debug new_run_file`), and the resolve path for
-`:Debug run` and run files, with no per-adapter code.
+completion, run file template (`:Debug new_run_file`).
 
 Run `:checkhealth ezdap` to see which registered adapters have their tooling
 available on the current machine.
@@ -217,46 +203,34 @@ available on the current machine.
 ==============================================================================
 6. Starting a debug session                                   *ezdap-sessions*
 
-ezdap offers several ways to launch or attach, from one-liners to
-version-controlled run files.
+ezdap offers 2 main ways to start debug sessions.
 
 
 LAUNCH OR ATTACH                                      *ezdap-launch-or-attach*
 
 Each adapter declares one or more named **modes** (`binary`, `script`,
 `attach`, `remote`, …), each declaring the **inputs** it accepts. Supply them
-as `input=value` tokens; the adapter and mode name come first as bare words:
+as `input=value` tokens; example:
 
 >vim
     :Debug run <adapter> <mode> [input=value ...]
 <
 
-Inputs are specific to each adapter/mode. For instance, every `binary` or
-`script` mode takes `command` (a full shell command line, split into the
-adapter’s own program/args fields) plus `cwd` and `env`; an `attach` mode
-takes `pid`, and a `remote` one takes `host`/`port`. Each input declares a
-**type** that decides how the value is read: `file`/`dir`/`cwd` (path
-expansion), `command` (a command line, completed path by path), `map`
-(`A=1,B=2`), `list` (`a,b`) and `integer`/`port`/`boolean`. An input left out
-is omitted from the request, unless the mode marks it required.
-
-Arguments split on whitespace the way Vim’s own commands do (|<f-args>|):
-quotes are _not_ special, and a value containing a space is written with a
-backslash: `command=./a.out\ --verbose`, `cwd=/tmp/my\ project`.
+Arguments split on whitespace(|<f-args>|): quotes are _not_ special, and a
+value containing a space is written with a backslash Example: `:Debug run
+debugpy script command=./main.py\ --verbose cwd=/tmp/my\ project`.
 
 Tab-completion offers adapters, then mode names, then the inputs available for
 the chosen mode and, after an `=`, the values that input can take: paths for
-the path-like ones, `true`/`false` for a boolean, and the fixed set an input
-like `console` or `backend` names.
+the path-like ones, `true`/`false` for a boolean.
 
 
 RUN FILES                                                    *ezdap-run-files*
 
-A run file is a Lua file that returns a single task table. Keep it in the
-project and run it on demand. It names a `mode` and answers that mode’s
-declared inputs under `parameters`, resolving exactly like `:Debug run` — so
-a required input left unset is an error and an attach with no `pid` opens a
-process picker:
+A run file is a Lua file that returns a table defining a debug session
+parameters. It names a `mode` and answers that mode’s declared inputs under
+`parameters`, resolving exactly like `:Debug run` — so a required input left
+unset is an error and an attach with no `pid` opens a process picker:
 
 >lua
     -- debug.lua
@@ -276,7 +250,7 @@ Pass a file, or a **directory** to pick from its `.lua` files:
 >vim
     :Debug run_file debug.lua
     :Debug run_file ./debug/   " picker over the folder's run files
-    :Debug rerun               " re-launch the most recently run task
+    :Debug rerun               " re-launch the most recent run
 <
 
 
@@ -334,7 +308,7 @@ Everything above is available programmatically:
 >lua
     local ezdap = require("ezdap")
     
-    -- Run a task table directly
+    -- Run a config table directly
     ezdap.run_task({
       adapter = "delve",
       request = "launch",
@@ -382,7 +356,7 @@ off instead.
 
 Gutter signs distinguish each kind (verified or pending, conditional, logpoint,
 disabled, exception). The full list of subcommands is in the
-|ezdap-commands|, and the sign glyphs are set in
+|ezdap-commands|, and the glyphs are set with the `symbols` option in
 |ezdap-config|.
 
 
@@ -491,6 +465,18 @@ shows the instruction reference. Breakpoints and stepping become
 instruction-level while it is focused.
 
 
+RIGHT-CLICK MENU                                            *ezdap-popup-menu*
+
+While a session is live, ezdap adds a **Debug Inspect** entry to the
+right-click menu, which inspects the word clicked on (or the selection, in
+visual mode). It appears with the first session and is removed with the last,
+so the stock menu is untouched when nothing is being debugged. Set `popup_menu
+= false` in |ezdap-config| to leave the menu alone entirely.
+
+The entry needs a GUI or a terminal with mouse support, and `mousemodel` at its
+default `popup_setpos`.
+
+
 ==============================================================================
 9. Stepping & execution control                               *ezdap-stepping*
 
@@ -569,8 +555,12 @@ Pass options to `setup()`. Defaults shown:
       -- E.g. { "alacritty", "-e" }.
       -- external_terminal = { "wezterm", "start", "--" },
     
-      -- Gutter sign glyphs.
-      signs = {
+      -- Add a "Debug Inspect" entry to the right-click menu while a session is
+      -- live (see Right-click menu).
+      popup_menu          = true,
+    
+      -- Glyphs for each debug state, in the gutter and in the panels alike.
+      symbols = {
         debug_frame              = "▶",   -- current execution position
         active_breakpoint        = "●",   -- enabled + verified
         inactive_breakpoint      = "○",   -- enabled, not yet verified
@@ -602,11 +592,11 @@ below are unchanged.
   --------------------- -------------------------------------------------
   run …                 Launch/attach from input=value tokens
 
-  run_file [path]       Run a Lua task file, or pick from a directory
+  run_file [path]       Run a Lua run file, or pick from a directory
 
   new_run_file …        Scaffold a run file from a mode’s inputs
 
-  rerun                 Re-launch the most recently run task
+  rerun                 Re-launch the most recent run
 
   view                  Open/focus the debug panel
 

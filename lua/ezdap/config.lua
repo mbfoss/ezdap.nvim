@@ -1,4 +1,4 @@
----@class ezdap.Signs
+---@class ezdap.Symbols
 ---@field debug_frame              string  current execution position
 ---@field active_breakpoint        string  enabled + verified
 ---@field inactive_breakpoint      string  enabled but not yet verified by adapter
@@ -44,7 +44,7 @@
 ---@field raw_messages         boolean   capture raw DAP protocol messages in a dedicated buffer; a debugging aid, off by default
 ---@field popup_menu           boolean   add a "Debug Inspect" entry to the right-click menu while a session is live
 ---@field external_terminal?   string|string[]  terminal emulator (command + args) a debuggee is launched in for an "external" runInTerminal, its command line appended; unset fails such a request
----@field signs ezdap.Signs
+---@field symbols              ezdap.Symbols  glyphs for every debug state, in the gutter and in the panels alike
 
 ---@type ezdap.Config
 local M = {
@@ -61,7 +61,7 @@ local M = {
 	inline_vars            = "eol",
 	raw_messages           = false,
 	popup_menu             = true,
-	signs                  = {
+	symbols                = {
 		debug_frame              = "▶",
 		active_breakpoint        = "●",
 		inactive_breakpoint      = "○",
