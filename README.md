@@ -174,12 +174,30 @@ of how to reach that language's debug adapter and what its launch/attach modes
 accept. These come from the
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin, which
 provides ready-made definitions for the common debuggers (debugpy, codelldb,
-delve, js-debug, netcoredbg, rdbg and more). Install it and they all register at
-once; the files are self-contained, so a single one can equally be copied into
-your own config instead.
+lldb, gdb, delve, netcoredbg, java-debug-server, js-debug, php-debug, rdbg,
+dart, bash-debug-adapter, local-lua-debugger). Install it and they all register
+at once; the files are self-contained, so a single one can equally be copied
+into your own config instead.
+
+**Which modes an adapter has, and what inputs each mode takes, is documented per
+adapter in that plugin's [Available adapters](https://github.com/mbfoss/ezdap-adapters#available-adapters)
+section**, help tag |ezdap-adapters-adapters| — one section each, listing the
+software the adapter needs and, for every mode, its inputs with their types,
+defaults and descriptions. That is the reference to reach for when writing a
+`:Debug run` line or filling in a run file.
+
+The same descriptions are also available without leaving Neovim, since they come
+from the definitions themselves: completion after `:Debug run <adapter> <mode> `
+lists that mode's inputs, and `:Debug new_run_file <adapter> <mode>` writes them
+all out, commented, with their descriptions.
 
 ezdap itself ships **one** adapter, `remote`, a generic TCP attach that connects
-to a DAP server already listening on `host:port`.
+to a DAP server already listening on `host:port`, through its single `connect`
+mode:
+
+```vim
+:Debug run remote connect host=127.0.0.1 port=4711
+```
 
 Registered adapters are exposed as `require("ezdap.adapters")`, a plain
 `name → definition` table assembled at load time from the shipped `remote` entry
@@ -189,7 +207,7 @@ precedence, so a file in your config overrides the plugin's.
 
 Each definition declares native process/connection config plus named **modes**
 that declare their inputs. From that one description, ezdap provides completion,
-run file template (`:Debug new_run_file`).
+validation and the run file template (`:Debug new_run_file`).
 
 Run `:checkhealth ezdap` to see which registered adapters have their tooling
 available on the current machine.
@@ -296,11 +314,12 @@ Everything above is available programmatically:
 ```lua
 local ezdap = require("ezdap")
 
--- Run a config table directly
+-- Run a raw DAP body directly: `parameters` bypasses the mode's `inputs`
+-- and is sent to the adapter as-is, so it uses that adapter's own field names
 ezdap.run_task({
-  adapter = "delve",
-  request = "launch",
-  parameters = { mode = "test" },
+  adapter    = "delve",
+  request    = "launch",
+  parameters = { mode = "test", program = "./..." },
 })
 
 -- The run_mode / run_file / new_run_file / rerun entry points, too
