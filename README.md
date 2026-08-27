@@ -179,17 +179,24 @@ dart, bash-debug-adapter, local-lua-debugger). Install it and they all register
 at once; the files are self-contained, so a single one can equally be copied
 into your own config instead.
 
-**Which modes an adapter has, and what inputs each mode takes, is documented per
-adapter in that plugin's [Available adapters](https://github.com/mbfoss/ezdap-adapters#available-adapters)
-section**, help tag |ezdap-adapters-adapters| — one section each, listing the
-software the adapter needs and, for every mode, its inputs with their types,
-defaults and descriptions. That is the reference to reach for when writing a
-`:Debug run` line or filling in a run file.
+**Which modes an adapter has, and what inputs each mode takes, is answered by
+the definitions themselves** — ask Neovim rather than a web page:
 
-The same descriptions are also available without leaving Neovim, since they come
-from the definitions themselves: completion after `:Debug run <adapter> <mode> `
-lists that mode's inputs, and `:Debug new_run_file <adapter> <mode>` writes them
-all out, commented, with their descriptions.
+```vim
+:Debug adapter_info            " every registered adapter and its modes
+:Debug adapter_info codelldb   " that adapter's modes and each mode's inputs
+```
+
+See [:Debug adapter_info](#debug-adapter_info). Because it reads the
+registered definition, it documents an adapter you wrote or edited yourself
+exactly as it does a shipped one. The same descriptions reach you while typing:
+completion after `:Debug run <adapter> <mode> ` lists that mode's inputs, and
+`:Debug new_run_file <adapter> <mode>` writes them all out, commented, with
+their descriptions.
+
+The [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters#available-adapters)
+README, help tag |ezdap-adapters-adapters|, covers the other half: what software
+each adapter needs installed and where the definition looks for it.
 
 ezdap itself ships **one** adapter, `remote`, a generic TCP attach that connects
 to a DAP server already listening on `host:port`, through its single `connect`
@@ -307,6 +314,42 @@ commented out with its description, ready to be uncommented as needed:
 Fill in the `parameters`, then `:Debug run_file` it. It resolves through the same
 path as `:Debug run`.
 
+### `:Debug adapter_info` <!-- tag: adapter-info -->
+
+Show what an adapter accepts, in a float, rendered from the registered
+definition: each mode with its request kind and description, and under it every
+input with its type and what it means. Required inputs sort first and are
+starred.
+
+```vim
+:Debug adapter_info gdb
+```
+
+```
+gdb
+gdb --interpreter=dap
+
+attach (attach)  attach to a running process by pid
+    pid      integer      process id to attach to
+    program  string file  local binary for symbols
+
+binary (launch)  debug a native executable
+    command*       string command  command line to debug
+    ada_charset    string          Ada source character set
+    cwd            string dir      working directory
+    env            map             environment variables
+    stop_at_main   boolean         break at the start of main
+    stop_on_entry  boolean         break at program entry
+
+* required
+```
+
+With no argument it lists every registered adapter and its modes; with a mode
+(`:Debug adapter_info gdb binary`) it shows just that one. Nothing here is
+written by hand — the text comes from the same `inputs` declaration `:Debug run`
+validates against, so it cannot drift from what the adapter accepts, and your
+own definitions document themselves the moment they are registered.
+
 ### From Lua <!-- tag: lua-api -->
 
 Everything above is available programmatically:
@@ -326,6 +369,10 @@ ezdap.run_task({
 ezdap.run_mode("debugpy", "script", { command = "./main.py" })
 ezdap.run_file("debug.lua")
 ezdap.rerun()
+
+-- What an adapter accepts, read from its own definition
+ezdap.adapter_info("codelldb")                      -- shown in a float
+local lines = require("ezdap.adapter_info").render("codelldb", "binary")
 ```
 
 ## Breakpoints
@@ -568,6 +615,7 @@ below are unchanged.
 | `run …`               | Launch/attach from `input=value` tokens           |
 | `run_file [path]`     | Run a Lua run file, or pick from a directory     |
 | `new_run_file …`      | Scaffold a run file from a mode's inputs        |
+| `adapter_info [adapter] [mode]` | Show an adapter's modes and their inputs |
 | `rerun`               | Re-launch the most recent run                     |
 | `view`                | Open/focus the debug panel                        |
 | `output`              | Toggle the bottom output window                   |
@@ -712,7 +760,9 @@ hooks for adapters that must be started as a server first, the input type and
 format vocabulary, and the helpers for locating an adapter binary.
 
 Added adapters are picked up by `:checkhealth ezdap` too; it reports whether
-each definition's `command` is present on the current machine.
+each definition's `command` is present on the current machine. They document
+themselves as well: `:Debug adapter_info myadapter` renders the modes and inputs
+declared above, the same as for any shipped definition.
 
 ## Contributing
 

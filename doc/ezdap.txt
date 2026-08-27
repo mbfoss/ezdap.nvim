@@ -13,6 +13,7 @@ Table of Contents                                    *ezdap-table-of-contents*
   - Run files                                                |ezdap-run-files|
   - Why inputs and not raw DAP                                  |ezdap-inputs|
   - :Debug new_run_file                                   |ezdap-new-run-file|
+  - :Debug adapter_info                                   |ezdap-adapter-info|
   - From Lua                                                   |ezdap-lua-api|
 7. Breakpoints                                             |ezdap-breakpoints|
 8. The debug UI                                                     |ezdap-ui|
@@ -182,17 +183,24 @@ bash-debug-adapter, local-lua-debugger). Install it and they all register at
 once; the files are self-contained, so a single one can equally be copied into
 your own config instead.
 
-**Which modes an adapter has, and what inputs each mode takes, is documented
-per adapter in that plugin’s Available adapters section**, help tag
-|ezdap-adapters-adapters| — one section each, listing the software the
-adapter needs and, for every mode, its inputs with their types, defaults and
-descriptions. That is the reference to reach for when writing a `:Debug run`
-line or filling in a run file.
+**Which modes an adapter has, and what inputs each mode takes, is answered by
+the definitions themselves** — ask Neovim rather than a web page:
 
-The same descriptions are also available without leaving Neovim, since they
-come from the definitions themselves: completion after `:Debug run <adapter>
-<mode>` lists that mode’s inputs, and `:Debug new_run_file <adapter> <mode>`
-writes them all out, commented, with their descriptions.
+>vim
+    :Debug adapter_info            " every registered adapter and its modes
+    :Debug adapter_info codelldb   " that adapter's modes and each mode's inputs
+<
+
+See |ezdap-adapter-info|. Because it reads the registered definition, it
+documents an adapter you wrote or edited yourself exactly as it does a shipped
+one. The same descriptions reach you while typing: completion after `:Debug run
+<adapter> <mode>` lists that mode’s inputs, and `:Debug new_run_file
+<adapter> <mode>` writes them all out, commented, with their descriptions.
+
+The ezdap-adapters
+<https://github.com/mbfoss/ezdap-adapters#available-adapters> README, help tag
+|ezdap-adapters-adapters|, covers the other half: what software each adapter
+needs installed and where the definition looks for it.
 
 ezdap itself ships **one** adapter, `remote`, a generic TCP attach that
 connects to a DAP server already listening on `host:port`, through its single
@@ -317,6 +325,43 @@ Fill in the `parameters`, then `:Debug run_file` it. It resolves through the
 same path as `:Debug run`.
 
 
+:DEBUG ADAPTER_INFO                                       *ezdap-adapter-info*
+
+Show what an adapter accepts, in a float, rendered from the registered
+definition: each mode with its request kind and description, and under it every
+input with its type and what it means. Required inputs sort first and are
+starred.
+
+>vim
+    :Debug adapter_info gdb
+<
+
+>
+    gdb
+    gdb --interpreter=dap
+    
+    attach (attach)  attach to a running process by pid
+        pid      integer      process id to attach to
+        program  string file  local binary for symbols
+    
+    binary (launch)  debug a native executable
+        command*       string command  command line to debug
+        ada_charset    string          Ada source character set
+        cwd            string dir      working directory
+        env            map             environment variables
+        stop_at_main   boolean         break at the start of main
+        stop_on_entry  boolean         break at program entry
+    
+    * required
+<
+
+With no argument it lists every registered adapter and its modes; with a mode
+(`:Debug adapter_info gdb binary`) it shows just that one. Nothing here is
+written by hand — the text comes from the same `inputs` declaration `:Debug
+run` validates against, so it cannot drift from what the adapter accepts, and
+your own definitions document themselves the moment they are registered.
+
+
 FROM LUA                                                       *ezdap-lua-api*
 
 Everything above is available programmatically:
@@ -336,6 +381,10 @@ Everything above is available programmatically:
     ezdap.run_mode("debugpy", "script", { command = "./main.py" })
     ezdap.run_file("debug.lua")
     ezdap.rerun()
+    
+    -- What an adapter accepts, read from its own definition
+    ezdap.adapter_info("codelldb")                      -- shown in a float
+    local lines = require("ezdap.adapter_info").render("codelldb", "binary")
 <
 
 
@@ -604,58 +653,57 @@ below are unchanged.
 
 :Debug subcommands ~
 
-  -----------------------------------------------------------------------
-  Subcommand            Description
-  --------------------- -------------------------------------------------
-  run …                 Launch/attach from input=value tokens
+  ---------------------------------------------------------------------------------
+  Subcommand                      Description
+  ------------------------------- -------------------------------------------------
+  run …                           Launch/attach from input=value tokens
 
-  run_file [path]       Run a Lua run file, or pick from a directory
+  run_file [path]                 Run a Lua run file, or pick from a directory
 
-  new_run_file …        Scaffold a run file from a mode’s inputs
+  new_run_file …                  Scaffold a run file from a mode’s inputs
 
-  rerun                 Re-launch the most recent run
+  adapter_info [adapter] [mode]   Show an adapter’s modes and their inputs
 
-  view                  Open/focus the debug panel
+  rerun                           Re-launch the most recent run
 
-  output                Toggle the bottom output window
+  view                            Open/focus the debug panel
 
-  continue /            Continue the active / every session
-  continue_all          
+  output                          Toggle the bottom output window
 
-  step_over (next) /    Stepping
-  step_in / step_out    
+  continue / continue_all         Continue the active / every session
 
-  step_into_targets     Pick a call target to step into
+  step_over (next) / step_in /    Stepping
+  step_out                        
 
-  step_back /           Reverse debugging
-  reverse_continue      
+  step_into_targets               Pick a call target to step into
 
-  jump_to_cursor        Set the next statement to the cursor line
+  step_back / reverse_continue    Reverse debugging
 
-  restart_frame         Restart the selected stack frame
+  jump_to_cursor                  Set the next statement to the cursor line
 
-  exception_info        Show details of the current exception
+  restart_frame                   Restart the selected stack frame
 
-  pause / restart       Pause / DAP-restart the session
+  exception_info                  Show details of the current exception
 
-  stop / stop_all       Stop the active / every session
+  pause / restart                 Pause / DAP-restart the session
 
-  session / thread /    Selection pickers
-  terminate_thread /    
-  frame                 
+  stop / stop_all                 Stop the active / every session
 
-  inspect               Hover a value (word under cursor or selection)
+  session / thread /              Selection pickers
+  terminate_thread / frame        
 
-  value                 Same, showing the full value instead of the tree
+  inspect                         Hover a value (word under cursor or selection)
 
-  disassemble           Open the disassembly view
+  value                           Same, showing the full value instead of the tree
 
-  clean                 Drop finished runs and wipe their buffers
+  disassemble                     Open the disassembly view
 
-  project               Report the resolved project root
+  clean                           Drop finished runs and wipe their buffers
 
-  breakpoint …          Breakpoint subcommands (below)
-  -----------------------------------------------------------------------
+  project                         Report the resolved project root
+
+  breakpoint …                    Breakpoint subcommands (below)
+  ---------------------------------------------------------------------------------
 :Debug breakpoint subcommands ~
 
   -----------------------------------------------------------------------------
@@ -801,7 +849,9 @@ the input type and format vocabulary, and the helpers for locating an adapter
 binary.
 
 Added adapters are picked up by `:checkhealth ezdap` too; it reports whether
-each definition’s `command` is present on the current machine.
+each definition’s `command` is present on the current machine. They document
+themselves as well: `:Debug adapter_info myadapter` renders the modes and
+inputs declared above, the same as for any shipped definition.
 
 
 ==============================================================================
