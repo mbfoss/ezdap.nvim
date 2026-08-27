@@ -475,6 +475,16 @@ function M.completion(input, partial)
     return vim.tbl_map(function(v) return head .. v end, values)
 end
 
+---What is wrong with how an input is *declared*, if anything: a format that
+---extends another type, a collection declaring a scalar's pair, an entry type
+---that is itself a collection. Nil when the input reads.
+---@param input ezdap.Input?
+---@return string? err
+function M.check(input)
+    local _, err = _resolve(input)
+    return err
+end
+
 ---What one element of an input's value becomes — a `list` entry, a `map` value:
 ---the type of the row its elements are read by, which its `item_type` names. Nil
 ---for an input that isn't a collection.

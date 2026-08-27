@@ -119,10 +119,29 @@ local function _check_adapters()
     end
 end
 
+---Check every registered definition for declaration mistakes — the ones that
+---otherwise surface only when someone runs that mode.
+local function _check_definitions()
+    health.start("ezdap: adapter definitions")
+
+    local problems = require("ezdap.schema").validate_all()
+    local names = vim.tbl_keys(problems)
+    table.sort(names)
+
+    if #names == 0 then
+        health.ok("every registered definition resolves")
+        return
+    end
+    for _, name in ipairs(names) do
+        health.warn(name .. ":\n  " .. table.concat(problems[name], "\n  "))
+    end
+end
+
 function M.check()
     _check_requirements()
     _check_setup()
     _check_adapters()
+    _check_definitions()
 end
 
 return M

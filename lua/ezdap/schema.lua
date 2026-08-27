@@ -107,6 +107,77 @@ function M.requests(adapter)
     return out
 end
 
+-- Validation
+
+---One mode's declaration problems, each already prefixed with the mode name.
+---@param adapter string
+---@param mode_name string
+---@param out string[]  appended to
+local function _check_mode(adapter, mode_name, out)
+    local mode = M.mode(adapter, mode_name)
+    local function problem(fmt, ...) out[#out + 1] = mode_name .. ": " .. fmt:format(...) end
+
+    if mode.request ~= "launch" and mode.request ~= "attach" then
+        problem("request is %s, expected \"launch\" or \"attach\"", vim.inspect(mode.request))
+    end
+    if type(mode.description) ~= "string" or mode.description == "" then
+        problem("no description")
+    end
+    if mode.build ~= nil and type(mode.build) ~= "function" then
+        problem("build is %s, expected a function", type(mode.build))
+    end
+    if mode.inputs ~= nil and type(mode.inputs) ~= "table" then
+        problem("inputs is %s, expected a table", type(mode.inputs))
+        return
+    end
+
+    for _, name in ipairs(M.mode_input_names(adapter, mode_name)) do
+        local spec = M.mode_inputs(adapter, mode_name)[name]
+        local err = inputs_registry.check(spec)
+        if err then problem("input %s: %s", name, err) end
+        if spec.choices ~= nil and not vim.islist(spec.choices) then
+            problem("input %s: choices is not a list", name)
+        end
+    end
+end
+
+---Everything wrong with one registered adapter's definition, as messages — a
+---mode that requests neither launch nor attach, an input that cannot be read.
+---An empty list is a definition that resolves, not one that runs: whether the
+---adapter's tooling is installed is `:checkhealth ezdap`.
+---@param adapter string
+---@return string[] problems
+function M.validate(adapter)
+    local def = require("ezdap.adapters")[adapter]
+    if type(def) ~= "table" then
+        return { ("not a table, got %s"):format(type(def)) }
+    end
+
+    local out = {}
+    if def.command == nil and def.host == nil and def.port == nil and def.setup == nil then
+        out[#out + 1] = "no command, host/port or setup: nothing says how to reach the adapter"
+    end
+
+    local names = M.mode_names(adapter)
+    if #names == 0 then
+        out[#out + 1] = "declares no modes: `:Debug run` cannot reach it"
+    end
+    for _, name in ipairs(names) do _check_mode(adapter, name, out) end
+    return out
+end
+
+---Every registered adapter's problems, keyed by adapter name. Adapters that
+---resolve cleanly are absent, so an empty table is a clean registry.
+---@return table<string, string[]>
+function M.validate_all()
+    local out = {}
+    for name in pairs(require("ezdap.adapters")) do
+        local problems = M.validate(name)
+        if #problems > 0 then out[name] = problems end
+    end
+    return out
+end
+
 -- Resolving
 
 ---Read every declared input from `values`, in whichever form it was authored: a

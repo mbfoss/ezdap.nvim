@@ -266,5 +266,6 @@ connection (`java-debug-server`).
 ```
 
 verifies the Neovim version, whether `setup()` has run, the resolved project
-state, and each built-in adapter's tooling — the quickest smoke test that a local
-change hasn't broken adapter resolution.
+state, each registered adapter's tooling, and that every registered definition
+resolves (`schema.validate_all`) — the quickest smoke test that a local change
+hasn't broken adapter resolution.
