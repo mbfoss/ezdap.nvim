@@ -23,8 +23,8 @@ local function _cell(text)
 end
 
 ---A markdown table, its columns padded to a common width so the source reads as
----a table too. Cells carry no inline markup: the float conceals it, and a
----concealed delimiter narrows the row it is on but not the header above it.
+---a table too. The float leaves markdown's markers on screen for that reason:
+---concealing one would narrow the row it is on but not the header above it.
 ---@param headers string[]
 ---@param rows string[][]
 ---@param out string[]  appended to
@@ -80,7 +80,7 @@ local function _description_of(input)
         text = text == "" and listed or (listed .. "; " .. text)
     end
     if input.required then
-        text = text == "" and "[required]" or ("[required] " .. text)
+        text = text == "" and "(required)" or ("(required) " .. text)
     end
     return text
 end
@@ -147,7 +147,7 @@ function M.overview()
     _table({ "adapter", "modes" }, rows, out)
     vim.list_extend(out, {
         "",
-        ("`:%s adapters <adapter>` for its modes and their inputs")
+        (":%s adapters <adapter> for its modes and their inputs")
         :format(require("ezdap.config").command),
     })
     return out
@@ -205,7 +205,7 @@ function M.show(adapter, mode_name)
         title = mode_name and (adapter .. " " .. mode_name) or adapter
     end
     require("ezdap.util.floatwin").open(table.concat(lines, "\n"),
-        { title = title, is_markdown = true })
+        { title = title, is_markdown = true, conceallevel = 0 })
 end
 
 return M

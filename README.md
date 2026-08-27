@@ -236,6 +236,19 @@ Arguments split on whitespace(`:h <f-args>`):
 quotes are *not* special, and a value containing a space is written with a backslash
 Example: `:Debug run debugpy script command=./main.py\ --verbose cwd=/tmp/my\ project`.
 
+On the command line a `list` or `map` input is one token: entries separated by
+commas, each entry `KEY=VALUE` for a map. Escape a comma inside an entry as
+`\,`, and a space as `\ `:
+
+```vim
+:Debug run gdb binary command=./app env=RUST_LOG=debug,NO_COLOR=1
+:Debug run codelldb binary command=./app args=--input\ my\ file.txt,--verbose
+:Debug run codelldb binary command=./app args=--fields=a\,b,--verbose
+```
+
+In a run file the same input takes a Lua table instead
+(`env = { RUST_LOG = "debug" }`).
+
 Tab-completion offers adapters, then mode names, then the inputs
 available for the chosen mode and, after an `=`, the values that
 input can take: paths for the path-like ones, `true`/`false` for a boolean.

@@ -7,6 +7,7 @@ local M = {}
 ---@class ezdap.util.floatwin.FloatwinOpts
 ---@field title? string
 ---@field is_markdown boolean?
+---@field conceallevel integer?  `'conceallevel'` for a markdown float; 3 when unset
 
 ---@param text string
 ---@param opts ezdap.util.floatwin.FloatwinOpts?
@@ -72,7 +73,10 @@ function M.open(text, opts)
         if not ok then
             vim.bo[buf].syntax = "on"
         end
-        vim.wo[win].conceallevel = 3
+        -- Concealing shortens the lines it is on, which pulls fixed-width
+        -- content out of column, so a caller can ask for 0 and keep every
+        -- character.
+        vim.wo[win].conceallevel = opts.conceallevel or 3
         vim.wo[win].concealcursor = "nv"
     end
 

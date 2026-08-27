@@ -304,6 +304,35 @@ local function _sealed(kind, out)
     return out
 end
 
+---Split a collection's string form on its separating commas. `\,` is a literal
+---comma in an entry; every other backslash is part of the value, since these
+---entries are paths and command lines.
+---@param raw string
+---@return string[]
+local function _split_entries(raw)
+    local entries, entry, i = {}, {}, 1
+    local function flush()
+        local text = table.concat(entry)
+        if text ~= "" then entries[#entries + 1] = text end
+        entry = {}
+    end
+    while i <= #raw do
+        local c = raw:sub(i, i)
+        if c == "\\" and raw:sub(i + 1, i + 1) == "," then
+            entry[#entry + 1] = ","
+            i = i + 2
+        elseif c == "," then
+            flush()
+            i = i + 1
+        else
+            entry[#entry + 1] = c
+            i = i + 1
+        end
+    end
+    flush()
+    return entries
+end
+
 ---Read a collection's string form: comma-separated entries, each element kept
 ---whole so it may contain spaces (a full LLDB command line), and each `key=value`
 ---for a `map` — environment variables, source-path remappings.
@@ -312,7 +341,7 @@ end
 ---@return table? value, string? err
 local function _parse_collection(r, raw)
     local out = {}
-    for _, entry in ipairs(vim.split(raw, ",", { plain = true, trimempty = true })) do
+    for _, entry in ipairs(_split_entries(raw)) do
         local key, text = nil, entry
         if r.kind == "map" then
             local eq = entry:find("=", 1, true)
