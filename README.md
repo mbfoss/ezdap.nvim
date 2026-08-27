@@ -183,11 +183,11 @@ into your own config instead.
 the definitions themselves** — ask Neovim rather than a web page:
 
 ```vim
-:Debug adapter_info            " every registered adapter and its modes
-:Debug adapter_info codelldb   " that adapter's modes and each mode's inputs
+:Debug adapters            " every registered adapter and its modes
+:Debug adapters codelldb   " that adapter's modes and each mode's inputs
 ```
 
-See [:Debug adapter_info](#debug-adapter_info). Because it reads the
+See [:Debug adapters](#debug-adapters). Because it reads the
 registered definition, it documents an adapter you wrote or edited yourself
 exactly as it does a shipped one. The same descriptions reach you while typing:
 completion after `:Debug run <adapter> <mode> ` lists that mode's inputs, and
@@ -314,38 +314,43 @@ commented out with its description, ready to be uncommented as needed:
 Fill in the `parameters`, then `:Debug run_file` it. It resolves through the same
 path as `:Debug run`.
 
-### `:Debug adapter_info` <!-- tag: adapter-info -->
+### `:Debug adapters` <!-- tag: adapters-command -->
 
-Show what an adapter accepts, in a float, rendered from the registered
-definition: each mode with its request kind and description, and under it every
-input with its type and what it means. Required inputs sort first and are
-starred.
+Show what an adapter accepts, in a markdown float, rendered from the registered
+definition: each mode with its request kind and description, and under it a
+table of every input with its type and what it means. Required inputs sort first
+and are marked `[required]` in their description.
 
 ```vim
-:Debug adapter_info gdb
+:Debug adapters gdb
 ```
 
-```
-gdb
-gdb --interpreter=dap
+````markdown
+## attach (attach)
 
-attach (attach)  attach to a running process by pid
-    pid      integer      process id to attach to
-    program  string file  local binary for symbols
+attach to a running process by pid
 
-binary (launch)  debug a native executable
-    command*       string command  command line to debug
-    ada_charset    string          Ada source character set
-    cwd            string dir      working directory
-    env            map             environment variables
-    stop_at_main   boolean         break at the start of main
-    stop_on_entry  boolean         break at program entry
+| input   | type        | description                        |
+| ------- | ----------- | ---------------------------------- |
+| pid     | integer     | [required] process id to attach to |
+| program | string file | local binary for symbols           |
 
-* required
-```
+## binary (launch)
+
+debug a native executable
+
+| input         | type           | description                      |
+| ------------- | -------------- | -------------------------------- |
+| command       | string command | [required] command line to debug |
+| ada_charset   | string         | Ada source character set         |
+| cwd           | string dir     | working directory                |
+| env           | map            | environment variables            |
+| stop_at_main  | boolean        | break at the start of main       |
+| stop_on_entry | boolean        | break at program entry           |
+````
 
 With no argument it lists every registered adapter and its modes; with a mode
-(`:Debug adapter_info gdb binary`) it shows just that one. Nothing here is
+(`:Debug adapters gdb binary`) it shows just that one. Nothing here is
 written by hand — the text comes from the same `inputs` declaration `:Debug run`
 validates against, so it cannot drift from what the adapter accepts, and your
 own definitions document themselves the moment they are registered.
@@ -371,8 +376,8 @@ ezdap.run_file("debug.lua")
 ezdap.rerun()
 
 -- What an adapter accepts, read from its own definition
-ezdap.adapter_info("codelldb")                      -- shown in a float
-local lines = require("ezdap.adapter_info").render("codelldb", "binary")
+ezdap.adapter_docs("codelldb")                      -- shown in a float
+local lines = require("ezdap.adapter_docs").render("codelldb", "binary")
 ```
 
 ## Breakpoints
@@ -615,7 +620,7 @@ below are unchanged.
 | `run …`               | Launch/attach from `input=value` tokens           |
 | `run_file [path]`     | Run a Lua run file, or pick from a directory     |
 | `new_run_file …`      | Scaffold a run file from a mode's inputs        |
-| `adapter_info [adapter] [mode]` | Show an adapter's modes and their inputs |
+| `adapters [adapter] [mode]` | Show an adapter's modes and their inputs |
 | `rerun`               | Re-launch the most recent run                     |
 | `view`                | Open/focus the debug panel                        |
 | `output`              | Toggle the bottom output window                   |
@@ -761,7 +766,7 @@ format vocabulary, and the helpers for locating an adapter binary.
 
 Added adapters are picked up by `:checkhealth ezdap` too; it reports whether
 each definition's `command` is present on the current machine. They document
-themselves as well: `:Debug adapter_info myadapter` renders the modes and inputs
+themselves as well: `:Debug adapters myadapter` renders the modes and inputs
 declared above, the same as for any shipped definition.
 
 ## Contributing
