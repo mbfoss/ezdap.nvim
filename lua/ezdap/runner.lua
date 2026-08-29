@@ -278,7 +278,17 @@ end
 local function _run_spec(spec, presenter)
     local run = _new_run(spec.name or spec.adapter, presenter)
 
-    local cancel_resolve = require("ezdap.schema").resolve_task(spec, function(task, err)
+    -- Cancelling while the mode is still resolving calls the question off and fails
+    -- the run. It goes on before resolving, not after: a mode that asks nothing
+    -- resolves and starts inside the call below, and `_start` must have the last
+    -- word on `cancel` — that one has a session to stop.
+    local cancel_resolve
+    run.cancel = function()
+        if cancel_resolve then cancel_resolve() end
+        if run.state == "running" then _set_state(run, "failed") end
+    end
+
+    cancel_resolve = require("ezdap.schema").resolve_task(spec, function(task, err)
         -- Cancelled while resolving: the run is already settled and nothing starts.
         if run.state ~= "running" then return end
         if not task then
@@ -291,10 +301,6 @@ local function _run_spec(spec, presenter)
         _start(run, task)
     end)
 
-    run.cancel = function()
-        cancel_resolve()
-        if run.state == "running" then _set_state(run, "failed") end
-    end
     return run
 end
 
