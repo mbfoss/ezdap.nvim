@@ -483,7 +483,6 @@ function _ensure_loaded()
     _load()
 end
 
--- adapters table is Lazily loaded on first access
 ---@type table<string, ezdap.AdapterDef>
 M.adapters = nil
 

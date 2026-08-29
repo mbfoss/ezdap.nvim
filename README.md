@@ -306,7 +306,7 @@ A declared input supplies what the raw body lacks: a description of itself.
   or in a run file (`env` as `A=1,B=2` or as a table); both resolve through the
   same declaration into the same `build`.
 - **Mode-supplied defaults.** A mode can act on a missing input instead of
-  omitting the field: every attach mode with no `pid` opens a process picker.
+  omitting the field.
 
 ezdap defines no portable vocabulary on top. No input is a cross-adapter alias
 subject to translation; each mode's `build` writes that adapter's own keys, and
