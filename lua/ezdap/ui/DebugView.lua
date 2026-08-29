@@ -490,8 +490,8 @@ function DebugView:clear_finished_sessions()
     self:_drop_finished_rows(function() return true end)
 end
 
----Drop the finished rows of just these sessions. For hosts that drive tasks
----through `start_task` and dispose of them themselves: they clear what they
+---Drop the finished rows of just these sessions. For runs disposed of one at a
+---time (`ezdap.remove_run`), rather than by `:Debug clean`: they clear what they
 ---started without touching rows they did not produce.
 ---@param ids integer[]
 function DebugView:clear_sessions(ids)

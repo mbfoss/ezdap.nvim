@@ -25,9 +25,9 @@ for the UI and commands — prefer it over importing `dap/client` or
 `dap/breakpoints` directly.
 
 **Public API** — [lua/ezdap/init.lua](lua/ezdap/init.lua)
-`setup`, the run entry points (`run`, `run_mode`, `run_file`, `new_run_file`,
-`rerun`), the debug/disassembly view accessors, and registration of the user
-command (`config.command`, dispatching to the command surface).
+`setup`, the run entry points (`run_task`, `run_mode`, `run_file`, `new_run_file`,
+`rerun`, `remove_run`), the debug/disassembly view accessors, and registration of
+the user command (`config.command`, dispatching to the command surface).
 
 **Active session / programmatic API** — [lua/ezdap/manager.lua](lua/ezdap/manager.lua)
 Owns the "which session is active" concept that keymaps and UI subscribe to.
@@ -66,11 +66,16 @@ its only path to the DAP layer.
 - [task.lua](lua/ezdap/task.lua) — the task runner backend. Consumes a native
   task (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`) and
   sends `parameters` as the DAP request body verbatim.
-- [runner.lua](lua/ezdap/runner.lua) — the standalone run host behind `:Debug
-  run`/`run_file`/`rerun`/`clean`: it tracks every run's buffers and state and
+- [runner.lua](lua/ezdap/runner.lua) — the run tracker behind `:Debug
+  run`/`run_file`/`rerun`/`clean`, and the single path from a mode to a running
+  session: it resolves the mode, tracks every run's buffers and state and
   announces them through signals. Where they are shown is a panel backend's call
   ([dock_panel.lua](lua/ezdap/ui/dock_panel.lua) or
-  [output_win.lua](lua/ezdap/ui/output_win.lua)).
+  [output_win.lua](lua/ezdap/ui/output_win.lua)). A run given a
+  `runner.Presenter` (as tomltasks' `debug` task type does) inverts that last
+  part: the presenter takes the buffers, progress and outcome through its own
+  callbacks, the run is never announced, and it leaves ezdap through `remove_run`
+  rather than `clean`.
 - [inputs.lua](lua/ezdap/inputs.lua) — the input registry: `M.types`, one row per
   scalar type, stating every way it is read (parsed from a command line, described
   as JSON Schema for a typed file, seeded into a scaffolded document, completed),
@@ -78,11 +83,12 @@ its only path to the DAP layer.
   value. Nothing else switches on a type or format name, so adding one is a single
   row.
 - [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug run`, the
-  reader for `new_run_file`, and the seam easytasks' `debug` task type runs on.
+  reader for `new_run_file`, and the mode engine `runner` resolves every run through.
   `resolve_task` reads a mode's declared `inputs` from a table of values
   and calls its `build`, delivering a complete `ezdap.Task` to a `done` callback —
   a `build` may stop to ask the user something first, and the returned `cancel`
-  drops the answer if the caller has given up by then.
+  drops the answer if the caller has given up by then. Only `runner` resolves:
+  every front end names a mode and lets the run do the rest.
 - [scaffold.lua](lua/ezdap/scaffold.lua) — `:Debug new_run_file`: writes a runnable
   Lua run file naming the `adapter` and `mode` and listing that mode's
   declared inputs under `parameters`, each seeded via `ezdap.inputs` and commented

@@ -4,7 +4,7 @@ local ui_util      = require "ezdap.util.ui"
 
 ---A debug task — native DAP, sent as-is. `parameters` is the adapter's raw
 ---launch/attach body, produced by a mode's `build`. This is the resolved shape
----`run`/`start_task` consume, which run files and `:Debug run` both produce via
+---`ezdap.runner` runs, which run files and `:Debug run` both produce via
 ---`ezdap.schema`'s `resolve_task`.
 ---@class ezdap.Task
 ---@field name?         string                     run group name (defaults to "debug")
@@ -15,7 +15,7 @@ local ui_util      = require "ezdap.util.ui"
 ---@field host?         string                     attach/TCP connection target
 ---@field port?         integer                    attach/TCP connection target (required for the `remote` adapter)
 
----Presentation options for a buffer registered with the run host.
+---Presentation options for a buffer registered with whoever is showing the run.
 ---@class ezdap.AddBufOpts
 ---@field label?      string   tab label (defaults to the buffer name)
 ---@field priority?   integer  higher = surfaced preferentially when added (default 0)

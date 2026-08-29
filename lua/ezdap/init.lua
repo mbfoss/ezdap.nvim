@@ -555,17 +555,25 @@ end
 ---Launch or attach under an adapter using one of its declared `modes`, assembling
 ---the request body from `inputs` — the answers to the mode's declared inputs, in
 ---either authoring form. The entry point behind `:Debug run`.
+---
+---Pass a `presenter` to show the run in a UI of your own: the run's buffers,
+---progress and outcome go to those callbacks, ezdap's own panels never see it, and
+---the run is yours to `remove_run` when you are done with it.
 ---@param adapter string  adapter name, e.g. "debugpy"
 ---@param mode string  mode name, e.g. "binary"
 ---@param inputs? table<string, string>  input name -> value, e.g. { command = "./main.py" }
-function M.run_mode(adapter, mode, inputs)
+---@param presenter? ezdap.runner.Presenter  a caller showing the run itself
+---@return ezdap.runner.Run?
+function M.run_mode(adapter, mode, inputs, presenter)
     _require_setup("run_mode")
-    M.clean()
-    return require("ezdap.runner").run_mode(adapter, mode, inputs)
+    -- Cleaning is ezdap tidying its own runs before adding another; a run shown
+    -- elsewhere is not one of them, and its presenter decides when to drop it.
+    if not presenter then M.clean() end
+    return require("ezdap.runner").run_mode(adapter, mode, inputs, presenter)
 end
 
 ---Run a complete native task — `adapter`/`request`/`parameters` (plus optional
----`name`/`host`/`port`) — in ezdap's own run host, the same one `run_mode` and
+---`name`/`host`/`port`) — in ezdap's own run UI, the same one `run_mode` and
 ---`run_file` end in. Returns nil when `task` is not a valid task table.
 ---@param task ezdap.Task
 ---@return ezdap.runner.Run?
@@ -575,21 +583,16 @@ function M.run_task(task)
     return require("ezdap.runner").run(task)
 end
 
---- function intended to be called by custom plugins that manages their own task UI
----@param task ezdap.Task
----@param callbacks ezdap.TaskCallback
----@return fun() cancel function
----@return fun() dispose  drop what this run left behind in ezdap's own UI
-function M.start_task(task, callbacks)
-    _require_setup("start_task")
-    M.clean()
-    local cancel, sessions = require("ezdap.task").start(task, callbacks)
-    -- The host owns the buffers it was handed; what is left here is this run's
-    -- session rows — and only if a view was ever opened, since disposing is no
-    -- reason to build one.
-    return cancel, function()
-        if _debug_view then _debug_view:clear_sessions(sessions) end
-    end
+---Forget a run and drop what it left in ezdap's own UI — the finished rows of the
+---sessions it produced, and, for a run ezdap showed itself, its buffers. The
+---buffers of a run shown elsewhere belong to its presenter and are left alone.
+---Cancel a live run before removing it. The debug view is only cleaned when it
+---exists; disposing of a run is no reason to build one.
+---@param run ezdap.runner.Run
+function M.remove_run(run)
+    _require_setup("remove_run")
+    require("ezdap.runner").remove(run)
+    if _debug_view then _debug_view:clear_sessions(run.sessions) end
 end
 
 ---Re-run the most recently run task from scratch. Warns when nothing has run yet.

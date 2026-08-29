@@ -1,14 +1,19 @@
 ---@brief Standalone task runner for ezdap.
 ---
----Runs a debug task without easytasks by supplying ezdap's own run callbacks
----to `ezdap.task.start`. `ezdap.task` stays provider-agnostic: easytasks
----supplies its own callbacks via its backend; this module is the standalone
----equivalent (progress, run lifecycle).
+---Runs a debug task by supplying run callbacks to `ezdap.task.start`, which
+---stays provider-agnostic. Every run — `:Debug run`, a run file, or another
+---plugin's task — goes through here, so resolving a mode, tracking the run and
+---cancelling it are written once.
 ---
 ---A run announces itself through signals — it started, it spawned a buffer, its
 ---state changed, it is gone — and holds the buffers it spawned so a late
 ---subscriber can catch up. Whether and how any of it is shown is the panel
 ---backends' decision; nothing here knows about windows.
+---
+---A run given a `presenter` (`ezdap.runner.Presenter`) inverts that: the presenter
+---takes the buffers, the progress and the outcome through its own callbacks, and
+---the run is never announced — ezdap's panels do not show what another plugin is
+---already showing.
 ---
 ---One task per file: a run file returns a single task (or a function
 ---returning one):
@@ -33,12 +38,21 @@ local M            = {}
 ---(REPL, Output, Terminal, DAP messages) and how it is faring. Runs are tracked
 ---together so tasks can run in parallel.
 ---@class ezdap.runner.Run
----@field id      string
----@field name    string
----@field cancel  fun()
----@field buffers ezdap.runner.RunBuffer[]
----@field state   ezdap.runner.RunState
----@field log     ezdap.OutputBuffer  this run's own progress log; its buffer is one of `buffers`
+---@field id       string
+---@field name     string
+---@field cancel   fun()
+---@field buffers   ezdap.runner.RunBuffer[]  empty when presented elsewhere: the presenter holds its own
+---@field sessions  integer[]  the sessions this run started, filled in as they start
+---@field state     ezdap.runner.RunState
+---@field presenter? ezdap.runner.Presenter  whoever shows this run, when it is not ezdap itself
+---@field log?      ezdap.OutputBuffer  this run's own progress log, one of its `buffers` (a presented run reports to its presenter instead)
+---@field settled?  boolean  whether the presenter has been told how the run ended
+
+---A caller showing a run in a UI of its own: it takes the run's buffers,
+---progress and outcome through these callbacks — the same ones `ezdap.task`
+---speaks — instead of ezdap's own log buffer and run signals.
+---@class ezdap.runner.Presenter : ezdap.TaskCallback
+---@field name? string  run group name (defaults to the adapter's)
 
 -- Signals. A run's whole life is announced here and nowhere else: a view
 -- subscribes to decide how runs are shown, and the runner stays out of it.
@@ -78,7 +92,10 @@ end
 ---@param bufnr integer
 ---@param opts? ezdap.AddBufOpts
 local function _add_buf(run, bufnr, opts)
-    opts                          = opts or {}
+    opts = opts or {}
+    -- A presented run's buffers are the presenter's: it is handed them and does its
+    -- own bookkeeping, so nothing is tracked or announced here.
+    if run.presenter then return run.presenter.add_bufnr(bufnr, opts) end
     run.buffers[#run.buffers + 1] = { bufnr = bufnr, opts = opts }
     M.on_run_buffer:emit(run, bufnr, opts)
 end
@@ -107,6 +124,7 @@ end
 ---@param run ezdap.runner.Run
 ---@param msg string
 local function _log(run, msg)
+    if run.presenter then return run.presenter.report(msg) end
     local stamp = os.date("%H:%M:%S")
     local lines = {}
     for _, l in ipairs(vim.split(msg, "\n", { plain = true })) do
@@ -116,9 +134,13 @@ local function _log(run, msg)
 end
 
 ---Announce a run's removal and wipe the buffers it spawned. The signal goes
----first, so subscribers are off those buffers before they are deleted.
+---first, so subscribers are off those buffers before they are deleted. A
+---presented run has neither: its presenter disposes of it.
 ---@param run ezdap.runner.Run
 local function _remove_run(run)
+    -- A presented run was never announced and holds no buffers of ours: dropping it
+    -- from the tracking above is all there is to do.
+    if run.presenter then return end
     M.on_run_removed:emit(run)
     for _, b in ipairs(run.buffers) do
         if vim.api.nvim_buf_is_valid(b.bufnr) then
@@ -134,7 +156,7 @@ end
 local function _clear_finished(name)
     local kept = {}
     for _, r in ipairs(_runs) do
-        if r.state ~= "running" and r.name == name then
+        if r.state ~= "running" and r.name == name and not r.presenter then
             _remove_run(r)
         else
             kept[#kept + 1] = r
@@ -156,12 +178,13 @@ function M.remove(run)
     _remove_run(run)
 end
 
----Drop every finished run and wipe their buffers, leaving live runs untouched.
+---Drop every finished run and wipe their buffers, leaving live runs — and every
+---run presented elsewhere, which is its presenter's to dispose of — untouched.
 ---Bound to `:Debug clean`.
 function M.clean()
     local kept, finished = {}, {}
     for _, r in ipairs(_runs) do
-        if r.state ~= "running" then
+        if r.state ~= "running" and not r.presenter then
             finished[#finished + 1] = r
         else
             kept[#kept + 1] = r
@@ -173,9 +196,112 @@ function M.clean()
     end
 end
 
----Run a debug task. Tasks may run in parallel: starting one does not cancel the
----others. Re-running a task replaces its own previous finished run. Returns nil
----when `task` is not a valid task table.
+---Create, track and announce a run, and give it the log it reports into. A
+---presented run is neither announced nor given a log: it reports to its
+---presenter, which is showing it, so ezdap's own panels must never see it.
+---@param name string  run group name
+---@param presenter? ezdap.runner.Presenter
+---@return ezdap.runner.Run
+local function _new_run(name, presenter)
+    _clear_finished(name)
+
+    _counter = _counter + 1
+    ---@type ezdap.runner.Run
+    local run = {
+        id        = name .. "-" .. _counter,
+        name      = name,
+        cancel    = function() end,
+        buffers   = {},
+        sessions  = {},
+        state     = "running",
+        presenter = presenter,
+    }
+    _runs[#_runs + 1] = run
+
+    if not presenter then
+        -- Announced before it has any buffer, so a subscriber that renders a run as a
+        -- whole (a tab, a status line) exists by the time the first one arrives.
+        M.on_run_started:emit(run)
+        -- The log is this run's own buffer, so its lines need no task-name prefix.
+        run.log = _make_log(run)
+    end
+    return run
+end
+
+---Record how a run is faring and tell whoever is watching it.
+---@param run ezdap.runner.Run
+---@param state ezdap.runner.RunState
+local function _set_state(run, state)
+    run.state = state
+    if run.presenter then
+        -- `on_done` is a one-shot contract, and says how the run ended by itself:
+        -- whatever ends after it — a second session, a late cancel — is no longer
+        -- the presenter's business, and the log line would only repeat it.
+        if not run.settled then
+            run.settled = true
+            run.presenter.on_done(state == "done")
+        end
+        return
+    end
+    M.on_run_state:emit(run, state)
+    _log(run, state == "done" and "finished" or state)
+end
+
+---Start a resolved task into a run that already exists, wiring up the callbacks
+---it reports through and taking over its `cancel`.
+---@param run ezdap.runner.Run
+---@param task ezdap.Task
+local function _start(run, task)
+    -- `rerun` re-launches into ezdap's own UI; a presented run is its presenter's
+    -- to repeat.
+    if not run.presenter then _last_task = task end
+
+    local cancel, sessions = require("ezdap.task").start(task, {
+        -- Announced for display, and tracked so `clean` can wipe them.
+        add_bufnr = function(bufnr, opts) _add_buf(run, bufnr, opts) end,
+        report    = function(msg) _log(run, msg) end,
+        on_done   = function(ok) _set_state(run, ok and "done" or "failed") end,
+    })
+
+    run.cancel   = cancel
+    -- Held by reference: the sessions land in it as they start.
+    run.sessions = sessions
+end
+
+---Resolve one of an adapter's named modes through its `build` and run it. The run
+---exists before `build` is asked anything, so a mode that stops to ask the user
+---something still has a run to report into and a `cancel` that calls the question
+---off — where a resolve that never answers would otherwise leave nothing to stop.
+---@param spec ezdap.ResolveSpec  `name` is the run group name, defaulting to the adapter's
+---@param presenter? ezdap.runner.Presenter
+---@return ezdap.runner.Run
+local function _run_spec(spec, presenter)
+    local run = _new_run(spec.name or spec.adapter, presenter)
+
+    local cancel_resolve = require("ezdap.schema").resolve_task(spec, function(task, err)
+        -- Cancelled while resolving: the run is already settled and nothing starts.
+        if run.state ~= "running" then return end
+        if not task then
+            local msg = ("run: %s: %s"):format(run.name, tostring(err))
+            _log(run, msg)
+            -- A presented run shows its own log; only ezdap's own runs need the notify.
+            if not presenter then _err(msg) end
+            return _set_state(run, "failed")
+        end
+        _start(run, task)
+    end)
+
+    run.cancel = function()
+        cancel_resolve()
+        if run.state == "running" then _set_state(run, "failed") end
+    end
+    return run
+end
+
+---Run an already-resolved debug task, in ezdap's own UI. Tasks may run in
+---parallel: starting one does not cancel the others. Re-running a task replaces
+---its own previous finished run. Returns nil when `task` is not a valid task
+---table.
 ---@param task ezdap.Task
 ---@return ezdap.runner.Run?
 function M.run(task)
@@ -184,46 +310,11 @@ function M.run(task)
         return
     end
 
-    task       = vim.deepcopy(task)
-    task.name  = task.name or "debug"
-    _last_task = task
+    task      = vim.deepcopy(task)
+    task.name = task.name or "debug"
 
-    _clear_finished(task.name)
-
-    _counter = _counter + 1
-    ---@type ezdap.runner.Run
-    ---@diagnostic disable-next-line: missing-fields -- log is set right below, once `run` exists to hang it on
-    local run = {
-        id      = task.name .. "-" .. _counter,
-        name    = task.name,
-        cancel  = function() end,
-        buffers = {},
-        state   = "running",
-    }
-    _runs[#_runs + 1] = run
-
-    -- Announced before it has any buffer, so a subscriber that renders a run as a
-    -- whole (a tab, a status line) exists by the time the first one arrives.
-    M.on_run_started:emit(run)
-    -- The log is this run's own buffer, so its lines need no task-name prefix.
-    run.log      = _make_log(run)
-
-    local cancel = require("ezdap.task").start(task, {
-        -- Announced for display, and tracked so `clean` can wipe them.
-        add_bufnr = function(bufnr, opts)
-            _add_buf(run, bufnr, opts)
-        end,
-        report    = function (msg)
-            _log(run, msg)
-        end,
-        on_done   = function(ok)
-            run.state = ok and "done" or "failed"
-            M.on_run_state:emit(run, run.state)
-            _log(run, ok and "finished" or "failed")
-        end,
-    })
-
-    run.cancel = cancel
+    local run = _new_run(task.name)
+    _start(run, task)
     return run
 end
 
@@ -266,6 +357,7 @@ end
 ---loaded and the value it returns is run — a mode-based task (`adapter`/`mode`/
 ---`parameters`), resolved through the mode's `build`.
 ---@param path string
+---@return ezdap.runner.Run?  nil when the path yields no task to run
 function M.run_file(path)
     if type(path) ~= "string" or path == "" then
         _warn("run: no path given (usage: run('path/to/task.lua' or a folder))")
@@ -310,22 +402,13 @@ function M.run_file(path)
 
     -- A mode-based run file names a mode and answers its inputs under
     -- `parameters`; resolve it through the mode's `build`, as `:Debug run` does.
-    -- It may open a picker, so the run starts from the callback.
     if type(spec.mode) == "string" then
-        local name = vim.fn.fnamemodify(resolved, ":t")
-        require("ezdap.schema").resolve_task({
+        return _run_spec({
             adapter = spec.adapter,
-            mode = spec.mode,
-            name    = spec.name,
+            mode    = spec.mode,
+            name    = spec.name or vim.fn.fnamemodify(resolved, ":t"),
             values  = spec.parameters,
-        }, function(task, err)
-            if not task then
-                _err("run: " .. name .. ": " .. tostring(err))
-                return
-            end
-            M.run(task)
-        end)
-        return
+        })
     end
 
     _err("run: " .. vim.fn.fnamemodify(resolved, ":t") .. " must set `mode` (a named mode)")
@@ -333,13 +416,14 @@ end
 
 ---Launch or attach under an adapter's named mode, resolving `inputs` — the
 ---answers to the mode's declared inputs, in either authoring form — through
----`schema.resolve_task`.
----Returns nil when `build` stops to ask the user something — the run starts on answer.
+---`schema.resolve_task`. The run is returned right away, even when `build` stops
+---to ask the user something: it starts, or fails, once they answer.
 ---@param adapter string  adapter name, e.g. "codelldb"
 ---@param mode_name string  mode name, e.g. "binary"
 ---@param inputs? table<string, string>  input name -> value, e.g. { command = "./a.out" }
+---@param presenter? ezdap.runner.Presenter  a caller showing the run in a UI of its own
 ---@return ezdap.runner.Run?
-function M.run_mode(adapter, mode_name, inputs)
+function M.run_mode(adapter, mode_name, inputs, presenter)
     local schema = require("ezdap.schema")
 
     if not adapter or adapter == "" then
@@ -359,25 +443,12 @@ function M.run_mode(adapter, mode_name, inputs)
         return
     end
 
-    local values = inputs or {}
-
-    -- A mode whose `build` asks the user something (an attach resolving an unset
-    -- `pid`) resolves only once they answer, so the run starts from the callback.
-    -- Every other mode resolves synchronously, assigning `run` before we return.
-    local run
-    schema.resolve_task({
+    return _run_spec({
         adapter = adapter,
-        mode = mode_name,
-        name    = adapter,
-        values  = values,
-    }, function(task, err)
-        if not task then
-            _err("run: " .. tostring(err))
-            return
-        end
-        run = M.run(task)
-    end)
-    return run
+        mode    = mode_name,
+        name    = (presenter and presenter.name) or adapter,
+        values  = inputs or {},
+    }, presenter)
 end
 
 ---Cancel every live run. Stops their sessions, or aborts a run still in adapter
@@ -397,11 +468,16 @@ function M.active()
     return nil
 end
 
----Every tracked run, live and finished, in start order — how a subscriber
----attaching after the fact catches up with the runs it missed.
+---Every run ezdap shows, live and finished, in start order — how a subscriber
+---attaching after the fact catches up with the runs it missed. Runs presented
+---elsewhere are absent: they were never announced, so no subscriber may see them.
 ---@return ezdap.runner.Run[]
 function M.runs()
-    return vim.list_slice(_runs)
+    local out = {}
+    for _, r in ipairs(_runs) do
+        if not r.presenter then out[#out + 1] = r end
+    end
+    return out
 end
 
 return M
