@@ -1,6 +1,8 @@
 # Writing an adapter definition
 
-An adapter definition is a single Lua file under `lua/ezdap-adapters/` on the runtimepath,
+An adapter definition is a single Lua file under an `ezdap-adapters/` directory on the
+runtimepath (beside `lsp/` and `plugin/`, not under `lua/` — it is a definition read by
+filename, not a Lua module),
 registered under its filename — `debugpy.lua` becomes the `debugpy` adapter, the name
 `:Debug run` takes. It is configuration only: it says how to reach the debug adapter — the
 program that actually speaks DAP, such as `codelldb` or `gdb --interpreter=dap` — and what
@@ -39,6 +41,12 @@ return {
     },
 }
 ```
+
+The file is loaded the first time something reads its definition, not when ezdap
+starts, so keep top-level work to building the table — anything expensive belongs
+in `setup`, which runs per run. It is read with `loadfile`, so it is never a Lua
+module: nothing can `require` it, and it cannot have siblings it requires — pull
+shared helpers from `ezdap.shared` instead.
 
 ## `ezdap.AdapterDef`
 

@@ -148,13 +148,22 @@ end
 ---@param adapter string
 ---@return string[] problems
 function M.validate(adapter)
-    local def = require("ezdap.adapters")[adapter]
+    local registry = require("ezdap.adapters")
+    local def = registry[adapter]
     if type(def) ~= "table" then
         return { ("not a table, got %s"):format(type(def)) }
     end
 
+    -- Reading a field is what loads the definition's file, and a file that fails
+    -- to load reports itself and leaves the registry — so ask again before
+    -- judging what would otherwise look like an empty definition.
+    local command = def.command
+    if registry[adapter] == nil then
+        return { "failed to load: see the error in `:messages`" }
+    end
+
     local out = {}
-    if def.command == nil and def.host == nil and def.port == nil and def.setup == nil then
+    if command == nil and def.host == nil and def.port == nil and def.setup == nil then
         out[#out + 1] = "no command, host/port or setup: nothing says how to reach the adapter"
     end
 

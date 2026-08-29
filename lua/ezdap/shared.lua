@@ -4,7 +4,7 @@ local str_util = require("ezdap.util.strutil")
 
 local M = {}
 
--- Re-exported so registry adapters (under `lua/ezdap-adapters/`) depend only on
+-- Re-exported so registry adapters (under `ezdap-adapters/`) depend only on
 -- `ezdap.shared`, not on the plugin's internal module layout.
 
 ---Spawn a command in a terminal buffer — see `ezdap.util.term.spawn`.

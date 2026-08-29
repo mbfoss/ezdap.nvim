@@ -137,8 +137,8 @@ Adapters come from the
 [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin: with it
 installed, every definition it ships is registered. 
 Single definitions can also be copied into the config one at a
-time, since each is a self-contained file under `lua/ezdap-adapters/` on the
-runtimepath (for example, under `~/.config/nvim/lua/ezdap-adapters/`)
+time, since each is a self-contained file under an `ezdap-adapters/` directory
+on the runtimepath (for example, `~/.config/nvim/ezdap-adapters/`)
 
 The main entry point is `:Debug run`, which launches (or attaches to) an
 adapter using one of its named modes, filled in with a few `input=value`
@@ -208,9 +208,13 @@ mode:
 
 Registered adapters are exposed as `require("ezdap.adapters")`, a plain
 `name → definition` table assembled at load time from the shipped `remote` entry
-and every `lua/ezdap-adapters/*.lua` file found on the runtimepath, one
-definition per file, keyed by its filename stem. Earlier runtimepath entries take
-precedence, so a file in your config overrides the plugin's.
+and every `ezdap-adapters/*.lua` file found on the runtimepath, one definition
+per file, keyed by its filename stem. The directory sits beside `lsp/` and
+`plugin/`, not under `lua/`: these are definitions read by filename, not Lua
+modules. Earlier runtimepath entries take precedence, so a file in your config
+overrides the plugin's. Only the file names are read up front: each definition's
+file is loaded the first time something reads that definition, so installing many
+adapters costs nothing until one is used.
 
 Each definition declares native process/connection config plus named **modes**
 that declare their inputs. From that one description, ezdap provides completion,
@@ -742,13 +746,13 @@ For a debugger already covered by
 (or copy the single file you need) rather than writing a definition. Writing one
 is for the rest: a new debugger, or a local variant of a shipped definition.
 
-A definition is a single Lua file under `lua/ezdap-adapters/` anywhere on the
-runtimepath, returning a table. It needs a way to reach the adapter (a `command`
+A definition is a single Lua file under an `ezdap-adapters/` directory anywhere
+on the runtimepath, returning a table. It needs a way to reach the adapter (a `command`
 to spawn or a `host`/`port` to connect to) and `modes`, each naming the `inputs`
 it accepts and a `build` that turns them into the native DAP body:
 
 ```lua
--- ~/.config/nvim/lua/ezdap-adapters/myadapter.lua
+-- ~/.config/nvim/ezdap-adapters/myadapter.lua
 ---@type ezdap.AdapterDef
 return {
   command = { "my-dap-adapter", "--stdio" },

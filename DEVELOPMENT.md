@@ -60,7 +60,7 @@ its only path to the DAP layer.
 - [adapters.lua](lua/ezdap/adapters.lua) — the adapter registry: a plain
   `name → ezdap.AdapterDef` table of native DAP process/connection config plus
   optional named `modes`. Only the generic `remote` adapter ships here; every
-  other adapter is user-supplied, one file per adapter under `lua/ezdap-adapters/`
+  other adapter is user-supplied, one file per adapter under `ezdap-adapters/`
   on the runtimepath, globbed and keyed by filename. Users add/override keys
   directly. The DAP core never reads `modes` — only `ezdap.schema` does.
 - [task.lua](lua/ezdap/task.lua) — the task runner backend. Consumes a native
@@ -243,7 +243,7 @@ Which names a mode takes is up to it — there is no portable role
 vocabulary across adapters — but by convention a `launch` mode takes one
 `command` input (a `command`-format string) carrying the whole command line, and
 `build` splits it into that adapter's own program/args fields via
-`shared.split_command`. See each file under `lua/ezdap-adapters/` for worked examples
+`shared.split_command`. See each file under `ezdap-adapters/` for worked examples
 of every shape, including custom-launch command strings (`codelldb`'s `core`), a
 `connect`-only mode (the shipped `remote`), and one input feeding both body and
 connection (`java-debug-server`).

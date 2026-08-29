@@ -292,7 +292,7 @@ function M._start_stdio(config, callbacks, progress)
     -- connection.stdio (which also leaves the run uncleaned — on_fail never fires).
     if vim.fn.executable(cmd[1]) == 0 then
         local msg = ("adapter executable not found: %s "
-            .. "(override its `command` in the adapter file under lua/ezdap-adapters/, "
+            .. "(override its `command` in the adapter file under ezdap-adapters/, "
             .. "or in require('ezdap.adapters'))"):format(cmd[1])
         vim.notify("[dap] " .. msg, vim.log.levels.ERROR)
         progress("[dap] " .. msg)
