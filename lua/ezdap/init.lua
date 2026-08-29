@@ -572,17 +572,6 @@ function M.run_mode(adapter, mode, inputs, presenter)
     return require("ezdap.runner").run_mode(adapter, mode, inputs, presenter)
 end
 
----Run a complete native task — `adapter`/`request`/`parameters` (plus optional
----`name`/`host`/`port`) — in ezdap's own run UI, the same one `run_mode` and
----`run_file` end in. Returns nil when `task` is not a valid task table.
----@param task ezdap.Task
----@return ezdap.runner.Run?
-function M.run_task(task)
-    _require_setup("run_task")
-    M.clean()
-    return require("ezdap.runner").run(task)
-end
-
 ---Forget a run and drop what it left in ezdap's own UI — the finished rows of the
 ---sessions it produced, and, for a run ezdap showed itself, its buffers. The
 ---buffers of a run shown elsewhere belong to its presenter and are left alone.

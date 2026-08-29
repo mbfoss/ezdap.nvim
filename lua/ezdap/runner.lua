@@ -298,36 +298,23 @@ local function _run_spec(spec, presenter)
     return run
 end
 
----Run an already-resolved debug task, in ezdap's own UI. Tasks may run in
----parallel: starting one does not cancel the others. Re-running a task replaces
----its own previous finished run. Returns nil when `task` is not a valid task
----table.
----@param task ezdap.Task
----@return ezdap.runner.Run?
-function M.run(task)
-    if not _is_task(task) then
-        _err("run: expected a task table with an `adapter` field")
-        return
-    end
-
-    task      = vim.deepcopy(task)
-    task.name = task.name or "debug"
-
-    local run = _new_run(task.name)
-    _start(run, task)
-    return run
-end
-
----Re-launch the most recently run task from scratch. Unlike `:Debug restart` (a DAP
----request on the live session) this works after the session has ended and for
----adapters without restart support. Warns when no task has been run yet.
+---Re-launch the most recently run task from scratch, skipping the resolve it
+---already went through. Unlike `:Debug restart` (a DAP request on the live
+---session) this works after the session has ended and for adapters without
+---restart support. Runs alongside the others: it replaces its own previous
+---finished run, not theirs. Warns when no task has been run yet.
 ---@return ezdap.runner.Run?
 function M.rerun()
     if not _last_task then
         _warn("rerun: nothing to re-run yet (run a task first)")
         return
     end
-    return M.run(_last_task)
+    -- Copied because `_start` records it as the task to rerun next time, and the
+    -- one held here must not be the one a run is mutating.
+    local task = vim.deepcopy(_last_task)
+    local run  = _new_run(task.name or "debug")
+    _start(run, task)
+    return run
 end
 
 ---Prompt to pick one of the Lua files directly in `dir`, then run it, using

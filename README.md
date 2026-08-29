@@ -379,15 +379,7 @@ Everything above is available programmatically:
 ```lua
 local ezdap = require("ezdap")
 
--- Run a raw DAP body directly: `parameters` bypasses the mode's `inputs`
--- and is sent to the adapter as-is, so it uses that adapter's own field names
-ezdap.run_task({
-  adapter    = "delve",
-  request    = "launch",
-  parameters = { mode = "test", program = "./..." },
-})
-
--- The run_mode / run_file / new_run_file / rerun entry points, too
+-- The run_mode / run_file / new_run_file / rerun entry points
 ezdap.run_mode("debugpy", "script", { command = "./main.py" })
 ezdap.run_file("debug.lua")
 ezdap.rerun()

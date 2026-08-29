@@ -25,7 +25,7 @@ for the UI and commands — prefer it over importing `dap/client` or
 `dap/breakpoints` directly.
 
 **Public API** — [lua/ezdap/init.lua](lua/ezdap/init.lua)
-`setup`, the run entry points (`run_task`, `run_mode`, `run_file`, `new_run_file`,
+`setup`, the run entry points (`run_mode`, `run_file`, `new_run_file`,
 `rerun`, `remove_run`), the debug/disassembly view accessors, and registration of
 the user command (`config.command`, dispatching to the command surface).
 
