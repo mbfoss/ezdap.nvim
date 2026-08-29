@@ -267,12 +267,12 @@ function M.resolve_task(spec, done)
         return cancel
     end
 
-    local body, connect = {}, {}
-
-    ---Package what `build` assembled in place into the task it describes.
-    local function deliver()
+    ---Package what `build` returned into the task it describes.
+    ---@param body table  the DAP request body
+    ---@param connect table  host/port overriding the AdapterDef's, possibly empty
+    local function deliver(body, connect)
         -- No spec governs `connect` (it's task-level, not a body field), so an unset
-        -- host/port is always optional: a `build` that leaves it empty reports none,
+        -- host/port is always optional: a `build` that returns none reports none,
         -- and the resolved AdapterDef's own host/port apply instead.
         local has_connect = next(connect) ~= nil
         finish({
@@ -286,17 +286,29 @@ function M.resolve_task(spec, done)
         })
     end
 
+    -- A mode with no `build` takes no inputs into the body: the request goes out bare.
     if not mode.build then
-        deliver()
+        deliver({}, {})
         return cancel
     end
 
     local co = coroutine.create(function()
-        local ok, berr = xpcall(mode.build, debug.traceback, body, connect, inputs)
-        if not ok then return finish(nil, berr) end
-        -- `build` gave up — a cancelled picker.
-        if berr then return finish(nil, berr) end
-        deliver()
+        local ok, body, connect = xpcall(mode.build, debug.traceback, inputs)
+        -- `build` raised: `body` holds the traceback the handler produced.
+        if not ok then return finish(nil, body) end
+        -- `build` gave up — a cancelled picker, an unresolvable pid — and named why
+        -- in the slot a successful call returns `connect` in.
+        if body == nil then
+            return finish(nil, connect and tostring(connect) or "build produced no request body")
+        end
+        if type(body) ~= "table" then
+            return finish(nil, ("build returned a %s, expected the request body"):format(type(body)))
+        end
+        if connect ~= nil and type(connect) ~= "table" then
+            return finish(nil, ("build returned a %s as its connection, expected a table")
+                :format(type(connect)))
+        end
+        deliver(body, connect or {})
     end)
     local ok, err = coroutine.resume(co)
     if not ok then finish(nil, tostring(err)) end

@@ -20,9 +20,8 @@ local remote = {
                 },
                 port = { type = "integer", format = "port", description = "DAP server port" },
             },
-            build = function(_, connect, inputs)
-                connect.host = inputs.host
-                connect.port = inputs.port
+            build = function(inputs)
+                return {}, { host = inputs.host, port = inputs.port }
             end,
         },
     },

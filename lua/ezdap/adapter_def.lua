@@ -46,7 +46,7 @@ error("do not require a meta file")
 ---@field description  string
 ---@field request      "launch"|"attach"
 ---@field inputs?      table<string, ezdap.Input>  the mode's declared inputs
----@field build?       fun(params: table, connect: table, inputs: table<string, any>): string?  assemble body + connection in place; return an error string to abort
+---@field build?       fun(inputs: table<string, any>): table?, table|string?  the DAP request body, plus an optional host/port overriding the adapter's; or nil and a message to abort
 
 ---@class ezdap.AdapterDef
 ---@field command?               string|string[]
