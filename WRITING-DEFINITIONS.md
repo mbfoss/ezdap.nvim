@@ -42,8 +42,9 @@ return {
 }
 ```
 
-The file is loaded the first time something reads its definition, not when ezdap
-starts, so keep top-level work to building the table — anything expensive belongs
+Definitions are read the first time something reaches the registry — a run,
+`:Debug adapters`, `:checkhealth` — and never when ezdap starts. They are read
+together, so keep top-level work to building the table: anything expensive belongs
 in `setup`, which runs per run. It is read with `loadfile`, so it is never a Lua
 module: nothing can `require` it, and it cannot have siblings it requires — pull
 shared helpers from `ezdap.shared` instead.

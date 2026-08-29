@@ -216,9 +216,10 @@ and every `ezdap-adapters/*.lua` file found on the runtimepath, one definition
 per file, keyed by its filename stem. The directory sits beside `lsp/` and
 `plugin/`, not under `lua/`: these are definitions read by filename, not Lua
 modules. Earlier runtimepath entries take precedence, so a file in your config
-overrides the plugin’s. Only the file names are read up front: each
-definition’s file is loaded the first time something reads that definition,
-so installing many adapters costs nothing until one is used.
+overrides the plugin’s. The registry is built the first time something
+reaches for it — a run, `:Debug adapters`, `:checkhealth` — and never
+during startup, so installing many adapters costs nothing until you debug
+something.
 
 Each definition declares native process/connection config plus named **modes**
 that declare their inputs. From that one description, ezdap provides

@@ -148,22 +148,13 @@ end
 ---@param adapter string
 ---@return string[] problems
 function M.validate(adapter)
-    local registry = require("ezdap.adapters")
-    local def = registry[adapter]
+    local def = require("ezdap.adapters")[adapter]
     if type(def) ~= "table" then
         return { ("not a table, got %s"):format(type(def)) }
     end
 
-    -- Reading a field is what loads the definition's file, and a file that fails
-    -- to load reports itself and leaves the registry — so ask again before
-    -- judging what would otherwise look like an empty definition.
-    local command = def.command
-    if registry[adapter] == nil then
-        return { "failed to load: see the error in `:messages`" }
-    end
-
     local out = {}
-    if command == nil and def.host == nil and def.port == nil and def.setup == nil then
+    if def.command == nil and def.host == nil and def.port == nil and def.setup == nil then
         out[#out + 1] = "no command, host/port or setup: nothing says how to reach the adapter"
     end
 
@@ -179,10 +170,18 @@ end
 ---resolve cleanly are absent, so an empty table is a clean registry.
 ---@return table<string, string[]>
 function M.validate_all()
+    local registry = require("ezdap.adapters")
     local out = {}
-    for name in pairs(require("ezdap.adapters")) do
+    for name in pairs(registry) do
         local problems = M.validate(name)
         if #problems > 0 then out[name] = problems end
+    end
+
+    -- A definition whose file did not load leaves no entry to walk, so the registry
+    -- keeps those names aside; report them here rather than let them go missing.
+    local meta = getmetatable(registry)
+    for name, err in pairs(meta and meta.errors or {}) do
+        out[name] = { "failed to load: " .. tostring(err) }
     end
     return out
 end

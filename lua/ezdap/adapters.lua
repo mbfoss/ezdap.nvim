@@ -37,61 +37,30 @@ local M = {
     remote = remote,
 }
 
----Load `path` into the stand-in that stands for it, so the entry is an ordinary
----table from then on. Fields already written by hand win over the file's, and a
----file that errors is reported and drops out of the registry.
----@param proxy table
----@param name string
----@param path string
-local function _hydrate(proxy, name, path)
-    setmetatable(proxy, nil)
+-- Definitions whose file failed to load, `name → message`. A name that is simply
+-- absent is the one thing a registry of names cannot report, so `:checkhealth` reads
+-- these; they sit on the metatable to keep `pairs(M)` adapter names only.
+local _errors = {} ---@type table<string, string>
+setmetatable(M, { errors = _errors })
 
-    local def, err = nil, nil
+---Read the definition in `path`.
+---@param path string
+---@return ezdap.AdapterDef? def, string? err
+local function _load(path)
     local chunk, load_err = loadfile(path)
-    if not chunk then
-        err = load_err
-    else
-        local ok, result = pcall(chunk)
-        if not ok then
-            err = result
-        elseif type(result) ~= "table" then
-            err = ("expected a table, got %s"):format(type(result))
-        else
-            def = result
-        end
-    end
+    if not chunk then return nil, load_err end
 
-    if not def then
-        vim.notify(("[ezdap] failed to load adapter '%s' (%s): %s"):format(name, path, err),
-            vim.log.levels.ERROR)
-        if rawequal(rawget(M, name), proxy) then M[name] = nil end
-        return
+    local ok, result = pcall(chunk)
+    if not ok then return nil, result end
+    if type(result) ~= "table" then
+        return nil, ("expected a table, got %s"):format(type(result))
     end
-
-    for k, v in pairs(def) do
-        if rawget(proxy, k) == nil then rawset(proxy, k, v) end
-    end
+    return result
 end
 
----A stand-in for the definition in `path`: an empty table that loads the file the
----first time any field is read. Reading a definition is what a run, the docs and
----`:checkhealth` all do, so nothing has to know the entry started out empty.
----@param name string
----@param path string
----@return ezdap.AdapterDef
-local function _lazy(name, path)
-    return setmetatable({}, {
-        __index = function(proxy, key)
-            _hydrate(proxy, name, path)
-            return rawget(proxy, key)
-        end,
-    })
-end
-
--- Find each `ezdap-adapters/*.lua` on the runtimepath, without loading any of them:
--- the glob is one pass over the runtimepath, while the files themselves cost whatever
--- their definitions do. The directory holds definitions only, never Lua modules, so
--- every file in it is an adapter and each is read from the path found here.
+-- Find each `ezdap-adapters/*.lua` on the runtimepath and load it. Nothing requires
+-- this module at startup — a run, the docs and `:checkhealth` are what reach it — so
+-- the registry is built in one pass here rather than per entry on first read.
 local _seen = {} ---@type table<string, boolean>
 for _, path in ipairs(vim.api.nvim_get_runtime_file("ezdap-adapters/*.lua", true)) do
     local name = vim.fn.fnamemodify(path, ":t:r")
@@ -99,7 +68,18 @@ for _, path in ipairs(vim.api.nvim_get_runtime_file("ezdap-adapters/*.lua", true
     -- definition in your config overrides the plugin's.
     if not _seen[name] then
         _seen[name] = true
-        M[name] = _lazy(name, path)
+        local def, err = _load(path)
+        if def then
+            M[name] = def
+        else
+            -- The name is spoken for either way: a broken override shadows what it
+            -- meant to replace, rather than silently running a different definition
+            -- than the one being edited.
+            M[name] = nil
+            _errors[name] = err
+            vim.notify(("[ezdap] failed to load adapter '%s' (%s): %s"):format(name, path, err),
+                vim.log.levels.ERROR)
+        end
     end
 end
 
