@@ -134,7 +134,7 @@ Each `ezdap.Mode`:
 | ------------- | ------------------------------------------------------------------------------- |
 | `request`     | `"launch"` or `"attach"`                                                        |
 | `inputs`      | what the mode accepts — `name -> ezdap.Input`; see below             |
-| `build`       | `fun(params, connect, inputs)` — assembles the native request body, and any task-level TCP endpoint, in place |
+| `build`       | `fun(inputs): table?, table\|string?` — returns the native request body, plus any task-level TCP endpoint; or `nil, err` to abort |
 
 Each `ezdap.Input` declares one input up front:
 
@@ -194,18 +194,17 @@ declared inputs under `parameters`, each seeded by its row and commented with it
 `description` — so it and `:Debug run` cannot drift, and there is no second field
 list to keep in step.
 
-- **`build(params, connect, inputs)`** assembles everything a run needs, in
-  place. `params` and `connect` both start empty; assign into them from `inputs`,
-  which arrive already read into each input's declared `type` whichever form the
-  caller wrote them in. Identity fields the adapter pins (`type`/`name`) and fixed defaults go
-  here too, as plain literals. An unset input is nil, and Lua drops nil-valued
-  keys, so `params.cwd = inputs.cwd` omits `cwd` when it wasn't supplied — assign
-  unconditionally and optional fields take care of themselves. Guard only when a
-  field is *derived* from an input (`if inputs.program then
-  params.targetCreateCommands = { "target create " .. inputs.program } end`), since
-  indexing nil would throw. Leave `connect` untouched unless the adapter takes a
-  task-level TCP endpoint — an empty `connect` leaves the adapter def's own
-  host/port in force.
+- **`build(inputs)`** returns everything a run needs: the request body, and
+  optionally a second table naming a task-level TCP endpoint. `inputs` arrives
+  already read into each input's declared `type` whichever form the caller wrote
+  them in. Identity fields the adapter pins (`type`/`name`) and fixed defaults go
+  in the body too, as plain literals. An unset input is nil, and Lua drops
+  nil-valued keys, so `cwd = inputs.cwd` omits `cwd` when it wasn't supplied —
+  write the field unconditionally and optional fields take care of themselves.
+  Guard only when a field is *derived* from an input (`targetCreateCommands =
+  inputs.program and { "target create " .. inputs.program }`), since indexing nil
+  would throw. Return no second value unless the adapter takes a task-level TCP
+  endpoint — without one the adapter def's own host/port stay in force.
 
   Omitting the field is only the *default* answer to an unset input; `build` is
   where a mode decides otherwise, because it alone knows what the request
@@ -213,10 +212,10 @@ list to keep in step.
   resolves an unset `pid` by asking the user to pick one:
 
   ```lua
-  build = function(params, _, inputs)
+  build = function(inputs)
       local pid, err = shared.resolve_pid(inputs.pid)
-      if not pid then return err end   -- cancelled: abort the run
-      params.processId = pid
+      if not pid then return nil, err end   -- cancelled: abort the run
+      return { processId = pid }
   end,
   ```
 
@@ -225,7 +224,7 @@ list to keep in step.
   coroutine and reports through a `done(task, err)` callback rather than a
   return: the pid arrives from a `vim.ui.select` callback, long after a return value
   would have been read. `done` fires synchronously for every `build` that asks
-  nothing. Returning a string from `build` aborts with that error — so always resume
+  nothing. Returning `nil` and a message aborts with that error — so always resume
   one way or the other, or the caller waiting on you never hears back.
 
 An input's `description` is what explains the scaffolded file, since it becomes that

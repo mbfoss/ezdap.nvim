@@ -853,9 +853,8 @@ the `inputs` it accepts and a `build` that turns them into the native DAP body:
           inputs      = {
             program = { required = true, format = "file", description = "executable to debug" },
           },
-          build = function(params, _, inputs)
-            params.program     = inputs.program
-            params.stopOnEntry = true
+          build = function(inputs)
+            return { program = inputs.program, stopOnEntry = true }
           end,
         },
       },

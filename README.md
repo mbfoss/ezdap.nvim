@@ -763,9 +763,8 @@ return {
       inputs      = {
         program = { required = true, format = "file", description = "executable to debug" },
       },
-      build = function(params, _, inputs)
-        params.program     = inputs.program
-        params.stopOnEntry = true
+      build = function(inputs)
+        return { program = inputs.program, stopOnEntry = true }
       end,
     },
   },

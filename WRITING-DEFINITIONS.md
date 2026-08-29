@@ -34,8 +34,9 @@ return {
             inputs      = {
                 command = { type = "string", format = "command", required = true, description = "command line to debug" },
             },
-            build       = function(params, _, inputs) -- inputs -> DAP body
-                params.program, params.args = require("ezdap.shared").split_command(inputs.command)
+            build       = function(inputs) -- inputs -> DAP body
+                local program, args = require("ezdap.shared").split_command(inputs.command)
+                return { program = program, args = args }
             end,
         },
     },
@@ -74,7 +75,7 @@ An `ezdap.Mode` is one runnable configuration:
 | `description` | `string` | A line shown in pickers and `:Debug new_run_file` output. |
 | `request` | `"launch"` \| `"attach"` | Which DAP request the mode issues. |
 | `inputs` | `table<string, ezdap.Input>` | What the user is asked for, keyed by the name used as `key=value` on the command line. |
-| `build` | `fun(params, connect, inputs): string?` | Turns answered inputs into the DAP request body. Mutates `params` (the body) and `connect` (`host`/`port`, overriding the definition's own) in place. Return a string to abort with that error. It runs in a coroutine, so it may yield — a `vim.ui.select` picker inside `build` is fine. |
+| `build` | `fun(inputs): table?, table\|string?` | Turns answered inputs into the DAP request body and returns it. A second return value is a `host`/`port` table overriding the definition's own. Return `nil, "message"` to abort with that error. It runs in a coroutine, so it may yield — a `vim.ui.select` picker inside `build` is fine. |
 
 An `ezdap.Input` describes one value:
 
@@ -107,11 +108,15 @@ return {
                 env           = { type = "map",                         description = "environment variables" },
                 stop_on_entry = { type = "boolean",                     description = "break at program entry" },
             },
-            build = function(params, connect, inputs)
-                params.program, params.args = require("ezdap.shared").split_command(inputs.command)
-                params.cwd         = inputs.cwd
-                params.env         = inputs.env
-                params.stopOnEntry = inputs.stop_on_entry
+            build = function(inputs)
+                local program, args = require("ezdap.shared").split_command(inputs.command)
+                return {
+                    program     = program,
+                    args        = args,
+                    cwd         = inputs.cwd,
+                    env         = inputs.env,
+                    stopOnEntry = inputs.stop_on_entry,
+                }
             end,
         },
     },
@@ -149,26 +154,27 @@ How the pieces fit:
   boolean input completes as `true`/`false` on its own.
 - **`required`** — an unset required input is a resolve error naming the input. Leave it
   off and an unset input simply arrives as `nil`; since Lua drops nil-valued keys,
-  `params.cwd = inputs.cwd` omits `cwd` entirely. Assign unconditionally and optional
+  `cwd = inputs.cwd` omits `cwd` entirely. Write the field unconditionally and optional
   fields take care of themselves.
-- **`build(params, connect, inputs)`** — fills both tables in place. `params` is the
-  native DAP body (write the adapter's own key names, plus any identity fields it pins, as
-  literals). `connect` is for adapters whose *connection* is what an input configures —
-  set `connect.host`/`connect.port` and leave it alone otherwise, so the definition's own
-  values stay in force. `inputs` arrives already read into each declared `type`, whichever
-  form the caller authored it in. Return nothing on success, or an **error string** to
-  abort.
+- **`build(inputs)`** — returns the native DAP body (write the adapter's own key names,
+  plus any identity fields it pins, as literals). `inputs` arrives already read into each
+  declared `type`, whichever form the caller authored it in. A **second** return value is
+  for adapters whose *connection* is what an input configures: return a `host`/`port`
+  table, or nothing at all, and the definition's own values stay in force.
+- **Aborting** — return `nil` and a message. The slot that carries the connection on a
+  successful call carries the reason on an unsuccessful one, so an abort reads as the
+  `nil, err` pair any Lua function returns.
 - **Asking the user** — `build` runs on a coroutine, so it may yield. That is how an
   attach mode with no `pid` opens a process picker rather than sending a meaningless
-  body: `local pid, err = shared.resolve_pid(inputs.pid); if not pid then return err end`.
-  It must always resume — return a value or an error string — so the caller waiting on it
+  body: `local pid, err = shared.resolve_pid(inputs.pid); if not pid then return nil, err end`.
+  It must always resume — return a body or an abort — so the caller waiting on it
   hears back.
 
 Because `:Debug run`, `:Debug new_run_file` and mode-based run files all resolve through
 the same `inputs` → `build` path, a mode is described in exactly one place and the three
 cannot drift apart. The shipped `remote` adapter in [adapters.lua](lua/ezdap/adapters.lua)
-is a compact reference for a mode that configures `connect` (a task-level `host`/`port`)
-instead of `params`; for a spawn-then-connect definition that starts a server and points
+is a compact reference for a mode that returns a connection (a task-level `host`/`port`)
+rather than a body; for a spawn-then-connect definition that starts a server and points
 the connection at it, see the `setup`/`teardown` example below.
 
 ## Setup and teardown
