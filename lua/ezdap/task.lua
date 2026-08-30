@@ -58,7 +58,7 @@ M.start            = function(task, callbacks)
             and ("DAP adapter " .. tostring(task.adapter) .. " failed to load: " .. load_err)
             or ("unknown DAP adapter: " .. tostring(task.adapter)))
         on_done(false)
-        return function() end
+        return function() end, {}
     end
 
     local request = task.request or "launch"

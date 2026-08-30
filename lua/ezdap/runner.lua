@@ -147,7 +147,7 @@ local function _new_run(name, presenter)
     _clear_finished(name)
 
     _counter = _counter + 1
-    ---@type ezdap.runner.Run
+    -- `presenter` is filled in just below: it needs the run to exist first.
     local run = {
         id       = name .. "-" .. _counter,
         name     = name,
@@ -155,7 +155,7 @@ local function _new_run(name, presenter)
         sessions = {},
         state    = "running",
         owned    = presenter == nil,
-    }
+    } --[[@as ezdap.runner.Run]]
     -- Built from the run so it has the identity to show it by, and built before
     -- anything can report into it: making the run's log is the presenter's own
     -- first act.

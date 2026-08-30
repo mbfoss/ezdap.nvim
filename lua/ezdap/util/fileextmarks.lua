@@ -392,10 +392,14 @@ end
 --- describes what is on disk, so this gates every write from a buffer back into
 --- the cache: an unsaved edit, and a buffer with no file behind it, are not it.
 ---@param bufnr integer
----@param file string        -- normalized
 ---@return boolean
-local function _buf_matches_file(bufnr, file)
-    return not vim.bo[bufnr].modified and vim.fn.filereadable(file) == 1
+local function _buf_matches_file(bufnr)
+    if vim.bo[bufnr].modified then return false end
+
+    -- The second call is reached only by a one-line buffer, so the common case is
+    -- a single C call and no allocation.
+    if vim.api.nvim_buf_line_count(bufnr) > 1 then return true end
+    return vim.api.nvim_buf_get_lines(bufnr, 0, 1, true)[1] ~= ""
 end
 
 --- Replaces the namespace with this group's stored marks for `bufnr`'s file. The
@@ -419,7 +423,7 @@ local function _apply_buffer_extmarks(bufnr, group)
     -- The clamp is evidence about the file only when the buffer holds what the
     -- file holds: a `BufNewFile` buffer is empty for want of a file, not for want
     -- of lines, and recording that would flatten every stored line to 1.
-    local store = _buf_matches_file(bufnr, file)
+    local store = _buf_matches_file(bufnr)
 
     for _, mark in pairs(file_data) do
         _set_extmark(bufnr, mark, store)
@@ -436,7 +440,7 @@ local function _sync_file_extmarks(bufnr)
 
     -- Both callers reach here with the buffer about to be written or dropped, and
     -- neither is a reason to record positions the file does not have.
-    if not _buf_matches_file(bufnr, file) then return end
+    if not _buf_matches_file(bufnr) then return end
 
     for _, group_data in pairs(_defined_groups) do
         local file_table = group_data.byfile[file]
@@ -459,7 +463,12 @@ local function _register_autocmds()
     if _autocmds_registered then return end
     _autocmds_registered = true
 
-    local augroup = vim.api.nvim_create_augroup(_prefixed("fileextmarks"), { clear = true })
+    local name = _prefixed("fileextmarks")
+
+    assert(not pcall(vim.api.nvim_get_autocmds, { group = name }),
+        ("augroup %q already exists -- another copy of this module owns prefix %q"):format(name, _require_prefix()))
+
+    local augroup = vim.api.nvim_create_augroup(name, { clear = true })
     -- `BufNewFile` alongside `BufReadPost`: a path with no file behind it fires
     -- only the former, and marks on a file that is not there yet are a case this
     -- module supports -- see `_normalize_file`.
@@ -490,9 +499,13 @@ local function _register_autocmds()
         group = augroup,
         callback = function(ev) _sync_file_extmarks(ev.buf) end,
     })
-    -- `BufWipeout`, not `BufUnload`: the number is freed here, and an unloaded
-    -- buffer keeps its name and may well be loaded again.
-    vim.api.nvim_create_autocmd("BufWipeout", {
+    -- `BufUnload` as well as `BufWipeout`: `:bdelete` unloads without wiping and
+    -- leaves the buffer valid, so waiting for the wipe leaks an entry per buffer
+    -- for the life of the session -- and `_lookup_loaded_bufnr` caches every
+    -- loaded buffer it walks past, tracked or not. An entry for an unloaded
+    -- buffer is dead weight anyway: only loaded buffers are ever scanned, and a
+    -- buffer that comes back pays one `resolve()` to re-enter the cache.
+    vim.api.nvim_create_autocmd({ "BufUnload", "BufWipeout" }, {
         group = augroup,
         callback = function(ev) _bufname_cache[ev.buf] = nil end,
     })
@@ -547,9 +560,13 @@ local function _set_file_extmark(id, file, lnum, col, group_data, opts, user_dat
     group_data.byfile[file][id] = mark
 
     if bufnr >= 0 then
-        -- Stored: the caller is placing the mark now, so where it actually landed
-        -- is the truth about it, short buffer or not.
-        _set_extmark(bufnr, mark, true)
+        -- Gated like every other write into the cached position: the clamp inside
+        -- `_set_extmark` is measured against the *buffer*, and a buffer with
+        -- unsaved deletes is shorter than its file. Storing that would pin the
+        -- mark to the short buffer's last line for good -- the edit can be thrown
+        -- away, the cached line cannot. Where the buffer is the file, the clamp is
+        -- evidence and worth keeping; where it is not, the caller's line stands.
+        _set_extmark(bufnr, mark, _buf_matches_file(bufnr))
         _attach_buffer(bufnr, file)
     end
 end
@@ -826,9 +843,13 @@ function M.define_group(group)
     assert(type(group) == "string", "group (string) required")
     assert(not _defined_groups[group], "group already defined")
 
+    local ns_name = _prefixed(group)
+    assert(not vim.api.nvim_get_namespaces()[ns_name],
+        ("namespace %q already exists -- another copy of this module owns prefix %q"):format(ns_name, _require_prefix()))
+
     ---@type ezdap.util.fileextmarks.GroupData
     local group_data = {
-        ns = vim.api.nvim_create_namespace(_prefixed(group)),
+        ns = vim.api.nvim_create_namespace(ns_name),
         byfile = {},
         id_to_file = {},
     }

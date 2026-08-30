@@ -101,6 +101,10 @@ end
 ---@param out string[]  appended to
 local function _check_mode(adapter, mode_name, out)
     local mode = M.mode(adapter, mode_name)
+    if not mode then
+        out[#out + 1] = mode_name .. ": not declared"
+        return
+    end
     local function problem(fmt, ...) out[#out + 1] = mode_name .. ": " .. fmt:format(...) end
 
     if mode.request ~= "launch" and mode.request ~= "attach" then
@@ -279,7 +283,7 @@ function M.resolve_task(spec, done)
     local co = coroutine.create(function()
         local ok, body, connect = xpcall(mode.build, debug.traceback, inputs)
         -- `build` raised: `body` holds the traceback the handler produced.
-        if not ok then return finish(nil, body) end
+        if not ok then return finish(nil, tostring(body)) end
         -- `build` gave up — a cancelled picker, an unresolvable pid — and named why
         -- in the slot a successful call returns `connect` in.
         if body == nil then
@@ -292,7 +296,7 @@ function M.resolve_task(spec, done)
             return finish(nil, ("build returned a %s as its connection, expected a table")
                 :format(type(connect)))
         end
-        deliver(body, connect or {})
+        deliver(body --[[@as table]], connect or {})
     end)
     local ok, err = coroutine.resume(co)
     if not ok then finish(nil, tostring(err)) end
