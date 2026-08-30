@@ -17,6 +17,12 @@ local _loaded = false
 ---@type fun()
 local _ensure_loaded
 
+-- The defaults, snapshotted by `setup()` before the user's `opts` are merged
+-- over them. Held here rather than on the config module, whose table *is* the
+-- live config: a key there would turn up in the merge and in every walk of it.
+---@type ezdap.Config?
+local _default_config
+
 ---Guard a public API entry point: raise a clear error — pointed at the caller —
 ---when `setup()` has not been called yet. Otherwise this *is* the demand that
 ---brings the plugin up, so every entry point below can assume a loaded plugin.
@@ -756,6 +762,16 @@ function M.is_setup()
     return _setup_done
 end
 
+---The configuration as it shipped, before `setup()` merged the user's options
+---over it. A fresh deep copy every call, so the caller may keep or mutate it;
+---`:checkhealth ezdap` diffs the live config against it.
+---@return ezdap.Config
+function M.get_default_config()
+    -- Before setup() the config module has not been written to yet, so it is
+    -- itself the defaults.
+    return vim.deepcopy(_default_config or require("ezdap.config"))
+end
+
 ---Initialise the plugin. Nothing exists before this runs, so options deciding
 ---what gets read off disk (`root_markers`, `data_filename`) or what the command
 ---is called (`command`) are in place by the time they are first used.
@@ -788,6 +804,9 @@ function M.setup(opts)
     end
 
     local config = require("ezdap.config")
+    -- Snapshot first: the merge below writes into the config module in place,
+    -- and the defaults are unrecoverable afterwards.
+    _default_config = vim.deepcopy(config)
     local tmp = vim.tbl_deep_extend("force", config or {}, opts or {})
     for k, v in pairs(tmp) do
         config[k] = v

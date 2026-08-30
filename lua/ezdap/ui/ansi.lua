@@ -21,7 +21,8 @@ local M = {}
 ---@field e  integer  end byte column (0-based, exclusive)
 ---@field hl string   highlight group name
 
--- Standard xterm palette for the first 16 colours.
+-- Fallback for the first 16 colours, used only where the colorscheme has not
+-- set the matching `g:terminal_color_N`.
 local _palette16 = {
     [0] = "#000000", [1] = "#cd0000", [2] = "#00cd00", [3] = "#cdcd00",
     [4] = "#0000ee", [5] = "#cd00cd", [6] = "#00cdcd", [7] = "#e5e5e5",
@@ -29,7 +30,8 @@ local _palette16 = {
     [12] = "#5c5cff", [13] = "#ff00ff", [14] = "#00ffff", [15] = "#ffffff",
 }
 
-local _hl_cache = {}
+local _hl_cache = {}   -- state key -> highlight group name
+local _hl_defs  = {}   -- highlight group name -> the state it renders
 local _next_id  = 0
 
 ---@return ezdap.ui.ansi.State
@@ -47,7 +49,12 @@ end
 ---@param n integer
 ---@return string
 local function xterm256(n)
-    if n < 16 then return _palette16[n] end
+    if n < 16 then
+        -- Prefer the colorscheme's terminal palette so ANSI output matches the
+        -- rest of the UI; `g:terminal_color_N` is what :terminal itself uses.
+        local c = vim.g["terminal_color_" .. n]
+        return type(c) == "string" and c or _palette16[n]
+    end
     if n >= 232 then
         local v = 8 + (n - 232) * 10
         return string.format("#%02x%02x%02x", v, v, v)
@@ -122,6 +129,21 @@ local function is_default(state)
         or state.italic or state.underline or state.reverse)
 end
 
+---(Re)define `name` from `state`, resolving palette indices against the current
+---colorscheme.
+---@param name string
+---@param state ezdap.ui.ansi.State
+local function define(name, state)
+    local opts = {}
+    if state.fg ~= nil then opts.fg = to_hex(state.fg) end
+    if state.bg ~= nil then opts.bg = to_hex(state.bg) end
+    if state.bold then opts.bold = true end
+    if state.italic then opts.italic = true end
+    if state.underline then opts.underline = true end
+    if state.reverse then opts.reverse = true end
+    vim.api.nvim_set_hl(0, name, opts)
+end
+
 ---Highlight group for the current state, defining it on first use. Returns nil
 ---for the default (unstyled) state, so plain text gets no extmark.
 ---@param state ezdap.ui.ansi.State
@@ -142,18 +164,21 @@ function M.hl_for(state)
     name = "EzdapAnsi_" .. _next_id
     _next_id = _next_id + 1
 
-    local opts = {}
-    if state.fg ~= nil then opts.fg = to_hex(state.fg) end
-    if state.bg ~= nil then opts.bg = to_hex(state.bg) end
-    if state.bold then opts.bold = true end
-    if state.italic then opts.italic = true end
-    if state.underline then opts.underline = true end
-    if state.reverse then opts.reverse = true end
-    vim.api.nvim_set_hl(0, name, opts)
-
     _hl_cache[key] = name
+    _hl_defs[name] = vim.deepcopy(state)
+    define(name, state)
     return name
 end
+
+-- Palette indices resolve against the active colorscheme, so every group has to
+-- be re-resolved when that changes; the names stay put, keeping live extmarks
+-- valid.
+vim.api.nvim_create_autocmd("ColorScheme", {
+    group = vim.api.nvim_create_augroup("EzdapAnsi", { clear = true }),
+    callback = function()
+        for name, state in pairs(_hl_defs) do define(name, state) end
+    end,
+})
 
 ---Parse `text` (a single line, no newlines) into clean text and highlight
 ---spans, threading `state` through so styles carry across calls.
