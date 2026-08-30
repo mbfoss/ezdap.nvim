@@ -1,22 +1,12 @@
 ---@brief Health check for ezdap.nvim — run with `:checkhealth ezdap`.
 ---
 ---Reports the Neovim version, whether `setup()` has run, the resolved project /
----store state, and which built-in DAP adapters have their dependencies in place
----(process-based adapters need their executable on PATH; connection-based
----adapters have nothing to verify locally).
+---store state, and which adapters are registered — by name only, since loading a
+---definition to check it is `:Debug adapter_info <adapter>`.
 
 local M = {}
 
 local health = vim.health
-
----Extract the executable name from an adapter's `command` field.
----@param command string|string[]|nil
----@return string? exe
-local function _exe_of(command)
-    if type(command) == "table" then return command[1] end
-    if type(command) == "string" then return command end
-    return nil
-end
 
 ---Check the Neovim version against the plugin's minimum (see `ezdap.setup`).
 local function _check_requirements()
@@ -59,89 +49,22 @@ local function _check_setup()
     end
 end
 
----Check a single adapter's local dependencies.
----@param name string
----@param cfg  ezdap.AdapterDef
-local function _check_adapter(name, cfg)
-    local exe = _exe_of(cfg.command)
-
-    if not exe then
-        if cfg.host or cfg.port ~= nil then
-            health.info(("%s: connection-based (host/port), nothing to verify"):format(name))
-        elseif cfg.setup then
-            health.info(("%s: provisioned on use, nothing to verify"):format(name))
-        else
-            health.info(("%s: no command configured"):format(name))
-        end
-        return
-    end
-
-    local resolved = vim.fn.exepath(exe)
-    if resolved == "" then
-        health.warn(("%s: '%s' not found on PATH"):format(name, exe), {
-            "Install it to use the " .. name .. " adapter",
-        })
-        return
-    end
-
-    -- Table commands may point at an adapter file (e.g. a mason-managed .js);
-    -- the executable existing does not mean the adapter itself is installed.
-    if type(cfg.command) == "table" then
-        for i = 2, #cfg.command do
-            local arg = cfg.command[i]
-            if type(arg) == "string" and arg:sub(1, 1) == "/" and arg:match("%.js$")
-                and vim.fn.filereadable(arg) == 0 then
-                health.warn(("%s: '%s' found but adapter file is missing: %s")
-                    :format(name, exe, arg), {
-                        "Install the " .. name .. " adapter (e.g. via mason)",
-                    })
-                return
-            end
-        end
-    end
-
-    health.ok(("%s: '%s' found (%s)"):format(name, exe, resolved))
-end
-
----Check each registered adapter for its local dependencies.
+---List the registered adapters. Their names are read from the registry's
+---filenames, so nothing here loads a definition; checking one is
+---`:Debug adapter_info <adapter>`, which reports its modes, inputs and tooling.
 local function _check_adapters()
     health.start("ezdap: adapters")
 
-    local adapters = require("ezdap.adapters")
-    local names    = vim.tbl_keys(adapters)
-    table.sort(names)
-
-    for _, name in ipairs(names) do
-        local cfg = adapters[name]
-        if type(cfg) == "table" then
-            _check_adapter(name, cfg)
-        end
-    end
-end
-
----Check every registered definition for declaration mistakes — the ones that
----otherwise surface only when someone runs that mode.
-local function _check_definitions()
-    health.start("ezdap: adapter definitions")
-
-    local problems = require("ezdap.schema").validate_all()
-    local names = vim.tbl_keys(problems)
-    table.sort(names)
-
-    if #names == 0 then
-        health.ok("every registered definition resolves")
-        return
-    end
-    for _, name in ipairs(names) do
-        health.warn(name .. ":\n  " .. table.concat(problems[name], "\n  "))
-    end
+    local names = require("ezdap.schema").adapter_names()
+    health.ok(("%d registered: %s"):format(#names, table.concat(names, ", ")))
+    health.info((":%s adapter_info <adapter> loads one and reports its modes, inputs and tooling")
+        :format(require("ezdap.config").command))
 end
 
 function M.check()
     _check_requirements()
     _check_setup()
     _check_adapters()
-    _check_definitions()
 end
 
 return M

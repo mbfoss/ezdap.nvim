@@ -1,11 +1,11 @@
----@brief The adapter reference behind `:Debug adapters`.
+---@brief The adapter reference behind `:Debug adapter_info`.
 ---
 ---An adapter definition documents itself: every mode carries a `description`
 ---and a `request`, every input a type, a format, its `choices` and a line on
 ---what it means (see `ezdap.adapters`' `ezdap.Input`). This module is the
----reader for that — it renders the registered definitions as markdown and shows
----it in a float, so the same declaration that `:Debug run` validates against and
----`new_run_file` seeds from is also what the docs say.
+---reader for that — it loads one adapter's definition, checks it, and renders
+---what it declares as markdown in a float, so the same declaration that
+---`:Debug run` validates against and `new_run_file` seeds from is what is shown.
 ---
 ---Nothing here is written by hand, so an adapter you wrote yourself, or a
 ---definition you edited in your own config, documents itself exactly as the
@@ -85,8 +85,8 @@ local function _description_of(input)
     return text
 end
 
----One mode's block: its heading, then a row per declared input. Required inputs
----sort first, since those are the ones a run fails without.
+---One mode's subsection: its heading, then a row per declared input. Required
+---inputs sort first, since those are the ones a run fails without.
 ---@param adapter string
 ---@param mode_name string
 ---@param out string[]  appended to
@@ -94,7 +94,7 @@ local function _mode_block(adapter, mode_name, out)
     local mode = schema.mode(adapter, mode_name)
     if not mode then return end
 
-    out[#out + 1] = ("## %s (%s)"):format(mode_name, mode.request or "?")
+    out[#out + 1] = ("### %s (%s)"):format(mode_name, mode.request or "?")
     if mode.description and mode.description ~= "" then
         out[#out + 1] = ""
         out[#out + 1] = _cell(mode.description)
@@ -127,43 +127,85 @@ local function _mode_block(adapter, mode_name, out)
     _table({ "input", "type", "description" }, rows, out)
 end
 
----Every registered adapter, one row each: its name and the modes it declares.
----What `:Debug adapters` shows when it is not asked about one in particular.
+---Every registered adapter name. What `:Debug adapter_info` shows when it is not
+---asked about one in particular: names only, so listing them loads no definition.
 ---@return string[]
 function M.overview()
-    local registry = require("ezdap.adapters")
-    local names = vim.tbl_keys(registry)
-    table.sort(names)
+    local names = schema.adapter_names()
 
     local out = { ("## adapters (%d)"):format(#names), "" }
-    local rows = {}
-    for i, name in ipairs(names) do
-        local modes = schema.mode_names(name)
-        rows[i] = {
-            name,
-            #modes > 0 and _cell(table.concat(modes, ", ")) or "(none)",
-        }
-    end
-    _table({ "adapter", "modes" }, rows, out)
+    for _, name in ipairs(names) do out[#out + 1] = "- " .. name end
     vim.list_extend(out, {
         "",
-        (":%s adapters <adapter> for its modes and their inputs")
+        (":%s adapter_info <adapter> loads one and reports its modes, inputs and tooling")
         :format(require("ezdap.config").command),
     })
     return out
 end
 
----One adapter's reference: a block per mode. `mode_name` narrows it to that
----one mode. Returns nil plus a message when the adapter or mode is not
+---Extract the executable name from an adapter's `command` field.
+---@param command string|string[]|nil
+---@return string? exe
+local function _exe_of(command)
+    if type(command) == "table" then return command[1] end
+    if type(command) == "string" then return command end
+    return nil
+end
+
+---Where the executable the definition names resolved to, or why it did not.
+---An adapter reached over a connection, or provisioned by its `setup`, has
+---nothing to verify locally and so says nothing at all.
+---@param def ezdap.AdapterDef
+---@return string? message
+local function _tooling(def)
+    local exe = _exe_of(def.command)
+    if not exe then return nil end
+
+    local resolved = vim.fn.exepath(exe)
+    if resolved == "" then
+        return ("'%s' not found on PATH"):format(exe)
+    end
+
+    -- A table command may point at an adapter file (e.g. a mason-managed .js);
+    -- the executable existing does not mean the adapter itself is installed.
+    if type(def.command) == "table" then
+        for i = 2, #def.command do
+            local arg = def.command[i]
+            if type(arg) == "string" and arg:sub(1, 1) == "/" and arg:match("%.js$")
+                and vim.fn.filereadable(arg) == 0 then
+                return ("'%s' found but the adapter file is missing: %s"):format(exe, arg)
+            end
+        end
+    end
+    return ("'%s' found (%s)"):format(exe, resolved)
+end
+
+---What checking the adapter turned up, opening the page untitled: where its
+---executable resolved to, then a line per declaration problem. A definition that
+---resolves and names no executable says nothing — that the rest of the page
+---renders at all is what "it resolves" looks like.
+---@param adapter string
+---@param out string[]  appended to
+local function _report_block(adapter, out)
+    local def = require("ezdap.adapters")[adapter]
+    if type(def) == "table" then out[#out + 1] = _tooling(def) end
+    for _, problem in ipairs(schema.validate(adapter)) do
+        out[#out + 1] = problem
+    end
+end
+
+---One adapter's reference: what checking its definition turned up, then a
+---`modes` section with a subsection per mode. `mode_name` narrows it to that one. Loading the definition is
+---what this does; returns nil plus a message when the adapter or mode is not
 ---registered.
 ---@param adapter string
 ---@param mode_name? string
 ---@return string[]? lines, string? err
 function M.render(adapter, mode_name)
     local def = require("ezdap.adapters")[adapter]
-    if not def then
+    if not def and not vim.tbl_contains(schema.adapter_names(), adapter) then
         return nil, ("unknown adapter: %s (available: %s)")
-            :format(adapter, table.concat(schema.adapters_with_modes(), ", "))
+            :format(adapter, table.concat(schema.adapter_names(), ", "))
     end
 
     local names = schema.mode_names(adapter)
@@ -175,20 +217,31 @@ function M.render(adapter, mode_name)
         names = { mode_name }
     end
 
-    -- The float's title already names the adapter, so the body is modes only.
-    if #names == 0 then return { "declares no modes" } end
-
+    -- A definition that did not load is reported by the block alone: there are no
+    -- modes to render behind it.
     local out = {}
-    for i, name in ipairs(names) do
-        if i > 1 then out[#out + 1] = "" end
+    _report_block(adapter, out)
+    if not def then return out end
+
+    -- Nothing to report is the common case, and then the page opens on the modes.
+    if #out > 0 then out[#out + 1] = "" end
+    out[#out + 1] = "## modes"
+    if #names == 0 then
+        out[#out + 1] = ""
+        out[#out + 1] = "(none declared)"
+        return out
+    end
+    for _, name in ipairs(names) do
+        out[#out + 1] = ""
         _mode_block(adapter, name, out)
     end
     return out
 end
 
----Show the adapter reference in a float: every adapter when `adapter` is nil,
----otherwise that adapter's modes and their inputs, narrowed to `mode_name` when
----given. The entry point behind `:Debug adapters`.
+---Show the adapter reference in a float: every registered name when `adapter` is
+---nil, otherwise that adapter loaded and checked — what the check turned up, then
+---its modes and their inputs, narrowed to `mode_name` when given. Behind
+---`:Debug adapter_info`.
 ---@param adapter? string
 ---@param mode_name? string
 function M.show(adapter, mode_name)
@@ -199,7 +252,7 @@ function M.show(adapter, mode_name)
         local err
         lines, err = M.render(adapter, mode_name)
         if not lines then
-            vim.notify("[ezdap] adapters: " .. tostring(err), vim.log.levels.ERROR)
+            vim.notify("[ezdap] adapter_info: " .. tostring(err), vim.log.levels.ERROR)
             return
         end
         title = mode_name and (adapter .. " " .. mode_name) or adapter

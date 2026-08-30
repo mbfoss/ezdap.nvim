@@ -197,7 +197,7 @@ local function _bp_complete(rest)
 end
 
 local _debug_subs = {
-    "run", "run_file", "new_run_file", "rerun", "adapters",
+    "run", "run_file", "new_run_file", "rerun", "adapter_info",
     "breakpoint",
     "view", "output", "continue", "continue_all",
     "step_over", "next", "step_in", "step_out", "step_back",
@@ -245,8 +245,8 @@ local function _debug_run(_, args, opts)
         if inputs then M.run_mode(adapter or "", mode or "", inputs) end
     elseif sub == "new_run_file" then
         M.new_run_file({ unpack(args, 2) })
-    elseif sub == "adapters" then
-        M.adapter_docs(args[2], args[3])
+    elseif sub == "adapter_info" then
+        M.adapter_info(args[2], args[3])
     elseif sub == "rerun" then
         M.rerun()
     elseif sub == "view" then
@@ -372,10 +372,10 @@ local function _debug_complete_subs(_, rest, arg_lead)
         local schema = require("ezdap.schema")
         return _run_complete(schema, { unpack(rest, 2) }, arg_lead)
     end
-    if rest[1] == "adapters" then
-        -- Positional: [adapter] [mode]; no argument shows every adapter.
+    if rest[1] == "adapter_info" then
+        -- Positional: [adapter] [mode]; no argument lists every adapter name.
         local schema = require("ezdap.schema")
-        if #rest == 1 then return schema.adapters_with_modes() end
+        if #rest == 1 then return schema.adapter_names() end
         if #rest == 2 then return schema.mode_names(rest[2]) end
         return {}
     end
@@ -544,15 +544,15 @@ function M.new_run_file(assignments)
     return require("ezdap.scaffold").new_run_file(assignments)
 end
 
----Show what an adapter accepts, read from the definition itself: its modes,
----and the inputs each mode declares with their types and descriptions. With no
----adapter, lists every registered one. The entry point behind
----`:Debug adapters`.
+---Load an adapter's definition, check it, and show what it accepts: anything
+---wrong with the definition or its tooling, then its modes and the inputs each
+---declares. With no adapter, lists every registered name without loading one.
+---The entry point behind `:Debug adapter_info`.
 ---@param adapter? string  adapter name, e.g. "debugpy"
 ---@param mode? string  a single mode to show, e.g. "script"
-function M.adapter_docs(adapter, mode)
-    _require_setup("adapter_docs")
-    return require("ezdap.adapter_docs").show(adapter, mode)
+function M.adapter_info(adapter, mode)
+    _require_setup("adapter_info")
+    return require("ezdap.adapter_info").show(adapter, mode)
 end
 
 ---Launch or attach under an adapter using one of its declared `modes`, assembling

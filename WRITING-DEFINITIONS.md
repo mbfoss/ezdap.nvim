@@ -43,10 +43,11 @@ return {
 }
 ```
 
-Definitions are read the first time something reaches the registry — a run,
-`:Debug adapters`, `:checkhealth` — and never when ezdap starts. They are read
-together, so keep top-level work to building the table: anything expensive belongs
-in `setup`, which runs per run. It is read with `loadfile`, so it is never a Lua
+Each definition is read the first time something reaches for that adapter by name
+— a run, `:Debug adapter_info <adapter>` — and never when ezdap starts. Listing
+adapters (`:Debug adapter_info`, `:checkhealth`) reads their filenames only, so keep
+top-level work to building the table: anything expensive belongs in `setup`, which
+runs per run. It is read with `loadfile`, so it is never a Lua
 module: nothing can `require` it, and it cannot have siblings it requires — pull
 shared helpers from `ezdap.shared` instead.
 

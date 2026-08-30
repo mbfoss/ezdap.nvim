@@ -71,7 +71,7 @@ the REPL, watch expressions, parallel sessions, persistence.
   between them.
 - **Project-scoped persistence**: breakpoints and watch expressions are saved
   per project and restored automatically.
-- **`:checkhealth ezdap`**: verifies the Neovim version and adapter tooling.
+- **`:checkhealth ezdap`**: verifies the Neovim version, setup and project state.
 
 ## Requirements
 
@@ -183,11 +183,11 @@ into your own config instead.
 the definitions themselves** — ask Neovim rather than a web page:
 
 ```vim
-:Debug adapters            " every registered adapter and its modes
-:Debug adapters codelldb   " that adapter's modes and each mode's inputs
+:Debug adapter_info            " every registered adapter, by name
+:Debug adapter_info codelldb   " that adapter's modes and each mode's inputs
 ```
 
-See [:Debug adapters](#debug-adapters). Because it reads the
+See [:Debug adapter_info](#debug-adapter_info). Because it reads the
 registered definition, it documents an adapter you wrote or edited yourself
 exactly as it does a shipped one. The same descriptions reach you while typing:
 completion after `:Debug run <adapter> <mode> ` lists that mode's inputs, and
@@ -206,22 +206,25 @@ mode:
 :Debug run remote connect host=127.0.0.1 port=4711
 ```
 
-Registered adapters are exposed as `require("ezdap.adapters")`, a plain
-`name → definition` table assembled at load time from the shipped `remote` entry
-and every `ezdap-adapters/*.lua` file found on the runtimepath, one definition
-per file, keyed by its filename stem. The directory sits beside `lsp/` and
-`plugin/`, not under `lua/`: these are definitions read by filename, not Lua
-modules. Earlier runtimepath entries take precedence, so a file in your config
-overrides the plugin's. The registry is built the first time something reaches for
-it — a run, `:Debug adapters`, `:checkhealth` — and never during startup, so
-installing many adapters costs nothing until you debug something.
+Registered adapters are exposed as `require("ezdap.adapters")`, a lazy
+`name → definition` table covering the shipped `remote` entry and every
+`ezdap-adapters/*.lua` file found on the runtimepath, one definition per file,
+keyed by its filename stem. The directory sits beside `lsp/` and `plugin/`, not
+under `lua/`: these are definitions read by filename, not Lua modules. Earlier
+runtimepath entries take precedence, so a file in your config overrides the
+plugin's. **A definition is read the first time that name is read** — a run,
+`:Debug adapter_info <adapter>` — never during startup, and never merely to list
+the adapters: names come from the filenames, so `:Debug adapter_info` and
+`:checkhealth` load nothing. Installing many adapters costs nothing until you
+debug with one.
 
 Each definition declares native process/connection config plus named **modes**
 that declare their inputs. From that one description, ezdap provides completion,
 validation and the run file template (`:Debug new_run_file`).
 
-Run `:checkhealth ezdap` to see which registered adapters have their tooling
-available on the current machine.
+`:checkhealth ezdap` lists the registered adapters by name;
+`:Debug adapter_info <adapter>` is what loads one and reports whether its
+definition resolves and its tooling is available on this machine.
 
 ## Starting a debug session <!-- tag: sessions -->
 
@@ -331,19 +334,25 @@ commented out with its description, ready to be uncommented as needed:
 Fill in the `parameters`, then `:Debug run_file` it. It resolves through the same
 path as `:Debug run`.
 
-### `:Debug adapters` <!-- tag: adapters-command -->
+### `:Debug adapter_info` <!-- tag: adapter-info-command -->
 
-Show what an adapter accepts, in a markdown float, rendered from the registered
-definition: each mode with its request kind and description, and under it a
-table of every input with its type and what it means. Required inputs sort first
-and are marked `[required]` in their description.
+Load an adapter's definition, check it, and show what it accepts, in a markdown
+float rendered from the definition itself: where its executable resolved to and
+anything wrong with the definition, then a `modes` section with a subsection per
+mode — its request kind, its description, and a table of every input with its
+type and what it means. Required inputs sort first and are marked `[required]` in
+their description.
 
 ```vim
-:Debug adapters gdb
+:Debug adapter_info gdb
 ```
 
 ````markdown
-## attach (attach)
+'gdb' found (/usr/bin/gdb)
+
+## modes
+
+### attach (attach)
 
 attach to a running process by pid
 
@@ -352,7 +361,7 @@ attach to a running process by pid
 | pid     | integer     | [required] process id to attach to |
 | program | string file | local binary for symbols           |
 
-## binary (launch)
+### binary (launch)
 
 debug a native executable
 
@@ -366,9 +375,13 @@ debug a native executable
 | stop_on_entry | boolean        | break at program entry           |
 ````
 
-With no argument it lists every registered adapter and its modes; with a mode
-(`:Debug adapters gdb binary`) it shows just that one. Nothing here is
-written by hand — the text comes from the same `inputs` declaration `:Debug run`
+With no argument it lists every registered adapter by name — the one form that
+loads no definition; with a mode (`:Debug adapter_info gdb binary`) it shows just
+that one. The lines above the `modes` section are where a definition that fails
+to load, a mode that requests neither `launch` nor `attach`, an input that cannot
+be read, or a missing executable is named; an adapter reached over a connection,
+or provisioned by its `setup`, has nothing to verify locally and opens straight
+on its modes. Nothing here is written by hand — the text comes from the same `inputs` declaration `:Debug run`
 validates against, so it cannot drift from what the adapter accepts, and your
 own definitions document themselves the moment they are registered.
 
@@ -385,8 +398,8 @@ ezdap.run_file("debug.lua")
 ezdap.rerun()
 
 -- What an adapter accepts, read from its own definition
-ezdap.adapter_docs("codelldb")                      -- shown in a float
-local lines = require("ezdap.adapter_docs").render("codelldb", "binary")
+ezdap.adapter_info("codelldb")                      -- shown in a float
+local lines = require("ezdap.adapter_info").render("codelldb", "binary")
 ```
 
 ## Breakpoints
@@ -629,7 +642,7 @@ below are unchanged.
 | `run …`               | Launch/attach from `input=value` tokens           |
 | `run_file [path]`     | Run a Lua run file, or pick from a directory     |
 | `new_run_file …`      | Scaffold a run file from a mode's inputs        |
-| `adapters [adapter] [mode]` | Show an adapter's modes and their inputs |
+| `adapter_info [adapter] [mode]` | Report an adapter's modes, inputs and tooling |
 | `rerun`               | Re-launch the most recent run                     |
 | `view`                | Open/focus the debug panel                        |
 | `output`              | Toggle the bottom output window                   |
@@ -702,7 +715,8 @@ persisted. The current project is reported by:
 ```
 
 Reports the Neovim version, whether `setup()` has run, the resolved project
-state, and which registered adapters have their tooling installed.
+state, and which adapters are registered — by name, since loading a definition
+to check it is `:Debug adapter_info <adapter>`.
 
 ## Keymaps example <!-- tag: keymaps -->
 
@@ -772,10 +786,10 @@ The full contract is in [WRITING-DEFINITIONS.md](WRITING-DEFINITIONS.md): every
 hooks for adapters that must be started as a server first, the input type and
 format vocabulary, and the helpers for locating an adapter binary.
 
-Added adapters are picked up by `:checkhealth ezdap` too; it reports whether
-each definition's `command` is present on the current machine. They document
-themselves as well: `:Debug adapters myadapter` renders the modes and inputs
-declared above, the same as for any shipped definition.
+Added adapters are listed by `:checkhealth ezdap` too, and document themselves:
+`:Debug adapter_info myadapter` renders the modes and inputs declared above, and
+reports whether the definition resolves and its `command` is present on this
+machine, the same as for any shipped definition.
 
 ## Contributing
 

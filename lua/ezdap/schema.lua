@@ -79,15 +79,24 @@ function M.mode_required(adapter, mode_name)
     return out
 end
 
+---Every registered adapter name, sorted. These are read from the registry's
+---filenames, so listing adapters loads no definition; what one declares is the
+---`mode_*` projections and `adapters_with_modes`, which do.
+---@return string[]
+function M.adapter_names()
+    return getmetatable(require("ezdap.adapters")).names()
+end
+
 ---Adapter names a mode-driven front end can offer — those declaring at
----least one mode — sorted.
+---least one mode — sorted. Every definition is loaded to answer.
 ---@return string[]
 function M.adapters_with_modes()
+    local registry = require("ezdap.adapters")
     local out = {}
-    for name, def in pairs(require("ezdap.adapters")) do
-        if def.modes and next(def.modes) then out[#out + 1] = name end
+    for _, name in ipairs(M.adapter_names()) do
+        local def = registry[name]
+        if def and def.modes and next(def.modes) then out[#out + 1] = name end
     end
-    table.sort(out)
     return out
 end
 
@@ -126,13 +135,20 @@ local function _check_mode(adapter, mode_name, out)
 end
 
 ---Everything wrong with one registered adapter's definition, as messages — a
----mode that requests neither launch nor attach, an input that cannot be read.
----An empty list is a definition that resolves, not one that runs: whether the
----adapter's tooling is installed is `:checkhealth ezdap`.
+---file that does not load, a mode that requests neither launch nor attach, an
+---input that cannot be read. An empty list is a definition that resolves, not
+---one that runs: whether its tooling is in place is `:Debug adapter_info`.
 ---@param adapter string
 ---@return string[] problems
-local function _validate(adapter)
-    local def = require("ezdap.adapters")[adapter]
+function M.validate(adapter)
+    local registry = require("ezdap.adapters")
+    local def = registry[adapter]
+    if def == nil then
+        -- A definition whose file did not load leaves no entry to walk; the registry
+        -- keeps why aside rather than let the name go missing.
+        local err = getmetatable(registry).errors[adapter]
+        return { err and ("failed to load: " .. tostring(err)) or "not registered" }
+    end
     if type(def) ~= "table" then
         return { ("not a table, got %s"):format(type(def)) }
     end
@@ -151,21 +167,14 @@ local function _validate(adapter)
 end
 
 ---Every registered adapter's problems, keyed by adapter name. Adapters that
----resolve cleanly are absent, so an empty table is a clean registry.
+---resolve cleanly are absent, so an empty table is a clean registry. Every
+---definition is loaded to answer.
 ---@return table<string, string[]>
 function M.validate_all()
-    local registry = require("ezdap.adapters")
     local out = {}
-    for name in pairs(registry) do
-        local problems = _validate(name)
+    for _, name in ipairs(M.adapter_names()) do
+        local problems = M.validate(name)
         if #problems > 0 then out[name] = problems end
-    end
-
-    -- A definition whose file did not load leaves no entry to walk, so the registry
-    -- keeps those names aside; report them here rather than let them go missing.
-    local meta = getmetatable(registry)
-    for name, err in pairs(meta and meta.errors or {}) do
-        out[name] = { "failed to load: " .. tostring(err) }
     end
     return out
 end
