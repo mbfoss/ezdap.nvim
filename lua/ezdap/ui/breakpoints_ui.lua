@@ -57,11 +57,12 @@ local function _refresh()
 end
 
 ---Feed the marks' current buffer positions back into the registry, so a
----breakpoint follows the edits that moved its line. Read live (the buffer is
----still loaded during BufUnload), which is independent of the module's own sync.
+---breakpoint follows the edits that moved its line. Only a saved buffer may do
+---this: a discarded edit never reached the file the stored line describes.
 ---@param bufnr integer
 local function _relocate_from_buffer(bufnr)
     if not _group then return end
+    if vim.bo[bufnr].modified then return end
     local file = vim.api.nvim_buf_get_name(bufnr)
     if file == "" then return end
 
@@ -87,7 +88,10 @@ function M.init()
     manager.on_active_changed:subscribe(function() _refresh() end)
 
     local augroup = vim.api.nvim_create_augroup("ezdap.breakpoints_ui", { clear = true })
-    vim.api.nvim_create_autocmd({ "BufWritePost", "BufUnload" }, {
+    -- `BufWritePost` alone. Doing this on `BufUnload` too moved a breakpoint by
+    -- edits the user then threw away: closing the buffer unsaved wrote the live
+    -- position into the registry, and reopening the file showed it there.
+    vim.api.nvim_create_autocmd("BufWritePost", {
         group = augroup,
         callback = function(ev) _relocate_from_buffer(ev.buf) end,
         desc = "ezdap: follow breakpoint marks moved by edits",
