@@ -15,39 +15,48 @@ local schema = require("ezdap.schema")
 
 local M = {}
 
----Cell text, with the one character a markdown table row cannot hold escaped.
----@param text string
----@return string
-local function _cell(text)
-    return (text:gsub("|", "\\|"))
-end
-
----A markdown table, its columns padded to a common width so the source reads as
----a table too. The float leaves markdown's markers on screen for that reason:
----concealing one would narrow the row it is on but not the header above it.
+---A box-drawn table, its columns padded to a common width. Drawn rather than left
+---to markdown because the float shows its source: a pipe-and-dash table reads as
+---markup, where ruled borders read as a table at any conceallevel.
 ---@param headers string[]
 ---@param rows string[][]
 ---@param out string[]  appended to
 local function _table(headers, rows, out)
+    -- Padded to display width, not byte length: a cell holding an em dash or any
+    -- other multibyte character would otherwise come out short by the difference
+    -- and break the column.
+    local width = vim.fn.strdisplaywidth
+
     local widths = {}
-    for i, head in ipairs(headers) do widths[i] = #head end
+    for i, head in ipairs(headers) do widths[i] = width(head) end
     for _, row in ipairs(rows) do
-        for i, cell in ipairs(row) do widths[i] = math.max(widths[i] or 0, #cell) end
+        for i, cell in ipairs(row) do widths[i] = math.max(widths[i] or 0, width(cell)) end
     end
 
-    local function line(cells)
+    ---@param cells string[]
+    local function row_line(cells)
         local parts = {}
         for i = 1, #headers do
-            parts[i] = ("%-" .. widths[i] .. "s"):format(cells[i] or "")
+            local cell = cells[i] or ""
+            parts[i] = cell .. (" "):rep(widths[i] - width(cell))
         end
-        return "| " .. table.concat(parts, " | ") .. " |"
+        return "│ " .. table.concat(parts, " │ ") .. " │"
     end
 
-    out[#out + 1] = line(headers)
-    local rule = {}
-    for i = 1, #headers do rule[i] = ("-"):rep(widths[i]) end
-    out[#out + 1] = line(rule)
-    for _, row in ipairs(rows) do out[#out + 1] = line(row) end
+    ---@param left string
+    ---@param join string
+    ---@param right string
+    local function rule(left, join, right)
+        local parts = {}
+        for i = 1, #headers do parts[i] = ("─"):rep(widths[i] + 2) end
+        return left .. table.concat(parts, join) .. right
+    end
+
+    out[#out + 1] = rule("┌", "┬", "┐")
+    out[#out + 1] = row_line(headers)
+    out[#out + 1] = rule("├", "┼", "┤")
+    for _, r in ipairs(rows) do out[#out + 1] = row_line(r) end
+    out[#out + 1] = rule("└", "┴", "┘")
 end
 
 ---How an input's value is written, in the `type[ format]` shape a definition
@@ -97,7 +106,7 @@ local function _mode_block(adapter, mode_name, out)
     out[#out + 1] = ("### %s (%s)"):format(mode_name, mode.request or "?")
     if mode.description and mode.description ~= "" then
         out[#out + 1] = ""
-        out[#out + 1] = _cell(mode.description)
+        out[#out + 1] = mode.description
     end
     out[#out + 1] = ""
 
@@ -118,11 +127,7 @@ local function _mode_block(adapter, mode_name, out)
 
     local rows = {}
     for i, name in ipairs(names) do
-        rows[i] = {
-            name,
-            _cell(_type_of(specs[name])),
-            _cell(_description_of(specs[name])),
-        }
+        rows[i] = { name, _type_of(specs[name]), _description_of(specs[name]) }
     end
     _table({ "input", "type", "description" }, rows, out)
 end
