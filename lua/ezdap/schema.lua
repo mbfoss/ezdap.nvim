@@ -79,20 +79,6 @@ function M.mode_required(adapter, mode_name)
     return out
 end
 
----Adapter names a mode-driven front end can offer — those declaring at
----least one mode — sorted. Every definition is loaded to answer; the names
----alone are `ezdap.available_adapters()`.
----@return string[]
-function M.adapters_with_modes()
-    local ezdap = require("ezdap")
-    local out = {}
-    for _, name in ipairs(ezdap.available_adapters()) do
-        local def = ezdap.load_adapter(name)
-        if def and def.modes and next(def.modes) then out[#out + 1] = name end
-    end
-    return out
-end
-
 -- Validation
 
 ---One mode's declaration problems, each already prefixed with the mode name.
@@ -158,19 +144,6 @@ function M.validate(adapter)
         out[#out + 1] = "declares no modes: `:Debug run` cannot reach it"
     end
     for _, name in ipairs(names) do _check_mode(adapter, name, out) end
-    return out
-end
-
----Every registered adapter's problems, keyed by adapter name. Adapters that
----resolve cleanly are absent, so an empty table is a clean registry. Every
----definition is loaded to answer.
----@return table<string, string[]>
-function M.validate_all()
-    local out = {}
-    for _, name in ipairs(require("ezdap").available_adapters()) do
-        local problems = M.validate(name)
-        if #problems > 0 then out[name] = problems end
-    end
     return out
 end
 

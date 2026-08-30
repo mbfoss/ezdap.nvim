@@ -116,7 +116,7 @@ function M.new_run_file(assignments)
         _err("new_run_file: " .. (load_err
             and ("adapter " .. adapter .. " failed to load: " .. load_err)
             or ("unknown adapter: " .. adapter .. " (available: "
-                .. table.concat(schema.adapters_with_modes(), ", ") .. ")")))
+                .. table.concat(require("ezdap").available_adapters(), ", ") .. ")")))
         return
     end
 

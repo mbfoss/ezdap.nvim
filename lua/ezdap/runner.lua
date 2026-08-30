@@ -359,7 +359,7 @@ function M.run_mode(adapter, mode_name, inputs, presenter)
     if not def then
         _err("run: " .. (load_err and ("adapter " .. adapter .. " failed to load: " .. load_err)
             or ("unknown adapter: " .. adapter .. " (available: "
-                .. table.concat(schema.adapters_with_modes(), ", ") .. ")")))
+                .. table.concat(require("ezdap").available_adapters(), ", ") .. ")")))
         return
     end
     if not mode_name or mode_name == "" then

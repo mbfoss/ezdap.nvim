@@ -352,7 +352,7 @@ local function _run_complete(schema, used, arg_lead)
 
     -- No `=` yet: complete the adapter, then the mode, then input names.
     if not adapter then
-        return schema.adapters_with_modes()
+        return M.available_adapters()
     elseif not mode_name then
         return schema.mode_names(adapter)
     end
@@ -392,7 +392,7 @@ local function _debug_complete_subs(_, rest, arg_lead)
         local used   = { unpack(rest, 2) }
         local pos    = #used + 1 -- 1-based position of the token being completed
         if pos == 1 then
-            return schema.adapters_with_modes()
+            return M.available_adapters()
         elseif pos == 2 then
             return schema.mode_names(used[1])
         end
