@@ -742,17 +742,16 @@ map("n", "<F11>", "<Cmd>Debug step_in<CR>", { desc = "Debug: step in" })
 map("n", "<F12>", "<Cmd>Debug step_out<CR>", { desc = "Debug: step out" })
 map("n", "<F9>", "<Cmd>Debug breakpoint<CR>", { desc = "Debug: bp" })
 
-local d = "<leader>d"
-map("n", d .. "c", "<Cmd>Debug breakpoint condition<CR>",
+map("n", "<leader>dc", "<Cmd>Debug breakpoint condition<CR>",
   { desc = "Debug: conditional breakpoint" })
-map("n", d .. "l", "<Cmd>Debug breakpoint logpoint<CR>",
+map("n", "<leader>dl", "<Cmd>Debug breakpoint logpoint<CR>",
   { desc = "Debug: logpoint" })
-map("n", d .. "r", "<Cmd>Debug rerun<CR>", { desc = "Debug: re-run" })
-map("n", d .. "u", "<Cmd>Debug view<CR>",  { desc = "Debug: focus view" })
-map("n", d .. "q", "<Cmd>Debug stop<CR>",  { desc = "Debug: stop" })
+map("n", "<leader>dr", "<Cmd>Debug rerun<CR>", { desc = "Debug: re-run" })
+map("n", "<leader>du", "<Cmd>Debug view<CR>",  { desc = "Debug: focus view" })
+map("n", "<leader>dq", "<Cmd>Debug stop<CR>",  { desc = "Debug: stop" })
 
-map("n", d .. "i", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
-map("x", d .. "i", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
+map("n", "<leader>di", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
+map("x", "<leader>di", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
 ```
 
 ## Adding a custom adapter <!-- tag: custom-adapters -->
