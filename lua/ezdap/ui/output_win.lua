@@ -2,10 +2,10 @@
 ---used when dock.nvim is not installed.
 ---
 ---A run spawns several buffers (Terminal, Output, REPL, adapter log, DAP
----messages); this module subscribes to `ezdap.runner` and registers each with a
----priority, and the window holds the highest-priority live one. One window is
----reused for all of them: registering a buffer swaps the occupant rather than
----opening a second split.
+---messages); this `ezdap.ui.RunBackend` registers each with a priority and the
+---window holds the highest-priority live one. One window is reused for all of
+---them: registering a buffer swaps the occupant rather than opening a second
+---split.
 ---
 ---There being one window shared by every run, a run's label and state have
 ---nowhere to show — which is why `ezdap.ui.dock_panel` takes over when dock.nvim
@@ -206,23 +206,20 @@ function M.winid()
     return _open_win()
 end
 
----Subscribe to the runner: every buffer a run registers is ranked here, and a
----run's end is nothing to show, so only that one signal is listened to. Called
----from `setup` unless dock.nvim took the runs; safe to call again.
+---The RunBackend interface: one window for all runs, so which run a buffer came
+---from does not matter here — it ranks against every other run's buffers, and a
+---run's identity and outcome have nowhere to show.
+---@param _run ezdap.runner.Run
+---@param bufnr integer
+---@param opts ezdap.AddBufOpts
+function M.add_buf(_run, bufnr, opts) M.add(bufnr, opts) end
+
+---Take the runs. Called from `setup` unless dock.nvim took them; safe to call
+---again.
 function M.init()
     if _enabled then return end
     _enabled = true
-
-    local runner = require("ezdap.runner")
-    -- There being one window for all runs, which run a buffer came from does not
-    -- matter here: it ranks against every other run's buffers.
-    runner.on_run_buffer:subscribe(function(_run, bufnr, opts) M.add(bufnr, opts) end)
-
-    -- A run that started before now still holds the buffers it spawned, so it is
-    -- registered after the fact exactly as it would have been live.
-    for _, run in ipairs(runner.runs()) do
-        for _, buf in ipairs(run.buffers) do M.add(buf.bufnr, buf.opts) end
-    end
+    require("ezdap.ui.run_display").set_backend(M)
 end
 
 return M

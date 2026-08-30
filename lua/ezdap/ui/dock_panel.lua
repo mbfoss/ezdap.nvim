@@ -1,18 +1,19 @@
 ---@brief The dock.nvim panel backend: one dock group (a tab) per run under the
 ---`ezdap` source, each of the run's buffers a page in it.
 ---
----It subscribes to `ezdap.runner` itself; `setup` starts it in place of
----`ezdap.ui.output_win` when dock.nvim is installed. dock owns the window, the
----tab bar and the focus rules; ezdap keeps owning its buffers, which is why a
----group is dropped rather than cleaned when the run's buffers are wiped.
+---An `ezdap.ui.RunBackend`, put in play by `init` in place of
+---`ezdap.ui.output_win` when dock.nvim is installed and driven from
+---`ezdap.ui.run_display`. dock owns the window, the tab bar and the focus rules;
+---ezdap keeps owning its buffers, which is why a group is dropped rather than
+---cleaned when the run's buffers are wiped.
 
 local format = require("ezdap.ui.format")
 
 local M      = {}
 
----Whether this backend was started. Everything below is inert until it is, so
----`:Debug output` reaches the backend that is in play — and nothing here
----requires `dock` before `setup` has established that it is there.
+---Whether this backend was started. The panel operations are inert until it is,
+---so `:Debug output` reaches the backend in play — and nothing here requires
+---`dock` before `setup` has established that it is there.
 local _enabled = false
 
 ---@type dock.Source?
@@ -67,41 +68,38 @@ local function _group(run)
     return group
 end
 
+-- The RunBackend interface. A run's group is made on the run itself rather than
+-- on its first buffer, so it has its tab by the time anything lands in it.
+
+---@param run ezdap.runner.Run
+function M.open_run(run) _group(run) end
+
 ---@param run ezdap.runner.Run
 ---@param bufnr integer
----@param opts? ezdap.AddBufOpts
-local function _page(run, bufnr, opts)
-    opts = opts or {}
+---@param opts ezdap.AddBufOpts
+function M.add_buf(run, bufnr, opts)
     _group(run):page({ buf = bufnr, label = opts.label, priority = opts.priority })
 end
 
----Subscribe to the runner and adopt any run that started before now — the whole
----connection between the two. Called from `setup` when dock.nvim is installed;
----safe to call again.
+---@param run ezdap.runner.Run
+---@param ok boolean
+function M.set_done(run, ok)
+    _group(run):set_busy(false):set_badge(_badge(ok and "done" or "failed"))
+end
+
+---@param run ezdap.runner.Run
+function M.close_run(run)
+    local group = _groups[run.id]
+    _groups[run.id] = nil
+    if group then group:remove() end
+end
+
+---Take the runs. Called from `setup` when dock.nvim is installed; safe to call
+---again.
 function M.init()
     if _enabled then return end
     _enabled = true
-
-    local runner = require("ezdap.runner")
-    -- Groups are made on the run's own signal, not on its first buffer, so a run
-    -- has its tab by the time anything lands in it.
-    runner.on_run_started:subscribe(function(run) _group(run) end)
-    runner.on_run_buffer:subscribe(_page)
-    runner.on_run_state:subscribe(function(run, state)
-        _group(run):set_busy(state == "running"):set_badge(_badge(state))
-    end)
-    runner.on_run_removed:subscribe(function(run)
-        local group = _groups[run.id]
-        _groups[run.id] = nil
-        if group then group:remove() end
-    end)
-
-    -- A run that started before now carries everything needed to render it after
-    -- the fact.
-    for _, run in ipairs(runner.runs()) do
-        _group(run)
-        for _, buf in ipairs(run.buffers) do _page(run, buf.bufnr, buf.opts) end
-    end
+    require("ezdap.ui.run_display").set_backend(M)
 end
 
 -- Panel-level operations. The dock is shared with other plugins, so these act on

@@ -68,14 +68,18 @@ its only path to the DAP layer.
   sends `parameters` as the DAP request body verbatim.
 - [runner.lua](lua/ezdap/runner.lua) — the run tracker behind `:Debug
   run`/`run_file`/`rerun`/`clean`, and the single path from a mode to a running
-  session: it resolves the mode, tracks every run's buffers and state and
-  announces them through signals. Where they are shown is a panel backend's call
-  ([dock_panel.lua](lua/ezdap/ui/dock_panel.lua) or
-  [output_win.lua](lua/ezdap/ui/output_win.lua)). A run given a
-  `runner.Presenter` (as tomltasks' `debug` task type does) inverts that last
-  part: the presenter takes the buffers, progress and outcome through its own
-  callbacks, the run is never announced, and it leaves ezdap through `remove_run`
-  rather than `clean`.
+  session: it resolves the mode, tracks every run and cancels it. Every run is
+  handed a `runner.Presenter` that takes its buffers, progress and outcome;
+  nothing here knows about windows.
+- [run_display.lua](lua/ezdap/ui/run_display.lua) — the presenter ezdap's own runs
+  get, installed on the runner by `setup`. It makes the run's log buffer, holds
+  the buffers the run spawned so `clean` can wipe them, and forwards all of it to
+  whichever `ui.RunBackend` is in play
+  ([dock_panel.lua](lua/ezdap/ui/dock_panel.lua) when dock.nvim is installed,
+  otherwise [output_win.lua](lua/ezdap/ui/output_win.lua)). A caller passing a
+  `runner.Presenter` of its own (as tomltasks' `debug` task type does) replaces
+  this module for that run: ezdap's panels never see it, `clean` does not touch
+  it, and it leaves ezdap through `remove_run`.
 - [inputs.lua](lua/ezdap/inputs.lua) — the input registry: `M.types`, one row per
   scalar type, stating every way it is read (parsed from a command line, described
   as JSON Schema for a typed file, seeded into a scaffolded document, completed),
@@ -103,8 +107,9 @@ that root. The store knows nothing about *what* is stored — the lifecycle
 
 **UI** — [lua/ezdap/ui/](lua/ezdap/ui/)
 `DebugView.lua` (the main tree panel, built on `TreeBuffer`), plus
-`DisassemblyView`, `InspectView`, `ReplBuffer`, `OutputBuffer`, the two panel
-backends (`dock_panel`, `output_win`), shared presentation (`format`,
+`DisassemblyView`, `InspectView`, `ReplBuffer`, `OutputBuffer`, the run display
+(`run_display`) and its two panel backends (`dock_panel`, `output_win`), shared
+presentation (`format`,
 `value_hover`, `node_details`) and the sign/inline-value modules
 (`breakpoints_ui`, `debugline_ui`, `inlinevars`, `expressions`).
 

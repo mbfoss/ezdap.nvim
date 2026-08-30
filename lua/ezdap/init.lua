@@ -458,14 +458,16 @@ local function _init()
     require("ezdap.ui.debugline_ui").init()
     require("ezdap.ui.inlinevars").enable()
     require("ezdap.ui.popup_menu").init()
-    -- A panel backend subscribes to the runner on its own; this is the one place
-    -- picking which. dock.nvim gives each run a tab of its own, so it takes the
-    -- runs when installed and ezdap's bottom split stays out of the way.
+    -- A panel backend takes the runs in its own `init`; this is the one place
+    -- picking which. dock.nvim gives each run a tab of its own, so it takes them
+    -- when installed and ezdap's bottom split stays out of the way.
     if pcall(require, "dock") then
         require("ezdap.ui.dock_panel").init()
     else
         require("ezdap.ui.output_win").init()
     end
+    -- Every run ezdap owns is shown through this, whichever backend is behind it.
+    require("ezdap.runner").set_presenter(require("ezdap.ui.run_display").presenter)
 
     local client = require("ezdap.dap.client")
     client.on_session_added:subscribe(function()
@@ -572,11 +574,11 @@ function M.run_mode(adapter, mode, inputs, presenter)
     return require("ezdap.runner").run_mode(adapter, mode, inputs, presenter)
 end
 
----Forget a run and drop what it left in ezdap's own UI — the finished rows of the
----sessions it produced, and, for a run ezdap showed itself, its buffers. The
----buffers of a run shown elsewhere belong to its presenter and are left alone.
----Cancel a live run before removing it. The debug view is only cleaned when it
----exists; disposing of a run is no reason to build one.
+---Forget a run: its presenter is told to dispose of what it made (ezdap's own
+---wipes the run's buffers; a caller's does whatever it does), and the finished
+---rows of the sessions it produced are dropped from the debug view. Cancel a live
+---run before removing it. The view is only cleaned when it exists; disposing of a
+---run is no reason to build one.
 ---@param run ezdap.runner.Run
 function M.remove_run(run)
     _require_setup("remove_run")
