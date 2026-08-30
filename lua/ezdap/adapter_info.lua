@@ -180,22 +180,30 @@ local function _tooling(def)
     return ("'%s' found (%s)"):format(exe, resolved)
 end
 
----What checking the adapter turned up, opening the page untitled: where its
----executable resolved to, then a line per declaration problem. A definition that
----resolves and names no executable says nothing — that the rest of the page
----renders at all is what "it resolves" looks like.
+---The `status` section: a bullet per finding — where the executable resolved to,
+---then anything wrong with the definition. Nothing to report is nothing to say,
+---so an adapter that resolves and has nothing to verify locally (a connection, or
+---a `setup` that provisions it) skips the section and opens on its modes.
 ---@param adapter string
 ---@param out string[]  appended to
 local function _report_block(adapter, out)
     local def = require("ezdap").load_adapter(adapter)
-    if type(def) == "table" then out[#out + 1] = _tooling(def) end
-    for _, problem in ipairs(schema.validate(adapter)) do
-        out[#out + 1] = problem
+    local tooling
+    if type(def) == "table" then tooling = _tooling(def) end
+
+    local problems = schema.validate(adapter)
+    if not tooling and #problems == 0 then return end
+
+    out[#out + 1] = "## status"
+    out[#out + 1] = ""
+    if tooling then out[#out + 1] = "- " .. tooling end
+    for _, problem in ipairs(problems) do
+        out[#out + 1] = "- " .. problem
     end
 end
 
----One adapter's reference: what checking its definition turned up, then a
----`modes` section with a subsection per mode. `mode_name` narrows it to that one. Loading the definition is
+---One adapter's reference: a `status` section with what checking its definition
+---turned up, then a `modes` section with a subsection per mode. `mode_name` narrows it to that one. Loading the definition is
 ---what this does; returns nil plus a message when the adapter or mode is not
 ---registered.
 ---@param adapter string
@@ -217,8 +225,8 @@ function M.render(adapter, mode_name)
         names = { mode_name }
     end
 
-    -- A definition that did not load is reported by the block alone: there are no
-    -- modes to render behind it.
+    -- A definition that did not load is reported by the status section alone:
+    -- there are no modes to render behind it.
     local out = {}
     _report_block(adapter, out)
     if not def then return out end

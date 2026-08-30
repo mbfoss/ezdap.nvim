@@ -32,6 +32,7 @@
 ---@class ezdap.Config
 ---@field command              string    name of the user command every subcommand lives under, e.g. "Dbg" for `:Dbg run`
 ---@field root_markers         string[]  filenames/dirs whose presence identifies a project root
+---@field enabled_adapters?    string[]  names of the only adapters to make available; unset (the default) leaves every registered adapter available
 ---@field data_filename string
 ---@field stack_trace_limit    integer   max number of call-stack frames shown in DebugView; extended when the current frame is deeper so it stays visible
 ---@field antiflicker_delay    integer   milliseconds to wait before clearing stale UI (inline vars, DebugView) to avoid flicker during step-through

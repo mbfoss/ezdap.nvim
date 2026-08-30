@@ -252,8 +252,9 @@ path as `:Debug run`.
 ### `:Debug adapter_info` <!-- tag: adapter-info-command -->
 
 Load an adapter's definition, check it, and show what it accepts, in a markdown
-float rendered from the definition itself: where its executable resolved to and
-anything wrong with the definition, then a `modes` section with a subsection per
+float rendered from the definition itself: a `status` section — where its
+executable resolved to and anything wrong with the definition, left out entirely
+when there is nothing to report — then a `modes` section with a subsection per
 mode ; its request kind, its description, and a table of every input with its
 type and what it means. Required inputs sort first and are marked `[required]` in
 their description.
@@ -271,7 +272,8 @@ ezdap.run_file("debug.lua")
 ezdap.rerun()
 
 -- Adapters
-ezdap.available_adapters() -- Available adapter names, (inlcuding unloaded)
+ezdap.available_adapters() -- Available adapter names, (inlcuding unloaded).
+                           -- Needs setup(); honours `enabled_adapters`.
 local adapters = require("ezdap.adapters") -- loaded adapters
 ```
 
@@ -445,6 +447,10 @@ require("ezdap").setup({
   -- Project detection: the nearest ancestor holding one of these is
   -- the root.
   root_markers        = { ".git" },
+  -- Adapters to make available, by name. Unset (the default) leaves every
+  -- registered adapter available; a list narrows the registry to exactly
+  -- those names, hiding the rest from listing, completion and `:Debug run`.
+  -- enabled_adapters = { "debugpy", "codelldb" },
   -- Per-project state file, written at the project root.
   data_filename       = ".ezdap.json",
 
@@ -647,7 +653,9 @@ return {
 
 `require("ezdap.adapters")` is writable, so a definition can be registered by
 hand from a config file (`require("ezdap.adapters").myadapter = { … }`) instead
-of a file ; `ezdap.available_adapters()` lists those too.
+of a file ; `ezdap.available_adapters()` lists those too — unless
+`enabled_adapters` is set and leaves the name out, which withholds it from the
+registry entirely.
 
 The full contract is in [WRITING-DEFINITIONS.md](WRITING-DEFINITIONS.md).
 

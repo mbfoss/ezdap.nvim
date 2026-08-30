@@ -565,14 +565,26 @@ local function _definitions()
     return _definition_paths
 end
 
+---Whether `name` survives the `enabled_adapters` filter. Unset — the default —
+---lets every name through; a list narrows the registry to exactly those names,
+---whether they come from a definition file or from `ezdap.adapters`.
+---@param name string
+---@return boolean
+local function _enabled(name)
+    local allowed = require("ezdap.config").enabled_adapters
+    return allowed == nil or vim.tbl_contains(allowed, name)
+end
+
 ---Every adapter that can be run, sorted: each definition file on the
 ---runtimepath, named by its filename stem, plus anything registered by hand in
----`ezdap.adapters`. Naming them reads no definition.
+---`ezdap.adapters`, narrowed to `enabled_adapters` when that is set. Naming them
+---reads no definition. Needs `setup()`, which is what settles the filter.
 ---@return string[]
 function M.available_adapters()
+    _require_setup("available_adapters")
     local out, seen = {}, {}
     local function add(name)
-        if not seen[name] then out[#out + 1], seen[name] = name, true end
+        if not seen[name] and _enabled(name) then out[#out + 1], seen[name] = name, true end
     end
     for name in pairs(_definitions()) do add(name) end
     for name in pairs(require("ezdap.adapters")) do add(name) end
@@ -582,12 +594,15 @@ end
 
 ---Read the definition named `adapter` and put it in `ezdap.adapters`, or hand
 ---back the one already there. A name no definition file answers to is nil and no
----error — `available_adapters()` says which names there are; a file that fails to
----load is nil and why, and is re-read on the next call rather than remembered
----broken.
+---error — `available_adapters()` says which names there are, and a name left out
+---of `enabled_adapters` is nil the same way; a file that fails to load is nil and
+---why, and is re-read on the next call rather than remembered broken.
 ---@param adapter string
 ---@return ezdap.AdapterDef? def, string? err
 function M.load_adapter(adapter)
+    _require_setup("load_adapter")
+    if not _enabled(adapter) then return nil end
+
     local loaded = require("ezdap.adapters")
     if loaded[adapter] then return loaded[adapter] end
 

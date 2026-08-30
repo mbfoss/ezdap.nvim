@@ -52,11 +52,24 @@ end
 ---List the registered adapters. Their names are read from the registry's
 ---filenames, so nothing here loads a definition; checking one is
 ---`:Debug adapter_info <adapter>`, which reports its modes, inputs and tooling.
+---Needs `setup()`: it is what settles the `enabled_adapters` filter, so before
+---then there is no list to report.
 local function _check_adapters()
     health.start("ezdap: adapters")
 
-    local names = require("ezdap").available_adapters()
+    local ezdap = package.loaded["ezdap"]
+    if not (ezdap and ezdap.is_setup()) then
+        health.warn("setup() has not been called, so no adapters are registered yet")
+        return
+    end
+
+    local names = ezdap.available_adapters()
+    local allowed = require("ezdap.config").enabled_adapters
     health.ok(("%d registered: %s"):format(#names, table.concat(names, ", ")))
+    if allowed then
+        health.info(("`enabled_adapters` is set (%s), so only those are available")
+            :format(table.concat(allowed, ", ")))
+    end
     health.info((":%s adapter_info <adapter> loads one and reports its modes, inputs and tooling")
         :format(require("ezdap.config").command))
 end
