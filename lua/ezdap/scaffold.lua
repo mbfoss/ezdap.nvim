@@ -111,10 +111,12 @@ function M.new_run_file(assignments)
         _warn("new_run_file: usage: new_run_file <adapter> [mode] [path]")
         return
     end
-    local base = require("ezdap.adapters")[adapter]
+    local base, load_err = require("ezdap").load_adapter(adapter)
     if not base then
-        _err("new_run_file: unknown adapter: " .. adapter ..
-            " (available: " .. table.concat(schema.adapters_with_modes(), ", ") .. ")")
+        _err("new_run_file: " .. (load_err
+            and ("adapter " .. adapter .. " failed to load: " .. load_err)
+            or ("unknown adapter: " .. adapter .. " (available: "
+                .. table.concat(schema.adapters_with_modes(), ", ") .. ")")))
         return
     end
 

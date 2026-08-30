@@ -355,9 +355,11 @@ function M.run_mode(adapter, mode_name, inputs, presenter)
             :format(require("ezdap.config").command))
         return
     end
-    if not require("ezdap.adapters")[adapter] then
-        _err("run: unknown adapter: " .. adapter ..
-            " (available: " .. table.concat(schema.adapters_with_modes(), ", ") .. ")")
+    local def, load_err = require("ezdap").load_adapter(adapter)
+    if not def then
+        _err("run: " .. (load_err and ("adapter " .. adapter .. " failed to load: " .. load_err)
+            or ("unknown adapter: " .. adapter .. " (available: "
+                .. table.concat(schema.adapters_with_modes(), ", ") .. ")")))
         return
     end
     if not mode_name or mode_name == "" then

@@ -57,12 +57,13 @@ its only path to the DAP layer.
 - `proto.lua` — a `---@meta` file of DAP spec types; never `require()` it.
 
 **Adapters & tasks**
-- [adapters.lua](lua/ezdap/adapters.lua) — the adapter registry: a plain
+- [adapters.lua](lua/ezdap/adapters.lua) — the loaded definitions: a plain
   `name → ezdap.AdapterDef` table of native DAP process/connection config plus
-  optional named `modes`. Only the generic `remote` adapter ships here; every
-  other adapter is user-supplied, one file per adapter under `ezdap-adapters/`
-  on the runtimepath, globbed and keyed by filename. Users add/override keys
-  directly. The DAP core never reads `modes` — only `ezdap.schema` does.
+  optional named `modes`, filled as `ezdap.load_adapter` reads them. Users can
+  assign into it directly. One file per adapter under `ezdap-adapters/` on the
+  runtimepath, keyed by filename — the generic `remote` adapter ships as one;
+  `ezdap.available_adapters` names them without reading any. The DAP core never
+  reads `modes` — only `ezdap.schema` does.
 - [task.lua](lua/ezdap/task.lua) — the task runner backend. Consumes a native
   task (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`) and
   sends `parameters` as the DAP request body verbatim.

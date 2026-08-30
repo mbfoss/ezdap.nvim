@@ -14,11 +14,11 @@ local M = {}
 
 -- Introspection
 
----An adapter's declared `modes`, or an empty table.
+---An adapter's declared `modes`, or an empty table. Loads the definition.
 ---@param adapter string
 ---@return table<string, ezdap.Mode>
 local function _modes(adapter)
-    local def = require("ezdap.adapters")[adapter]
+    local def = require("ezdap").load_adapter(adapter)
     return (def and def.modes) or {}
 end
 
@@ -79,22 +79,15 @@ function M.mode_required(adapter, mode_name)
     return out
 end
 
----Every registered adapter name, sorted. These are read from the registry's
----filenames, so listing adapters loads no definition; what one declares is the
----`mode_*` projections and `adapters_with_modes`, which do.
----@return string[]
-function M.adapter_names()
-    return getmetatable(require("ezdap.adapters")).names()
-end
-
 ---Adapter names a mode-driven front end can offer — those declaring at
----least one mode — sorted. Every definition is loaded to answer.
+---least one mode — sorted. Every definition is loaded to answer; the names
+---alone are `ezdap.available_adapters()`.
 ---@return string[]
 function M.adapters_with_modes()
-    local registry = require("ezdap.adapters")
+    local ezdap = require("ezdap")
     local out = {}
-    for _, name in ipairs(M.adapter_names()) do
-        local def = registry[name]
+    for _, name in ipairs(ezdap.available_adapters()) do
+        local def = ezdap.load_adapter(name)
         if def and def.modes and next(def.modes) then out[#out + 1] = name end
     end
     return out
@@ -141,12 +134,10 @@ end
 ---@param adapter string
 ---@return string[] problems
 function M.validate(adapter)
-    local registry = require("ezdap.adapters")
-    local def = registry[adapter]
+    local def, err = require("ezdap").load_adapter(adapter)
     if def == nil then
-        -- A definition whose file did not load leaves no entry to walk; the registry
-        -- keeps why aside rather than let the name go missing.
-        local err = getmetatable(registry).errors[adapter]
+        -- A definition whose file did not load leaves nothing to walk; say why
+        -- rather than let the name go missing.
         return { err and ("failed to load: " .. tostring(err)) or "not registered" }
     end
     if type(def) ~= "table" then
@@ -172,7 +163,7 @@ end
 ---@return table<string, string[]>
 function M.validate_all()
     local out = {}
-    for _, name in ipairs(M.adapter_names()) do
+    for _, name in ipairs(require("ezdap").available_adapters()) do
         local problems = M.validate(name)
         if #problems > 0 then out[name] = problems end
     end

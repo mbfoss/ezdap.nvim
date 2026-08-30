@@ -2,7 +2,7 @@
 ---
 ---An adapter definition documents itself: every mode carries a `description`
 ---and a `request`, every input a type, a format, its `choices` and a line on
----what it means (see `ezdap.adapters`' `ezdap.Input`). This module is the
+---what it means (see `ezdap.Input` in `adapter_def.lua`). This module is the
 ---reader for that — it loads one adapter's definition, checks it, and renders
 ---what it declares as markdown in a float, so the same declaration that
 ---`:Debug run` validates against and `new_run_file` seeds from is what is shown.
@@ -131,7 +131,7 @@ end
 ---asked about one in particular: names only, so listing them loads no definition.
 ---@return string[]
 function M.overview()
-    local names = schema.adapter_names()
+    local names = require("ezdap").available_adapters()
 
     local out = { ("## adapters (%d)"):format(#names), "" }
     for _, name in ipairs(names) do out[#out + 1] = "- " .. name end
@@ -187,7 +187,7 @@ end
 ---@param adapter string
 ---@param out string[]  appended to
 local function _report_block(adapter, out)
-    local def = require("ezdap.adapters")[adapter]
+    local def = require("ezdap").load_adapter(adapter)
     if type(def) == "table" then out[#out + 1] = _tooling(def) end
     for _, problem in ipairs(schema.validate(adapter)) do
         out[#out + 1] = problem
@@ -202,10 +202,10 @@ end
 ---@param mode_name? string
 ---@return string[]? lines, string? err
 function M.render(adapter, mode_name)
-    local def = require("ezdap.adapters")[adapter]
-    if not def and not vim.tbl_contains(schema.adapter_names(), adapter) then
+    local def, load_err = require("ezdap").load_adapter(adapter)
+    if not def and not load_err then
         return nil, ("unknown adapter: %s (available: %s)")
-            :format(adapter, table.concat(schema.adapter_names(), ", "))
+            :format(adapter, table.concat(require("ezdap").available_adapters(), ", "))
     end
 
     local names = schema.mode_names(adapter)

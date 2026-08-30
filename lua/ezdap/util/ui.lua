@@ -8,6 +8,25 @@ local function _is_regular_win(winid)
     return true
 end
 
+--- The buffer, if any, named exactly `path`. `vim.fn.bufnr()` looks like the tool
+--- for this but matches its argument as a pattern and, when nothing matches
+--- exactly, settles for a partial match -- so it answers with buffers that merely
+--- spell like the path, and chokes on a name holding a regex metacharacter.
+---
+--- `path` is expanded first, since that is what `nvim_buf_set_name` does with a
+--- relative or bare name and so what the buffer is named by the time we look.
+---@param path string
+---@return integer           -- -1 when no buffer has that name
+local function _bufnr_by_name(path)
+    path = vim.fn.fnamemodify(path, ":p")
+
+    for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_get_name(bufnr) == path then return bufnr end
+    end
+
+    return -1
+end
+
 ---@param winid integer
 ---@param line? integer 1-based line number (nil = just open)
 ---@param col?  integer 0-based column (nil = column 0)
@@ -120,11 +139,8 @@ function M.smart_open_file(filepath, line, col, activate)
     -- file on disk. (bufadd() would happily create a phantom entry for a
     -- nonexistent file, so we still need this exact-match precheck.) The buffer
     -- list scan only runs for paths missing from disk, which is the rare case.
-    if vim.fn.filereadable(full_path) == 0 then
-        local pattern = '^' .. vim.fn.escape(full_path, '\\[]*?~$.') .. '$'
-        if vim.fn.bufnr(pattern) == -1 then
-            return -1, -1
-        end
+    if vim.fn.filereadable(full_path) == 0 and _bufnr_by_name(full_path) == -1 then
+        return -1, -1
     end
 
     -- Reuse a window already showing this file.
@@ -266,13 +282,13 @@ function M.blend_colors(c1, c2, alpha)
     return bit.bor(bit.lshift(r, 16), bit.lshift(g, 8), b)
 end
 
----Return `basename` if no buffer has that name, otherwise `basename#1`, `basename#2`, …
+---Return `basename` if no buffer has that name, otherwise `basename~1`, `basename~2`, …
 ---@param basename string
 ---@return string
 function M.unique_buf_name(basename)
     local name = basename
     local n    = 0
-    while vim.fn.bufnr(name) ~= -1 do
+    while _bufnr_by_name(name) ~= -1 do
         n    = n + 1
         name = basename .. "~" .. n
     end

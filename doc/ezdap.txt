@@ -210,25 +210,31 @@ connects to a DAP server already listening on `host:port`, through its single
     :Debug run remote connect host=127.0.0.1 port=4711
 <
 
-Registered adapters are exposed as `require("ezdap.adapters")`, a lazy `name
-→ definition` table covering the shipped `remote` entry and every
-`ezdap-adapters/*.lua` file found on the runtimepath, one definition per file,
-keyed by its filename stem. The directory sits beside `lsp/` and `plugin/`, not
-under `lua/`: these are definitions read by filename, not Lua modules. Earlier
-runtimepath entries take precedence, so a file in your config overrides the
-plugin’s. **A definition is read the first time that name is read** — a
+An adapter is one `ezdap-adapters/*.lua` file on the runtimepath, keyed by its
+filename stem — `remote` included, shipped as `ezdap-adapters/remote.lua`.
+The directory sits beside `lsp/` and `plugin/`, not under `lua/`: these are
+definitions read by filename, not Lua modules. Earlier runtimepath entries take
+precedence, so a file in your config overrides the plugin’s.
+
+>lua
+    ezdap.available_adapters()      -- every adapter that can be run, by name
+    ezdap.load_adapter("codelldb")  -- read one definition; returns it, or nil and why
+    require("ezdap.adapters")       -- name → definition, the ones read so far
+<
+
+**A definition is read the first time that adapter is asked for by name** — a
 run, `:Debug adapter_info <adapter>` — never during startup, and never merely
-to list the adapters: names come from the filenames, so `:Debug adapter_info`
-and `:checkhealth` load nothing. Installing many adapters costs nothing until
-you debug with one.
+to list the adapters: `available_adapters()` reads filenames, so `:Debug
+adapter_info` and `:checkhealth` load nothing. Installing many adapters costs
+nothing until you debug with one.
 
 Each definition declares native process/connection config plus named **modes**
 that declare their inputs. From that one description, ezdap provides
 completion, validation and the run file template (`:Debug new_run_file`).
 
-`:checkhealth ezdap` lists the registered adapters by name; `:Debug
-adapter_info <adapter>` is what loads one and reports whether its definition
-resolves and its tooling is available on this machine.
+`:checkhealth ezdap` lists the available adapters by name; `:Debug adapter_info
+<adapter>` is what loads one and reports whether its definition resolves and
+its tooling is available on this machine.
 
 
 ==============================================================================
@@ -413,6 +419,10 @@ Everything above is available programmatically:
     -- What an adapter accepts, read from its own definition
     ezdap.adapter_info("codelldb")                      -- shown in a float
     local lines = require("ezdap.adapter_info").render("codelldb", "binary")
+    
+    -- The registry
+    ezdap.available_adapters()                          -- names, loading nothing
+    local def, err = ezdap.load_adapter("codelldb")     -- the definition itself
 <
 
 
@@ -866,9 +876,9 @@ the `inputs` it accepts and a `build` that turns them into the native DAP body:
     }
 <
 
-`require("ezdap.adapters")` is also writable at runtime, so a definition can be
-assigned straight from a config file (`require("ezdap.adapters").myadapter = {
-… }`) instead.
+`require("ezdap.adapters")` is writable, so a definition can be registered by
+hand from a config file (`require("ezdap.adapters").myadapter = { … }`)
+instead of a file — `ezdap.available_adapters()` lists those too.
 
 The full contract is in WRITING-DEFINITIONS.md <WRITING-DEFINITIONS.md>: every
 `ezdap.AdapterDef`, `ezdap.Mode` and `ezdap.Input` field, the
@@ -876,10 +886,11 @@ The full contract is in WRITING-DEFINITIONS.md <WRITING-DEFINITIONS.md>: every
 the input type and format vocabulary, and the helpers for locating an adapter
 binary.
 
-Added adapters are listed by `:checkhealth ezdap` too, and document themselves:
-`:Debug adapter_info myadapter` renders the modes and inputs declared above,
-and reports whether the definition resolves and its `command` is present on
-this machine, the same as for any shipped definition.
+Added adapters are listed by `:checkhealth ezdap` and
+`ezdap.available_adapters()` too, and document themselves: `:Debug adapter_info
+myadapter` renders the modes and inputs declared above, and reports whether the
+definition resolves and its `command` is present on this machine, the same as
+for any shipped definition.
 
 
 ==============================================================================

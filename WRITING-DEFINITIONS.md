@@ -44,10 +44,10 @@ return {
 ```
 
 Each definition is read the first time something reaches for that adapter by name
-— a run, `:Debug adapter_info <adapter>` — and never when ezdap starts. Listing
-adapters (`:Debug adapter_info`, `:checkhealth`) reads their filenames only, so keep
-top-level work to building the table: anything expensive belongs in `setup`, which
-runs per run. It is read with `loadfile`, so it is never a Lua
+(`ezdap.load_adapter`) — a run, `:Debug adapter_info <adapter>` — and never when
+ezdap starts. Listing adapters (`ezdap.available_adapters`, `:checkhealth`) reads
+their filenames only, so keep top-level work to building the table: anything
+expensive belongs in `setup`, which runs per run. It is read with `loadfile`, so it is never a Lua
 module: nothing can `require` it, and it cannot have siblings it requires — pull
 shared helpers from `ezdap.shared` instead.
 
@@ -173,7 +173,7 @@ How the pieces fit:
 
 Because `:Debug run`, `:Debug new_run_file` and mode-based run files all resolve through
 the same `inputs` → `build` path, a mode is described in exactly one place and the three
-cannot drift apart. The shipped `remote` adapter in [adapters.lua](lua/ezdap/adapters.lua)
+cannot drift apart. The shipped `remote` adapter in [remote.lua](ezdap-adapters/remote.lua)
 is a compact reference for a mode that returns a connection (a task-level `host`/`port`)
 rather than a body; for a spawn-then-connect definition that starts a server and points
 the connection at it, see the `setup`/`teardown` example below.
@@ -239,7 +239,7 @@ directory (`debugpy.lua` maps a venv to its `bin/python`).
 [`netcoredbg.lua`](adapters/netcoredbg.lua) adds a binary lookup,
 [`debugpy.lua`](adapters/debugpy.lua) shows shared input groups and a spawned server. The
 full contract is in the `ezdap.AdapterDef` and `ezdap.Mode` annotations in
-`lua/ezdap/adapters.lua`.
+`lua/ezdap/adapter_def.lua`.
 
 Contributions of new definitions are welcome. Please follow the structure and comment style
 of the existing files, and cite the adapter's own documentation that the field set is

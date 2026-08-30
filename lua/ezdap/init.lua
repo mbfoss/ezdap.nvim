@@ -375,7 +375,7 @@ local function _debug_complete_subs(_, rest, arg_lead)
     if rest[1] == "adapter_info" then
         -- Positional: [adapter] [mode]; no argument lists every adapter name.
         local schema = require("ezdap.schema")
-        if #rest == 1 then return schema.adapter_names() end
+        if #rest == 1 then return M.available_adapters() end
         if #rest == 2 then return schema.mode_names(rest[2]) end
         return {}
     end
@@ -542,6 +542,68 @@ end
 function M.new_run_file(assignments)
     _require_setup("new_run_file")
     return require("ezdap.scaffold").new_run_file(assignments)
+end
+
+-- The adapter registry. Definitions are files found by name on the runtimepath
+-- and read one at a time, so nothing is loaded until an adapter is asked for by
+-- name; what has been read lives in `ezdap.adapters`.
+
+---Every `ezdap-adapters/*.lua` on the runtimepath, `name → path`.
+---@type table<string, string>?
+local _definition_paths
+
+---@return table<string, string>
+local function _definitions()
+    if _definition_paths then return _definition_paths end
+    _definition_paths = {}
+    for _, path in ipairs(vim.api.nvim_get_runtime_file("ezdap-adapters/*.lua", true)) do
+        local name = vim.fn.fnamemodify(path, ":t:r")
+        -- Runtimepath order, so the first match for a name shadows any later one: a
+        -- definition in your config overrides the plugin's.
+        if not _definition_paths[name] then _definition_paths[name] = path end
+    end
+    return _definition_paths
+end
+
+---Every adapter that can be run, sorted: each definition file on the
+---runtimepath, named by its filename stem, plus anything registered by hand in
+---`ezdap.adapters`. Naming them reads no definition.
+---@return string[]
+function M.available_adapters()
+    local out, seen = {}, {}
+    local function add(name)
+        if not seen[name] then out[#out + 1], seen[name] = name, true end
+    end
+    for name in pairs(_definitions()) do add(name) end
+    for name in pairs(require("ezdap.adapters")) do add(name) end
+    table.sort(out)
+    return out
+end
+
+---Read the definition named `adapter` and put it in `ezdap.adapters`, or hand
+---back the one already there. A name no definition file answers to is nil and no
+---error — `available_adapters()` says which names there are; a file that fails to
+---load is nil and why, and is re-read on the next call rather than remembered
+---broken.
+---@param adapter string
+---@return ezdap.AdapterDef? def, string? err
+function M.load_adapter(adapter)
+    local loaded = require("ezdap.adapters")
+    if loaded[adapter] then return loaded[adapter] end
+
+    local path = _definitions()[adapter]
+    if not path then return nil end
+
+    local chunk, load_err = loadfile(path)
+    if not chunk then return nil, load_err end
+    local ok, def = pcall(chunk)
+    if not ok then return nil, def end
+    if type(def) ~= "table" then
+        return nil, ("%s: expected a table, got %s"):format(path, type(def))
+    end
+
+    loaded[adapter] = def
+    return def
 end
 
 ---Load an adapter's definition, check it, and show what it accepts: anything

@@ -8,7 +8,7 @@ local ui_util      = require "ezdap.util.ui"
 ---`ezdap.schema`'s `resolve_task`.
 ---@class ezdap.Task
 ---@field name?         string                     run group name (defaults to "debug")
----@field adapter       string                     name of an entry in `ezdap.adapters`
+---@field adapter       string                     an adapter name, see `ezdap.available_adapters`
 ---@field mode?         string                     the mode this was resolved from, for the adapter's `setup`
 ---@field request?      "launch"|"attach"          defaults to "launch"
 ---@field parameters?   table                      native DAP launch/attach body (the adapter's own keys), sent verbatim
@@ -48,14 +48,15 @@ M.start            = function(task, callbacks)
     local run_key   = (task.name or "debug") .. "~" .. _run_counter
 
     local manager   = require("ezdap.manager")
-    local adapters  = require("ezdap.adapters")
 
     -- The task is native DAP: `parameters` is the adapter's raw launch/attach body,
     -- sent verbatim and never inspected or translated here. Scaffolding it from an
     -- adapter schema is new_run_file's job. No `parameters` sends an empty body.
-    local base      = adapters[task.adapter]
+    local base, load_err = require("ezdap").load_adapter(task.adapter)
     if not base then
-        report("unknown DAP adapter: " .. tostring(task.adapter))
+        report(load_err
+            and ("DAP adapter " .. tostring(task.adapter) .. " failed to load: " .. load_err)
+            or ("unknown DAP adapter: " .. tostring(task.adapter)))
         on_done(false)
         return function() end
     end

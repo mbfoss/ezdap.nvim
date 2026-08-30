@@ -55,7 +55,7 @@ end
 local function _check_adapters()
     health.start("ezdap: adapters")
 
-    local names = require("ezdap.schema").adapter_names()
+    local names = require("ezdap").available_adapters()
     health.ok(("%d registered: %s"):format(#names, table.concat(names, ", ")))
     health.info((":%s adapter_info <adapter> loads one and reports its modes, inputs and tooling")
         :format(require("ezdap.config").command))
