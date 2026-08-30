@@ -8,6 +8,7 @@ local M = {}
 ---@field title? string
 ---@field is_markdown boolean?
 ---@field conceallevel integer?  `'conceallevel'` for a markdown float; 3 when unset
+---@field content_width integer?  width the text occupies once concealed, when the caller knows better than measuring the source
 
 ---@param text string
 ---@param opts ezdap.util.floatwin.FloatwinOpts?
@@ -19,8 +20,12 @@ function M.open(text, opts)
     local max_w = math.floor(ui_width * 0.8)
     local max_h = math.floor(ui_height * 0.8)
     local content_w = 30
-    for _, line in ipairs(lines) do
-        content_w = math.max(content_w, vim.fn.strwidth(line))
+    if opts.content_width then
+        content_w = math.max(content_w, opts.content_width)
+    else
+        for _, line in ipairs(lines) do
+            content_w = math.max(content_w, vim.fn.strwidth(line))
+        end
     end
 
     local win_width = math.min(content_w + 2, max_w)
@@ -73,9 +78,9 @@ function M.open(text, opts)
         if not ok then
             vim.bo[buf].syntax = "on"
         end
-        -- Concealing shortens the lines it is on, which pulls fixed-width
-        -- content out of column, so a caller can ask for 0 and keep every
-        -- character.
+        -- Concealing shortens the lines it is on: fixed-width content either
+        -- pads for that and says how wide it lands (`content_width`) or asks
+        -- for level 0. `concealcursor` keeps the cursor's row from reopening.
         vim.wo[win].conceallevel = opts.conceallevel or 3
         vim.wo[win].concealcursor = "nv"
     end

@@ -15,17 +15,28 @@ local schema = require("ezdap.schema")
 
 local M = {}
 
+---How wide `text` lands on screen: its display width, less the markup the float
+---hides. `markdown_inline` conceals code-span backticks and emphasis delimiters,
+---so the cell markup below costs no columns.
+---@param text string
+---@return integer
+local function _width(text)
+    local shown = text:gsub("`", ""):gsub("%*%*", "")
+    return vim.fn.strdisplaywidth(shown)
+end
+
 ---A box-drawn table, its columns padded to a common width. Drawn rather than left
----to markdown because the float shows its source: a pipe-and-dash table reads as
----markup, where ruled borders read as a table at any conceallevel.
+---to markdown because a pipe-and-dash table only lines up while its markers are
+---on screen, where ruled borders survive the conceal that makes the cell markup
+---pay off.
 ---@param headers string[]
 ---@param rows string[][]
 ---@param out string[]  appended to
 local function _table(headers, rows, out)
-    -- Padded to display width, not byte length: a cell holding an em dash or any
-    -- other multibyte character would otherwise come out short by the difference
+    -- Measured as displayed, not in bytes: a cell holding an em dash, or the
+    -- backticks around a type, would otherwise come out short by the difference
     -- and break the column.
-    local width = vim.fn.strdisplaywidth
+    local width = _width
 
     local widths = {}
     for i, head in ipairs(headers) do widths[i] = width(head) end
@@ -85,11 +96,14 @@ end
 local function _description_of(input)
     local text = input.description or ""
     if input.choices and #input.choices > 0 then
-        local listed = "one of " .. table.concat(input.choices, ", ")
+        local quoted = vim.tbl_map(function(c) return ("`%s`"):format(c) end, input.choices)
+        local listed = "one of " .. table.concat(quoted, ", ")
         text = text == "" and listed or (listed .. "; " .. text)
     end
     if input.required then
-        text = text == "" and "(required)" or ("(required) " .. text)
+        -- Inside the code span the brackets are text, not a shortcut link whose
+        -- own brackets the float would conceal.
+        text = text == "" and "`[required]`" or ("`[required]` " .. text)
     end
     return text
 end
@@ -127,7 +141,13 @@ local function _mode_block(adapter, mode_name, out)
 
     local rows = {}
     for i, name in ipairs(names) do
-        rows[i] = { name, _type_of(specs[name]), _description_of(specs[name]) }
+        -- Code spans, so the markdown highlighter colours the name and the type
+        -- apart from the prose beside them.
+        rows[i] = {
+            ("`%s`"):format(name),
+            ("`%s`"):format(_type_of(specs[name])),
+            _description_of(specs[name]),
+        }
     end
     _table({ "input", "type", "description" }, rows, out)
 end
@@ -139,7 +159,7 @@ function M.overview()
     local names = require("ezdap").available_adapters()
 
     local out = { ("## adapters (%d)"):format(#names), "" }
-    for _, name in ipairs(names) do out[#out + 1] = "- " .. name end
+    for _, name in ipairs(names) do out[#out + 1] = "- `" .. name .. "`" end
     vim.list_extend(out, {
         "",
         (":%s adapter_info <adapter> loads one and reports its modes, inputs and tooling")
@@ -168,7 +188,7 @@ local function _tooling(def)
 
     local resolved = vim.fn.exepath(exe)
     if resolved == "" then
-        return ("'%s' not found on PATH"):format(exe)
+        return ("`%s` not found on PATH"):format(exe)
     end
 
     -- A table command may point at an adapter file (e.g. a mason-managed .js);
@@ -178,11 +198,11 @@ local function _tooling(def)
             local arg = def.command[i]
             if type(arg) == "string" and arg:sub(1, 1) == "/" and arg:match("%.js$")
                 and vim.fn.filereadable(arg) == 0 then
-                return ("'%s' found but the adapter file is missing: %s"):format(exe, arg)
+                return ("`%s` found but the adapter file is missing: `%s`"):format(exe, arg)
             end
         end
     end
-    return ("'%s' found (%s)"):format(exe, resolved)
+    return ("`%s` found (`%s`)"):format(exe, resolved)
 end
 
 ---The `status` section: a bullet per finding — where the executable resolved to,
@@ -270,8 +290,12 @@ function M.show(adapter, mode_name)
         end
         title = mode_name and (adapter .. " " .. mode_name) or adapter
     end
+    -- Width measured the same way the table was padded, so the float is as wide
+    -- as the page looks rather than as wide as its markup.
+    local width = 0
+    for _, line in ipairs(lines) do width = math.max(width, _width(line)) end
     require("ezdap.util.floatwin").open(table.concat(lines, "\n"),
-        { title = title, is_markdown = true, conceallevel = 0 })
+        { title = title, is_markdown = true, content_width = width })
 end
 
 return M
