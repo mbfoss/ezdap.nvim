@@ -72,11 +72,11 @@ its only path to the DAP layer.
   handed a `runner.Presenter` that takes its buffers, progress and outcome;
   nothing here knows about windows.
 - [run_display.lua](lua/ezdap/ui/run_display.lua) — the presenter ezdap's own runs
-  get, installed on the runner by `setup`. It makes the run's log buffer, holds
-  the buffers the run spawned so `clean` can wipe them, and forwards all of it to
-  whichever `ui.RunBackend` is in play
+  get. `for_panel` closes it over one `ui.RunPanel`
   ([dock_panel.lua](lua/ezdap/ui/dock_panel.lua) when dock.nvim is installed,
-  otherwise [output_win.lua](lua/ezdap/ui/output_win.lua)). A caller passing a
+  otherwise [output_win.lua](lua/ezdap/ui/output_win.lua)) and `setup` installs the
+  result on the runner. It makes the run's log buffer, holds the buffers the run
+  spawned so `clean` can wipe them, and forwards all of it to that panel. A caller passing a
   `runner.Presenter` of its own (as tomltasks' `debug` task type does) replaces
   this module for that run: ezdap's panels never see it, `clean` does not touch
   it, and it leaves ezdap through `remove_run`.
@@ -108,7 +108,7 @@ that root. The store knows nothing about *what* is stored — the lifecycle
 **UI** — [lua/ezdap/ui/](lua/ezdap/ui/)
 `DebugView.lua` (the main tree panel, built on `TreeBuffer`), plus
 `DisassemblyView`, `InspectView`, `ReplBuffer`, `OutputBuffer`, the run display
-(`run_display`) and its two panel backends (`dock_panel`, `output_win`), shared
+(`run_display`) and its two run panels (`dock_panel`, `output_win`), shared
 presentation (`format`,
 `value_hover`, `node_details`) and the sign/inline-value modules
 (`breakpoints_ui`, `debugline_ui`, `inlinevars`, `expressions`).

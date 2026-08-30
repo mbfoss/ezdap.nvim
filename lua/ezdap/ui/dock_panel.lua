@@ -1,18 +1,18 @@
----@brief The dock.nvim panel backend: one dock group (a tab) per run under the
+---@brief The dock.nvim run panel: one dock group (a tab) per run under the
 ---`ezdap` source, each of the run's buffers a page in it.
 ---
----An `ezdap.ui.RunBackend`, put in play by `init` in place of
----`ezdap.ui.output_win` when dock.nvim is installed and driven from
----`ezdap.ui.run_display`. dock owns the window, the tab bar and the focus rules;
----ezdap keeps owning its buffers, which is why a group is dropped rather than
----cleaned when the run's buffers are wiped.
+---An `ezdap.ui.RunPanel`, driven from `ezdap.ui.run_display`; `setup` puts it
+---in play in place of `ezdap.ui.output_win` when dock.nvim is installed. dock owns
+---the window, the tab bar and the focus rules; ezdap keeps owning its buffers,
+---which is why a group is dropped rather than cleaned when the run's buffers are
+---wiped.
 
 local format = require("ezdap.ui.format")
 
 local M      = {}
 
----Whether this backend was started. The panel operations are inert until it is,
----so `:Debug output` reaches the backend in play — and nothing here requires
+---Whether this panel was started. The dock operations below are inert until it
+---is, so `:Debug output` reaches the panel in play — and nothing here requires
 ---`dock` before `setup` has established that it is there.
 local _enabled = false
 
@@ -68,7 +68,7 @@ local function _group(run)
     return group
 end
 
--- The RunBackend interface. A run's group is made on the run itself rather than
+-- The RunPanel interface. A run's group is made on the run itself rather than
 -- on its first buffer, so it has its tab by the time anything lands in it.
 
 ---@param run ezdap.runner.Run
@@ -94,16 +94,12 @@ function M.close_run(run)
     if group then group:remove() end
 end
 
----Take the runs. Called from `setup` when dock.nvim is installed; safe to call
----again.
-function M.init()
-    if _enabled then return end
-    _enabled = true
-    require("ezdap.ui.run_display").set_backend(M)
-end
+---Mark this panel the one in play, so the dock operations below act rather than
+---defer to the bottom split. Called from `setup`, which also hands it the runs.
+function M.init() _enabled = true end
 
--- Panel-level operations. The dock is shared with other plugins, so these act on
--- the whole panel, not on ezdap's tabs alone.
+-- Dock-level operations. The dock is shared with other plugins, so these act on
+-- its whole panel, not on ezdap's tabs alone.
 
 ---@param focus? boolean
 function M.open(focus)

@@ -1,8 +1,8 @@
----@brief The single bottom split that shows a run's buffer — the panel backend
+---@brief The single bottom split that shows a run's buffer — the run panel
 ---used when dock.nvim is not installed.
 ---
 ---A run spawns several buffers (Terminal, Output, REPL, adapter log, DAP
----messages); this `ezdap.ui.RunBackend` registers each with a priority and the
+---messages); this `ezdap.ui.RunPanel` registers each with a priority and the
 ---window holds the highest-priority live one. One window is reused for all of
 ---them: registering a buffer swaps the occupant rather than opening a second
 ---split.
@@ -16,7 +16,7 @@ local config   = require("ezdap.config")
 
 local M        = {}
 
----Whether this window is the backend in play, established by `init`. Everything
+---Whether this window is the run panel in play, established by `init`. Everything
 ---below is inert until then, so `:Debug output` reaches the dock instead.
 local _enabled = false
 
@@ -206,7 +206,7 @@ function M.winid()
     return _open_win()
 end
 
----The RunBackend interface: one window for all runs, so which run a buffer came
+---The RunPanel interface: one window for all runs, so which run a buffer came
 ---from does not matter here — it ranks against every other run's buffers, and a
 ---run's identity and outcome have nowhere to show.
 ---@param _run ezdap.runner.Run
@@ -214,12 +214,8 @@ end
 ---@param opts ezdap.AddBufOpts
 function M.add_buf(_run, bufnr, opts) M.add(bufnr, opts) end
 
----Take the runs. Called from `setup` unless dock.nvim took them; safe to call
----again.
-function M.init()
-    if _enabled then return end
-    _enabled = true
-    require("ezdap.ui.run_display").set_backend(M)
-end
+---Mark this panel the one in play, so the window operations above act rather
+---than defer to the dock. Called from `setup`, which also hands it the runs.
+function M.init() _enabled = true end
 
 return M

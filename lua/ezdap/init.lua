@@ -458,16 +458,20 @@ local function _init()
     require("ezdap.ui.debugline_ui").init()
     require("ezdap.ui.inlinevars").enable()
     require("ezdap.ui.popup_menu").init()
-    -- A panel backend takes the runs in its own `init`; this is the one place
-    -- picking which. dock.nvim gives each run a tab of its own, so it takes them
-    -- when installed and ezdap's bottom split stays out of the way.
+    -- The one place picking a run panel: dock.nvim gives each run a tab of its
+    -- own, so it takes the runs when installed and ezdap's bottom split stays out
+    -- of the way.
+    local panel
     if pcall(require, "dock") then
-        require("ezdap.ui.dock_panel").init()
+        panel = require("ezdap.ui.dock_panel")
     else
-        require("ezdap.ui.output_win").init()
+        panel = require("ezdap.ui.output_win")
     end
-    -- Every run ezdap owns is shown through this, whichever backend is behind it.
-    require("ezdap.runner").set_presenter(require("ezdap.ui.run_display").presenter)
+    panel.init()
+
+    -- Every run ezdap owns is shown through `run_display`, onto that panel.
+    require("ezdap.runner").set_presenter(
+        require("ezdap.ui.run_display").for_panel(panel))
 
     local client = require("ezdap.dap.client")
     client.on_session_added:subscribe(function()

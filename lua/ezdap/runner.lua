@@ -58,7 +58,7 @@ local _presenter_for = function()
 end
 
 ---Install the presenter ezdap's own runs are shown by. Called from `setup`, which
----picks the panel backend behind it.
+---picks the run panel behind it.
 ---@param factory ezdap.runner.PresenterFactory
 function M.set_presenter(factory) _presenter_for = factory end
 
