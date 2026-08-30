@@ -489,9 +489,6 @@ function _ensure_loaded()
     _load()
 end
 
----@type table<string, ezdap.AdapterDef>
-M.adapters = nil
-
 ---Return the singleton DebugView, creating it on first call.
 ---@return ezdap.DebugView
 function M.debug_view()

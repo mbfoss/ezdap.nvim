@@ -17,7 +17,7 @@ local M = {}
 ---An adapter's declared `modes`, or an empty table.
 ---@param adapter string
 ---@return table<string, ezdap.Mode>
-function M.modes(adapter)
+local function _modes(adapter)
     local def = require("ezdap.adapters")[adapter]
     return (def and def.modes) or {}
 end
@@ -27,7 +27,7 @@ end
 ---@param name string
 ---@return ezdap.Mode?
 function M.mode(adapter, name)
-    return M.modes(adapter)[name]
+    return _modes(adapter)[name]
 end
 
 ---An adapter's mode names, sorted.
@@ -35,7 +35,7 @@ end
 ---@return string[]
 function M.mode_names(adapter)
     local out = {}
-    for name in pairs(M.modes(adapter)) do out[#out + 1] = name end
+    for name in pairs(_modes(adapter)) do out[#out + 1] = name end
     table.sort(out)
     return out
 end
@@ -91,22 +91,6 @@ function M.adapters_with_modes()
     return out
 end
 
----The distinct `request` values ("launch"/"attach") an adapter's modes use,
----sorted.
----@param adapter string
----@return string[]
-function M.requests(adapter)
-    local seen, out = {}, {}
-    for _, mode in pairs(M.modes(adapter)) do
-        if not seen[mode.request] then
-            seen[mode.request] = true
-            out[#out + 1] = mode.request
-        end
-    end
-    table.sort(out)
-    return out
-end
-
 -- Validation
 
 ---One mode's declaration problems, each already prefixed with the mode name.
@@ -147,7 +131,7 @@ end
 ---adapter's tooling is installed is `:checkhealth ezdap`.
 ---@param adapter string
 ---@return string[] problems
-function M.validate(adapter)
+local function _validate(adapter)
     local def = require("ezdap.adapters")[adapter]
     if type(def) ~= "table" then
         return { ("not a table, got %s"):format(type(def)) }
@@ -173,7 +157,7 @@ function M.validate_all()
     local registry = require("ezdap.adapters")
     local out = {}
     for name in pairs(registry) do
-        local problems = M.validate(name)
+        local problems = _validate(name)
         if #problems > 0 then out[name] = problems end
     end
 

@@ -383,15 +383,4 @@ function M.cancel()
     end
 end
 
----Every run ezdap owns, live and finished, in start order. Runs a caller presents
----are absent: that caller tracks its own.
----@return ezdap.runner.Run[]
-function M.runs()
-    local out = {}
-    for _, r in ipairs(_runs) do
-        if r.owned then out[#out + 1] = r end
-    end
-    return out
-end
-
 return M

@@ -485,14 +485,4 @@ function M.check(input)
     return err
 end
 
----What one element of an input's value becomes — a `list` entry, a `map` value:
----the type of the row its elements are read by, which its `item_type` names. Nil
----for an input that isn't a collection.
----@param input ezdap.Input?
----@return ezdap.InputType?
-function M.item_value_type(input)
-    local r = _resolve(input)
-    return r.kind and r.def.type or nil
-end
-
 return M
