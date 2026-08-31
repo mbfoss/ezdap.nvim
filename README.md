@@ -657,7 +657,15 @@ of a file ; `ezdap.available_adapters()` lists those too — unless
 `enabled_adapters` is set and leaves the name out, which withholds it from the
 registry entirely.
 
+<!-- panvimdoc-ignore-start -->
+
 The full contract is in [WRITING-DEFINITIONS.md](WRITING-DEFINITIONS.md).
+
+<!-- panvimdoc-ignore-end -->
+
+<!-- vimdoc-only
+The full contract is in WRITING-DEFINITIONS.md in the repository.
+-->
 
 Added adapters are listed by `:checkhealth ezdap` and `ezdap.available_adapters()`
 too, and document themselves:
@@ -685,5 +693,14 @@ Why do modes declare `inputs` rather than taking a raw DAP body?
 
 ## Contributing
 
+<!-- panvimdoc-ignore-start -->
+
 Contributions are welcome. See [DEVELOPMENT.md](DEVELOPMENT.md) for the
 architecture overview, module map, and conventions.
+
+<!-- panvimdoc-ignore-end -->
+
+<!-- vimdoc-only
+Contributions are welcome. See DEVELOPMENT.md in the repository for the
+architecture overview, module map, and conventions.
+-->
