@@ -146,9 +146,10 @@ end
 local function _new_run(name, presenter)
     _clear_finished(name)
 
-    _counter = _counter + 1
+    _counter          = _counter + 1
     -- `presenter` is filled in just below: it needs the run to exist first.
-    local run = {
+    ---@diagnostic disable-next-line: missing-fields
+    local run         = {
         id       = name .. "-" .. _counter,
         name     = name,
         cancel   = function() end,
@@ -194,9 +195,9 @@ local function _start(run, task)
         on_done   = function(ok) _set_state(run, ok and "done" or "failed") end,
     })
 
-    run.cancel   = cancel
+    run.cancel             = cancel
     -- Held by reference: the sessions land in it as they start.
-    run.sessions = sessions
+    run.sessions           = sessions
 end
 
 ---Resolve one of an adapter's named modes through its `build` and run it. The run

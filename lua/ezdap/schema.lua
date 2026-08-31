@@ -269,7 +269,7 @@ function M.resolve_task(spec, done)
             return finish(nil, ("build returned a %s as its connection, expected a table")
                 :format(type(connect)))
         end
-        deliver(body --[[@as table]], connect or {})
+        deliver(body --[[@as table]], connect --[[@as table]] or {})
     end)
     local ok, err = coroutine.resume(co)
     if not ok then finish(nil, tostring(err)) end

@@ -11,14 +11,14 @@
 ---nowhere to show — which is why `ezdap.ui.dock_panel` takes over when dock.nvim
 ---can give each run a tab of its own.
 
-local fixedwin = require("ezdap.util.fixedwin")
-local config   = require("ezdap.config")
+local fixedwin     = require("ezdap.util.fixedwin")
+local config       = require("ezdap.config")
 
-local M        = {}
+local M            = {}
 
 ---Whether this window is the run panel in play, established by `init`. Everything
 ---below is inert until then, so `:Debug output` reaches the dock instead.
-local _enabled = false
+local _enabled     = false
 
 ---One buffer a run registered for display, as passed to `ezdap.AddBufOpts`.
 ---@class ezdap.ui.output_win.Entry
@@ -27,25 +27,30 @@ local _enabled = false
 ---@field seq      integer  registration order; breaks priority ties toward the newest
 
 ---@type ezdap.ui.output_win.Entry[]
-local _entries = {}
-local _seq     = 0
+local _entries     = {}
+local _seq         = 0
 
 ---@type integer?
-local _win     = nil
+local _win         = nil
+---fixedwin's autocmd group for `_win`, torn down when the window stops being
+---ours so it no longer holds the user's window to our height.
 ---@type integer?
-local _shown   = nil
+local _fixed_group = nil
+---@type integer?
+local _shown       = nil
 ---The buffer the window held when it was closed, live only for the tick of the
 ---close: nvim closes the window before announcing the buffer's deletion, so this
 ---is how `refresh` tells that close apart from the user closing the window.
 ---@type integer?
 local _closed_with = nil
 ---@type number?
-local _ratio   = nil
+local _ratio       = nil
 
-local _augroup = vim.api.nvim_create_augroup("ezdap.output_win", { clear = true })
+local _augroup     = vim.api.nvim_create_augroup("ezdap.output_win", { clear = true })
 
--- `vim.wo[win].opt = val` also writes nvim's hidden global default, leaking this
--- window's settings into every future window. Force `scope = "local"`.
+-- `vim.wo[win].opt = val` acts like `:set` (see `:h vim.wo`): it writes the
+-- option's global value too, so freshly created windows -- floats especially --
+-- inherit this window's settings. Force `scope = "local"`.
 ---@param win integer
 ---@param opt string
 ---@param val any
@@ -79,21 +84,62 @@ local function _target()
     return best and best.bufnr
 end
 
+---@param bufnr integer
+---@return boolean  whether the buffer is one of ours
+local function _is_registered(bufnr)
+    for _, e in ipairs(_entries) do
+        if e.bufnr == bufnr then return true end
+    end
+    return false
+end
+
+---Give the window back to the user, keeping its height for the next one we
+---open. Like a quickfix window turned ordinary, it keeps the look and the
+---pinned size it was given; only our hold on it goes.
+local function _disown()
+    local win = _win
+    _win, _shown = nil, nil
+    if win and vim.api.nvim_win_is_valid(win) then
+        _ratio = vim.api.nvim_win_get_height(win) / vim.o.lines
+        vim.wo[win].winfixheight = nil
+        _setlocal(win, "spell", false)
+    end
+    if _fixed_group then
+        vim.api.nvim_del_augroup_by_id(_fixed_group)
+        _fixed_group = nil
+    end
+end
+
+---The window while it is still ours: valid, and holding one of our buffers. The
+---user switching it to a buffer of their own hands it over, so a later `open`
+---splits a new one rather than taking theirs.
 ---@return integer?  the window, when open
 local function _open_win()
-    if _win and vim.api.nvim_win_is_valid(_win) then return _win end
+    if not _win then return nil end
+    if vim.api.nvim_win_is_valid(_win) then
+        local bufnr = vim.api.nvim_win_get_buf(_win)
+        if bufnr == _shown or _is_registered(bufnr) then
+            _shown = bufnr
+            return _win
+        end
+    end
+    _disown()
     return nil
 end
 
+-- Notice the handover as it happens: waiting for the next call into this module
+-- would leave fixedwin pinning the height of a window that is no longer ours.
+vim.api.nvim_create_autocmd("BufWinEnter", {
+    group    = _augroup,
+    callback = function() _open_win() end,
+})
+
+---@param win   integer  the window, already checked to be ours
 ---@param bufnr integer
-local function _display(bufnr)
-    local win = _open_win()
-    if not win or _shown == bufnr then return end
+local function _display(win, bufnr)
+    if _shown == bufnr then return end
     vim.api.nvim_win_set_buf(win, bufnr)
     _shown = bufnr
-    _setlocal(win, "number", false)
-    _setlocal(win, "relativenumber", false)
-    _setlocal(win, "signcolumn", "no")
 end
 
 ---Open the window (a no-op when already open) and show the target buffer.
@@ -106,24 +152,28 @@ function M.open(focus)
     local win = _open_win()
     if win then
         if focus then vim.api.nvim_set_current_win(win) end
-        _display(bufnr)
+        _display(win, bufnr)
         return
     end
     -- fixedwin owns the split, its height pinning and the resize/ratio tracking;
     -- we only swap in the run's buffer. Its on_delete fires on WinClosed, so
     -- closing by any route — ours, `:q` — records the height and drops the state.
-    _win = fixedwin.create_fixed_win("height", _ratio or config.panel_height_ratio,
+    _win, _fixed_group = fixedwin.create_fixed_win("height", _ratio or config.panel_height_ratio,
         function(ratio)
             _ratio       = ratio
             _closed_with = _shown
             _win, _shown = nil, nil
+            _fixed_group = nil
             -- Only a deletion of the buffer just closed with reopens the window,
             -- and only on this tick — a `:q` a moment earlier must not.
             vim.schedule(function() _closed_with = nil end)
         end,
         { enter = focus or false })
+
+    _setlocal(_win, "spell", false)
+
     _shown = nil
-    _display(bufnr)
+    _display(_win, bufnr)
 end
 
 ---Close the window, keeping the registry — the next registered buffer (or an
@@ -147,10 +197,11 @@ function M.refresh(deleted)
     local reopen = deleted ~= nil and deleted == _closed_with
     _closed_with = nil
     local bufnr  = _target()
+    local win    = _open_win()
     if not bufnr then
         M.close()
-    elseif _open_win() then
-        _display(bufnr)
+    elseif win then
+        _display(win, bufnr)
     elseif reopen then
         M.open(false)
     end
@@ -198,7 +249,8 @@ function M.show(bufnr, opts)
     if not _enabled then return end
     M.add(bufnr, opts)
     M.open(true)
-    _display(bufnr)
+    local win = _open_win()
+    if win then _display(win, bufnr) end
 end
 
 ---@return integer? winid  the window, when open
