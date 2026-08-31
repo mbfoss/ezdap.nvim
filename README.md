@@ -641,10 +641,10 @@ return {
       description = "debug an executable",
       request     = "launch",
       inputs      = {
-        program = { required = true, format = "file", description = "executable to debug" },
+        program = { required = true, completion = "file", description = "executable to debug" },
       },
       build = function(inputs)
-        return { program = inputs.program, stopOnEntry = true }
+        return { program = require("ezdap.shared").normalize_path(inputs.program), stopOnEntry = true }
       end,
     },
   },

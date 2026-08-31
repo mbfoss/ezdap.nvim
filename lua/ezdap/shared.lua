@@ -47,6 +47,38 @@ function M.expand_path(path, cwd)
     return vim.fs.normalize(path)
 end
 
+---One path input as the DAP server should receive it: `~`, `$VAR` and redundant
+---separators resolved. Nil passes through, so an unset optional input stays unset
+---and its key is dropped from the body; a `list`/`map` of paths is normalized
+---entry by entry. Not `expand()`: that reads a leading `%`/`#`/`<` as a
+---cmdline-special name, which rewrites a path starting with one and *raises* when
+---there is nothing to name.
+---@param path string|string[]|table<string,string>|nil  a path input's value
+---@return string|table|nil
+function M.normalize_path(path)
+    if path == nil then return nil end
+    if type(path) == "table" then
+        local out = {}
+        for key, entry in pairs(path) do out[key] = M.normalize_path(entry) end
+        return out
+    end
+    return vim.fs.normalize(path)
+end
+
+---One port input, held to the range a port has. Returns the port unchanged, or nil
+---and a message — the `nil, err` pair `build` returns to abort a run:
+---`local port, err = shared.resolve_port(inputs.port)`. An unset optional input is
+---nil in and nil out, with no error, so only a written value is checked.
+---@param port integer?  a port input's value
+---@return integer? port, string? err
+function M.resolve_port(port)
+    if port == nil then return nil end
+    if port < 0 or port > 65535 then
+        return nil, ("port out of range (0-65535), got %s"):format(port)
+    end
+    return port
+end
+
 ---Walk a list of candidate locations and return the first one `accept` approves,
 ---alongside every candidate actually tried (for an error message naming them).
 ---Entries are expanded by `expand_path`, mapped through `opts.transform` when one

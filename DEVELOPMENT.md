@@ -84,9 +84,8 @@ its only path to the DAP layer.
 - [inputs.lua](lua/ezdap/inputs.lua) — the input registry: `M.types`, one row per
   scalar type, stating every way it is read (parsed from a command line, described
   as JSON Schema for a typed file, seeded into a scaffolded document, completed),
-  and `M.formats`, each row extending one type with a narrower reading of the same
-  value. Nothing else switches on a type or format name, so adding one is a single
-  row.
+  and `M.sources`, the completion an input may ask for by name. Nothing else
+  switches on a type name, so adding one is a single row.
 - [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug run`, the
   reader for `new_run_file`, and the mode engine `runner` resolves every run through.
   `resolve_task` reads a mode's declared `inputs` from a table of values
@@ -153,16 +152,22 @@ Each `ezdap.Input` declares one input up front:
 | Field      | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
 | `type`     | what the input *is* — what `build` receives: one of `string`/`boolean`/`integer`/`number`, or a collection, `list` (`a,b`) or `map` (`A=1,B=2`, string keys). Defaults to `string` |
-| `format`   | an optional **extension** of `type` with a narrower reading of the same value: `file`/`dir` (a string, normalized and completed as a path), `command` (a string taken verbatim, each token completed as a path), `port` (an integer, range-checked). Types and formats are one flat vocabulary to write in — `{ type = "port" }` and `{ type = "integer", format = "port" }` say the same thing — but naming a `type` the format doesn't extend is an error |
 | `item_type` | a collection's *entry* type, declared exactly as `type` is but scalars only — `{ type = "list", item_type = "integer" }` is a list of integers. Defaults to `string` |
-| `item_format` | an extension of `item_type`, declared exactly as `format` is — `{ type = "map", item_format = "dir" }` is a map of directories |
-| `choices`  | the values the input is normally written with, when the adapter names them itself. Completion offers them and a typed file's schema lists them as `examples`, but nothing rejects a value outside them |
+| `completion` | what the value completes with, in one of three forms: a named source (`"file"`, `"dir"`, `"command"` — the last completing each token of a command line as a path), the values themselves (`{ "console", "terminal" }`), or a `fun(partial): string[]` computing them. A written-out set also reaches a typed file's schema as `examples` and the scaffolded file as a comment; a source or a function has nothing to serialize. Completion only *suggests* — nothing rejects a value written past it. On a collection it describes one entry |
 | `required` | when `true`, the user must supply the value; leaving it unset is a resolve error. Any other unset input simply arrives at `build` as nil — which `build` may answer by omitting the field, or some other way: an attach `build` asks the user to pick a process for an unset `pid`, so no adapter marks that input `required` |
 | `description` | a few words on what the input means, e.g. `"process id to attach to"` |
 
-Every type and format is one row in [inputs.lua](lua/ezdap/inputs.lua) stating how a
-value of it is parsed, described as JSON Schema, seeded and completed — so adding one
-is a single row, never an `if format == …` anywhere else.
+Every type is one row in [inputs.lua](lua/ezdap/inputs.lua) stating how a value of it
+is parsed, described as JSON Schema, seeded and completed, and every named completion
+source one entry beside them — so adding either is a single row, never an
+`if type == …` anywhere else.
+
+What a value additionally *is* — a path, a port — is not a row: `build` says it, with
+`shared.normalize_path` and `shared.resolve_port`. A row states what a value **is**;
+narrowing one kind of string into another was a second vocabulary layered on that one,
+paid for in every projection (a schema merge, a refine step, a check step, and the rule
+reconciling a `type` with a `format` naming a different one), and it bought two
+behaviours a `build` line each expresses.
 
 #### Two authoring forms
 
@@ -182,8 +187,8 @@ This is why a row is more than a parser. `map` is the clearest case: you write
 `build` receives one table either way. The [inputs.lua](lua/ezdap/inputs.lua) row
 states both forms, along with how the input gets described to a schema-driven
 editor, seeded into a scaffolded document, and completed on a command line. Adding
-a type or format means adding one row — every consumer, in ezdap and easytasks
-alike, reads it from there.
+a type means adding one row — every consumer, in ezdap and easytasks alike, reads
+it from there.
 
 Both forms must describe the *same* value. A transformation into a different shape
 is not a second spelling and doesn't belong in a row: splitting a command line into
@@ -252,7 +257,7 @@ are normal and correct.
 
 Which names a mode takes is up to it — there is no portable role
 vocabulary across adapters — but by convention a `launch` mode takes one
-`command` input (a `command`-format string) carrying the whole command line, and
+`command` input (a string completing as `"command"`) carrying the whole command line, and
 `build` splits it into that adapter's own program/args fields via
 `shared.split_command`. See each file under `ezdap-adapters/` for worked examples
 of every shape, including custom-launch command strings (`codelldb`'s `core`), a

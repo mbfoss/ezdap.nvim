@@ -111,9 +111,6 @@ local function _check_mode(adapter, mode_name, out)
         local spec = M.mode_inputs(adapter, mode_name)[name]
         local err = inputs_registry.check(spec)
         if err then problem("input %s: %s", name, err) end
-        if spec.choices ~= nil and not vim.islist(spec.choices) then
-            problem("input %s: choices is not a list", name)
-        end
     end
 end
 

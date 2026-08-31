@@ -2,6 +2,8 @@
 -- host/port live at the task level (they set the connection), so the attach body
 -- itself stays minimal. The one adapter ezdap ships.
 
+local shared = require("ezdap.shared")
+
 ---@type ezdap.AdapterDef
 return {
     host  = "127.0.0.1",
@@ -13,12 +15,14 @@ return {
             inputs      = {
                 host = {
                     type = "string", description = "DAP server host",
-                    choices = { "localhost", "127.0.0.1", "::1", "::" },
+                    completion = { "localhost", "127.0.0.1", "::1", "::" },
                 },
-                port = { type = "integer", format = "port", description = "DAP server port" },
+                port = { type = "integer", description = "DAP server port" },
             },
             build = function(inputs)
-                return {}, { host = inputs.host, port = inputs.port }
+                local port, err = shared.resolve_port(inputs.port)
+                if err then return nil, err end
+                return {}, { host = inputs.host, port = port }
             end,
         },
     },

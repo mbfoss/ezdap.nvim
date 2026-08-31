@@ -32,7 +32,7 @@ return {
             description = "debug a native executable",
             request     = "launch", -- or "attach"
             inputs      = {
-                command = { type = "string", format = "command", required = true, description = "command line to debug" },
+                command = { type = "string", completion = "command", required = true, description = "command line to debug" },
             },
             build       = function(inputs) -- inputs -> DAP body
                 local program, args = require("ezdap.shared").split_command(inputs.command)
@@ -83,10 +83,9 @@ An `ezdap.Input` describes one value:
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | What the value is. Defaults to `string`. `list` is a table of entries, `map` a table of `key=value` entries. |
-| `format` | `"file"` \| `"dir"` \| `"command"` \| `"port"` | Narrows `type` — normalizes paths, range-checks a port, completes a command line's tokens as paths. Each format extends one type; naming a format under a type it doesn't extend is an error. |
-| `item_type` / `item_format` | as above | The same two fields for the *entries* of a `list` or `map`. |
+| `item_type` | as above, scalars only | The entry type of a `list` or `map`. |
 | `required` | `boolean` | Leaving it unset is an error. Defaults to `false`. |
-| `choices` | `string[]` | Suggested values, offered in completion. |
+| `completion` | `"file"` \| `"dir"` \| `"command"` \| `string[]` \| `fun(partial): string[]` | What the value completes with: a named source, the values themselves, or a function computing them. Suggests only — it never rejects a value. |
 | `description` | `string` | A few words on what the input means — this is what `:Debug new_run_file` and `quick_run` completion show. |
 
 ## Modes
@@ -104,17 +103,18 @@ return {
             description = "debug an executable",
             request     = "launch",
             inputs      = {
-                command       = { type = "string",  format = "command", required = true, description = "command line to debug" },
-                cwd           = { type = "string",  format = "dir",     description = "working directory" },
-                env           = { type = "map",                         description = "environment variables" },
-                stop_on_entry = { type = "boolean",                     description = "break at program entry" },
+                command       = { type = "string",  completion = "command", required = true, description = "command line to debug" },
+                cwd           = { type = "string",  completion = "dir",     description = "working directory" },
+                env           = { type = "map",                             description = "environment variables" },
+                stop_on_entry = { type = "boolean",                         description = "break at program entry" },
             },
             build = function(inputs)
-                local program, args = require("ezdap.shared").split_command(inputs.command)
+                local shared = require("ezdap.shared")
+                local program, args = shared.split_command(inputs.command)
                 return {
                     program     = program,
                     args        = args,
-                    cwd         = inputs.cwd,
+                    cwd         = shared.normalize_path(inputs.cwd),
                     env         = inputs.env,
                     stopOnEntry = inputs.stop_on_entry,
                 }
@@ -136,23 +136,26 @@ How the pieces fit:
 - **`inputs`** — one entry per accepted value, keyed by the name typed on the command line
   or written in a run file's `parameters`. `type` is what `build` receives (`string`,
   `boolean`, `integer`, `number`, and the two collections `list` — `a,b` — and `map` —
-  `A=1,B=2`, string keys). `type` alone says everything for a plain value; the optional
-  `format` **extends** one type with a narrower reading of the same value — `file`/`dir`
-  (a string, normalized and completed as a path), `command` (a string taken verbatim, its
-  program and each argument completed as paths), `port` (an integer, range-checked). The
-  value stays the type's, so naming a `type` the format doesn't extend is an error — but
-  the two are one flat vocabulary to write in, so `{ type = "port" }` and
-  `{ format = "port" }` both say a range-checked integer. A `list`/`map` declares one
-  *element* the same way, under `item_type`/`item_format`: `{ type = "list", item_format =
-  "dir" }` is a list of directories, `{ type = "map", item_type = "integer" }` a map of
-  integers, and a collection that declares neither holds strings. The full vocabulary is
-  one row per type and per format in [inputs.lua](lua/ezdap/inputs.lua) — every consumer
-  reads those rows, so a new format is a single addition there, never a
-  `if format == …` anywhere else.
-- **`choices`** — the values an input is normally written with, when the adapter names
-  them itself (`console`, `terminal`, `backend`, …). Completion offers them and a typed
-  file's schema lists them as `examples`, but nothing rejects a value outside them. A
-  boolean input completes as `true`/`false` on its own.
+  `A=1,B=2`, string keys), and it is the whole of what an input declares about its value.
+  A `list`/`map` declares its *entries* the same way under `item_type`: `{ type = "list",
+  item_type = "integer" }` is a list of integers, and a collection that declares none
+  holds strings. The full vocabulary is one row per type in
+  [inputs.lua](lua/ezdap/inputs.lua) — every consumer reads those rows.
+- **`completion`** — what the value offers while it is being typed, in whichever of three
+  forms fits: a named source (`"file"`, `"dir"`, or `"command"`, which completes each
+  token of a command line as a path), the values the input is normally written with when
+  the adapter names them itself (`{ "console", "terminal" }`), or a
+  `fun(partial): string[]` when they can only be computed — the targets in a workspace,
+  the containers running now. On a `list`/`map` it describes one entry. A written-out set
+  is also what a typed file's schema lists as `examples` and what
+  `:Debug new_run_file` writes into the scaffolded comment; a source or a function has
+  nothing to serialize. Nothing rejects a value outside what completes. A boolean input
+  completes as `true`/`false` on its own.
+- **Paths and ports** — a path input is a `string` and a port a plain `integer`; what
+  either additionally is, `build` says: `shared.normalize_path(inputs.cwd)` resolves `~`
+  and `$VAR` (nil in, nil out, and a `list`/`map` entry by entry), and
+  `local port, err = shared.resolve_port(inputs.port)` holds a port to its range, giving
+  back the `nil, err` pair an abort already returns.
 - **`required`** — an unset required input is a resolve error naming the input. Leave it
   off and an unset input simply arrives as `nil`; since Lua drops nil-valued keys,
   `cwd = inputs.cwd` omits `cwd` entirely. Write the field unconditionally and optional
@@ -220,9 +223,9 @@ connection there.
 ## Helpers
 
 Locating the adapter binary is most of what a definition does before it can run, so
-`ezdap.shared` helps: `split_command`, `resolve_pid`, `spawn`, and
-`resolve_path(candidates, accept, opts?)` — which expands `$VAR` and `~` and returns the
-first candidate `accept` approves, plus everything tried:
+`ezdap.shared` helps: `split_command`, `normalize_path`, `resolve_port`, `resolve_pid`,
+`spawn`, and `resolve_path(candidates, accept, opts?)` — which expands `$VAR` and `~` and
+returns the first candidate `accept` approves, plus everything tried:
 
 ```lua
 local shared = require("ezdap.shared")

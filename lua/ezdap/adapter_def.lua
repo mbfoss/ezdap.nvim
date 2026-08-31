@@ -11,7 +11,7 @@ error("do not require a meta file")
 ---@field mode?      string
 
 ---What an input's value *is*. A collection holds entries read as scalars, which its
----`item_type`/`item_format` name.
+---`item_type` names.
 ---@alias ezdap.InputType
 ---| "string"   # the default
 ---| "boolean"
@@ -20,25 +20,25 @@ error("do not require a meta file")
 ---| "list"     # a table of entries
 ---| "map"      # a table of `key=value` entries
 
----An optional *extension* of a type: the value stays that type, read the same way,
----and the format only narrows it — normalizing it, refusing part of its range or
----completing it differently. Each names the type it extends.
----@alias ezdap.InputFormat
----| "file"        # extends string: a file path, normalized
----| "dir"         # extends string: a directory path, normalized
----| "command"     # extends string: a command line, verbatim (each token completed as a path)
----| "port"        # extends integer: range-checked (0-65535)
+---What an input offers when its value is being typed, in any of three forms: a
+---named source, the values themselves, or a function computing them from what has
+---been typed so far. Completion only *suggests* — nothing here rejects a value
+---written past it, and what a path or a port additionally is, `build` says (see
+---`ezdap.shared.normalize_path`, `ezdap.shared.resolve_port`).
+---@alias ezdap.Completion
+---| "file"     # a file path
+---| "dir"      # a directory
+---| "command"  # a command line, each token completed as a path
+---| string[]   # the values themselves
+---| fun(partial: string): string[]
 
----A collection declares its *entries* with `item_type`/`item_format`, a scalar itself
----with `type`/`format`. A format may be named in either type slot (`type = "port"`),
----where it stands for the type it extends; naming a type it doesn't extend is an error.
+---A collection declares its *entries* with `item_type`, a scalar its own `type`.
+---`completion` describes one value either way — an entry, for a collection.
 ---@class ezdap.Input
 ---@field required?    boolean  unset is an error (default false)
----@field type?        ezdap.InputType    default `string`
----@field format?      ezdap.InputFormat  an extension of `type`, for a scalar input
----@field item_type?   ezdap.InputType    a `list`/`map` entry's type, default `string`
----@field item_format? ezdap.InputFormat  an extension of `item_type`
----@field choices?     string[]  suggested values for the input
+---@field type?        ezdap.InputType  default `string`
+---@field item_type?   ezdap.InputType  a `list`/`map` entry's type, default `string`
+---@field completion?  ezdap.Completion  what the value completes with
 ---@field description? string   a few words on what the input means
 
 ---@class ezdap.Mode

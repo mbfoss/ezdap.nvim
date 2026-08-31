@@ -1,7 +1,7 @@
 ---@brief The adapter reference behind `:Debug adapter_info`.
 ---
 ---An adapter definition documents itself: every mode carries a `description`
----and a `request`, every input a type, a format, its `choices` and a line on
+---and a `request`, every input a type, the values it completes with and a line on
 ---what it means (see `ezdap.Input` in `adapter_def.lua`). This module is the
 ---reader for that — it loads one adapter's definition, checks it, and renders
 ---what it declares as markdown in a float, so the same declaration that
@@ -70,33 +70,28 @@ local function _table(headers, rows, out)
     out[#out + 1] = rule("└", "┴", "┘")
 end
 
----How an input's value is written, in the `type[ format]` shape a definition
----declares it: the scalar's own pair, or the entry type of a collection.
+---How an input's value is written, as the definition declares it: the scalar's
+---own type, or the entry type of a collection.
 ---@param input ezdap.Input
 ---@return string
 local function _type_of(input)
     local kind = input.type or "string"
     if kind == "list" or kind == "map" then
-        local item = input.item_format or input.item_type
-        return item and (kind .. " of " .. item) or kind
-    end
-    -- A format may stand in the type slot (`type = "port"`), and then it has
-    -- already said everything the pair would.
-    if input.format and input.format ~= kind then
-        return kind .. " " .. input.format
+        return input.item_type and (kind .. " of " .. input.item_type) or kind
     end
     return kind
 end
 
 ---An input's description, with its enumerated values folded in — the set is
 ---part of what the input means, and completion is not available in a float —
----behind a `[required]` marker for the inputs a run fails without.
+---behind a `[required]` marker for the inputs a run fails without. Only a
+---written-out set is shown; a source or a function is completion's to answer.
 ---@param input ezdap.Input
 ---@return string
 local function _description_of(input)
     local text = input.description or ""
-    if input.choices and #input.choices > 0 then
-        local quoted = vim.tbl_map(function(c) return ("`%s`"):format(c) end, input.choices)
+    if vim.islist(input.completion) and #input.completion > 0 then
+        local quoted = vim.tbl_map(function(c) return ("`%s`"):format(c) end, input.completion)
         local listed = "one of " .. table.concat(quoted, ", ")
         text = text == "" and listed or (listed .. "; " .. text)
     end
