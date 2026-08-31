@@ -55,15 +55,7 @@ local UndoStack     = require("ezdap.util.UndoStack")
 
 ---@alias ezdap.DebugView.Chunk ezdap.ui.Chunk
 
--- `vim.wo[win].opt = val` sets both the window-local value AND nvim's hidden global
--- default, even for options with no real global scope — leaking this window's
--- settings into every future window. Force `scope = "local"` to confine them.
----@param win integer
----@param opt string
----@param val any
-local function _setlocal(win, opt, val)
-    vim.api.nvim_set_option_value(opt, val, { win = win, scope = "local" })
-end
+local _win_setlocal = ui.win_setlocal
 
 ---@param stop fun()?  stop fn returned by `_start_timer`, or nil
 ---@return nil
@@ -999,11 +991,11 @@ function DebugView:_open(focus)
         function(ratio) self._width_ratio = ratio end,
         { enter = focus, pos = pos })
     vim.api.nvim_win_set_buf(win, bufnr)
-    _setlocal(win, "winfixbuf", true)
-    _setlocal(win, "signcolumn", "no")
-    _setlocal(win, "number", false)
-    _setlocal(win, "relativenumber", false)
-    _setlocal(win, "wrap", false)
+    _win_setlocal(win, "winfixbuf", true)
+    _win_setlocal(win, "signcolumn", "no")
+    _win_setlocal(win, "number", false)
+    _win_setlocal(win, "relativenumber", false)
+    _win_setlocal(win, "wrap", false)
 end
 
 ---Open the DebugView in a vertical split (or focus if already visible).

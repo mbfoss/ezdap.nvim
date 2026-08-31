@@ -63,9 +63,9 @@ function M.open(text, opts)
         callback = close,
     })
 
-    vim.wo[win].wrap = false
-    vim.wo[win].winfixbuf = true
-    vim.wo[win].winhighlight = "NormalFloat:NormalFloat,FloatBorder:FloatBorder,FloatTitle:FloatTitle"
+    uiutil.win_setlocal(win, "wrap", false)
+    uiutil.win_setlocal(win, "winfixbuf", true)
+    uiutil.win_setlocal(win, "winhighlight", "NormalFloat:NormalFloat,FloatBorder:FloatBorder,FloatTitle:FloatTitle")
 
     if opts.is_markdown then
         vim.bo[buf].filetype = "markdown"
@@ -76,8 +76,8 @@ function M.open(text, opts)
         -- Concealing shortens the lines it is on, which pulls fixed-width
         -- content out of column, so a caller can ask for 0 and keep every
         -- character.
-        vim.wo[win].conceallevel = opts.conceallevel or 3
-        vim.wo[win].concealcursor = "nv"
+        uiutil.win_setlocal(win, "conceallevel", opts.conceallevel or 3)
+        uiutil.win_setlocal(win, "concealcursor", "nv")
     end
 
     local key_opts = { buffer = buf, silent = true }

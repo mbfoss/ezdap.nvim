@@ -565,8 +565,8 @@ function Picker:create_windows()
         self.pwin = nil
         if not self.closed then vim.schedule(function() self:close() end) end
     end)
-    vim.wo[self.pwin].winhighlight = _WINHL
-    vim.wo[self.pwin].wrap = false
+    ui_util.win_setlocal(self.pwin, "winhighlight", _WINHL)
+    ui_util.win_setlocal(self.pwin, "wrap", false)
 
     assert(type(pwin_augroup) == "number")
     vim.api.nvim_create_autocmd("WinEnter", {
@@ -598,14 +598,14 @@ function Picker:create_windows()
         self.lwin = nil
         if not self.closed then vim.schedule(function() self:close() end) end
     end)
-    vim.wo[self.lwin].winhighlight = _WINHL
-    vim.wo[self.lwin].wrap = self.opts.list_wrap ~= false
-    vim.wo[self.lwin].cursorline = false
-    vim.wo[self.lwin].breakindent = true
+    ui_util.win_setlocal(self.lwin, "winhighlight", _WINHL)
+    ui_util.win_setlocal(self.lwin, "wrap", self.opts.list_wrap ~= false)
+    ui_util.win_setlocal(self.lwin, "cursorline", false)
+    ui_util.win_setlocal(self.lwin, "breakindent", true)
     -- `wbr` is what `%=` stretches across the winbar; `eob` comes with the
     -- window's `style = "minimal"`, and setting 'fillchars' here drops it.
-    vim.wo[self.lwin].fillchars = "eob: ,wbr:" .. _RULE
-    vim.wo[self.lwin].winbar = _lwin_winbar(self._position_text)
+    ui_util.win_setlocal(self.lwin, "fillchars", "eob: ,wbr:" .. _RULE)
+    ui_util.win_setlocal(self.lwin, "winbar", _lwin_winbar(self._position_text))
 
     -- Preview window (optional)
     if self.preview_enabled then
@@ -619,8 +619,8 @@ function Picker:create_windows()
         self.vwin = ui_util.create_window(self.vbuf, false, self:_vwin_config(), function()
             self.vwin = nil
         end)
-        vim.wo[self.vwin].wrap = true
-        vim.wo[self.vwin].winhighlight = _WINHL
+        ui_util.win_setlocal(self.vwin, "wrap", true)
+        ui_util.win_setlocal(self.vwin, "winhighlight", _WINHL)
     end
 end
 
@@ -761,7 +761,7 @@ function Picker:render_list()
     vim.bo[self.lbuf].modifiable = false
 
     if self.lwin and vim.api.nvim_win_is_valid(self.lwin) then
-        vim.wo[self.lwin].cursorline = #self.list_items > 0
+        ui_util.win_setlocal(self.lwin, "cursorline", #self.list_items > 0)
     end
 end
 
@@ -834,7 +834,7 @@ function Picker:render_position()
     local text  = total > 0 and string.format("%d/%d", self:get_cursor() or 1, total) or nil
     if text == self._position_text then return end
     self._position_text = text
-    vim.wo[self.lwin].winbar = _lwin_winbar(text)
+    ui_util.win_setlocal(self.lwin, "winbar", _lwin_winbar(text))
 end
 
 function Picker:render_cursor()

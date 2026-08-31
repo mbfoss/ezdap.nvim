@@ -174,9 +174,9 @@ function M.open(expr)
             end
         end
 
-        vim.wo[win].wrap = false
-        vim.wo[win].winfixbuf = true
-        vim.wo[win].winhighlight = "NormalFloat:NormalFloat,FloatBorder:FloatBorder,FloatTitle:FloatTitle"
+        ui_util.win_setlocal(win, "wrap", false)
+        ui_util.win_setlocal(win, "winfixbuf", true)
+        ui_util.win_setlocal(win, "winhighlight", "NormalFloat:NormalFloat,FloatBorder:FloatBorder,FloatTitle:FloatTitle")
 
         -- The inspect float is a hover itself: dismiss it and put the value hover
         -- in its place, rather than stacking the two.

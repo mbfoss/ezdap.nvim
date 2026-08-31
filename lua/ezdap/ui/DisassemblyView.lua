@@ -268,10 +268,10 @@ function DisassemblyView:_ensure_win()
             self._win = nil
             self:close()
         end)
-        vim.wo[win].number         = false
-        vim.wo[win].relativenumber = false
-        vim.wo[win].signcolumn     = "yes"
-        vim.wo[win].winfixbuf      = true
+        ui_util.win_setlocal(win, "number", false)
+        ui_util.win_setlocal(win, "relativenumber", false)
+        ui_util.win_setlocal(win, "signcolumn", "yes")
+        ui_util.win_setlocal(win, "winfixbuf", true)
         self._win                  = win
     end
 end

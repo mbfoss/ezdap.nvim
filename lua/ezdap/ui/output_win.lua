@@ -12,6 +12,7 @@
 ---can give each run a tab of its own.
 
 local fixedwin     = require("ezdap.util.fixedwin")
+local ui_util      = require("ezdap.util.ui")
 local config       = require("ezdap.config")
 
 local M            = {}
@@ -48,15 +49,7 @@ local _ratio       = nil
 
 local _augroup     = vim.api.nvim_create_augroup("ezdap.output_win", { clear = true })
 
--- `vim.wo[win].opt = val` acts like `:set` (see `:h vim.wo`): it writes the
--- option's global value too, so freshly created windows -- floats especially --
--- inherit this window's settings. Force `scope = "local"`.
----@param win integer
----@param opt string
----@param val any
-local function _setlocal(win, opt, val)
-    vim.api.nvim_set_option_value(opt, val, { win = win, scope = "local" })
-end
+local _win_setlocal = ui_util.win_setlocal
 
 ---Drop `bufnr`, plus any entry whose buffer is already gone. Buffer numbers are
 ---reused, so a stale entry eventually names an unrelated buffer.
@@ -101,8 +94,8 @@ local function _disown()
     _win, _shown = nil, nil
     if win and vim.api.nvim_win_is_valid(win) then
         _ratio = vim.api.nvim_win_get_height(win) / vim.o.lines
-        vim.wo[win].winfixheight = nil
-        _setlocal(win, "spell", false)
+        _win_setlocal(win, "winfixheight", nil)
+        _win_setlocal(win, "spell", false)
     end
     if _fixed_group then
         vim.api.nvim_del_augroup_by_id(_fixed_group)
@@ -170,7 +163,7 @@ function M.open(focus)
         end,
         { enter = focus or false })
 
-    _setlocal(_win, "spell", false)
+    _win_setlocal(_win, "spell", false)
 
     _shown = nil
     _display(_win, bufnr)

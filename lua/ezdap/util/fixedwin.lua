@@ -1,3 +1,5 @@
+local uiutil = require("ezdap.util.ui")
+
 ---@class ezdap.util.fixedwin
 local M = {}
 
@@ -36,15 +38,7 @@ local _AXES = {
     },
 }
 
--- `vim.wo[win].opt = val` sets both the window-local value AND nvim's hidden
--- global default (the value new windows inherit) — so it can silently leak the
--- pinning option into every future plain window. Force `scope = "local"`.
----@param win integer
----@param opt string
----@param val any
-local function setlocal(win, opt, val)
-    vim.api.nvim_set_option_value(opt, val, { win = win, scope = "local" })
-end
+local win_setlocal = uiutil.win_setlocal
 
 -- Find the frame node ("col"/"row") directly containing `target` as a leaf.
 ---@param node   table    a vim.fn.winlayout() node
@@ -93,7 +87,7 @@ function M.create_fixed_win(axis, ratio, on_delete, opts)
     local win = vim.api.nvim_get_current_win() ---@type integer?
     assert(win)
 
-    setlocal(win, spec.fix, true)
+    win_setlocal(win, spec.fix, true)
 
     -- last-known ratio, kept current as the user resizes; closed over by the
     -- autocmds below and reported to on_delete.
