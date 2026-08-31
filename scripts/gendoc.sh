@@ -73,7 +73,9 @@ awk -v project="$project" -v md="$work/README.md" '
         }
         heading = $0
         sub(/^#+[ \t]*/, "", heading)
-        gsub(/`/, "", heading)   # panvimdoc drops inline-code markers
+        # panvimdoc derives the tag from the rendered heading, so drop the
+        # inline markers pandoc consumes on the way there.
+        gsub(/[`*_]/, "", heading)
         gsub(/[ \t]+/, "-", heading)
         print project "-" tolower(heading) "\t" project "-" tag
     }
@@ -119,7 +121,22 @@ awk '
         }
         print line
     }
-' "$work/tagmap" "$work/doc/$project.txt" > "$work/$project.txt"
+' "$work/tagmap" "$work/doc/$project.txt" > "$work/$project.txt.tags"
+
+# panvimdoc heads the file with a *<project>.txt* tag. Nothing links to a help
+# file by its filename, so make it the plain *<project>* the rest of the tags
+# are named after, keeping the description right-aligned where it was.
+awk -v project="$project" '
+    NR == 1 && index($0, "*" project ".txt*") == 1 {
+        tag  = "*" project "*"
+        desc = substr($0, length(project) + 8)
+        sub(/^[ \t]+/, "", desc)
+        pad = length($0) - length(tag) - length(desc)
+        if (pad < 1) pad = 1
+        $0 = tag sprintf("%" pad "s", "") desc
+    }
+    { print }
+' "$work/$project.txt.tags" > "$work/$project.txt"
 
 if [ "${1:-}" = "--check" ]; then
     cmp -s "$work/$project.txt" "$out" && {

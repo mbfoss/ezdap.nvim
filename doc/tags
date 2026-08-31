@@ -1,4 +1,6 @@
-ezdap-adapter-info-command	ezdap.txt	/*ezdap-adapter-info-command*
+ezdap	ezdap.txt	/*ezdap*
+ezdap-:debug-adapter_info	ezdap.txt	/*ezdap-:debug-adapter_info*
+ezdap-:debug-new_run_file	ezdap.txt	/*ezdap-:debug-new_run_file*
 ezdap-adapters	ezdap.txt	/*ezdap-adapters*
 ezdap-breakpoints	ezdap.txt	/*ezdap-breakpoints*
 ezdap-commands	ezdap.txt	/*ezdap-commands*
@@ -12,7 +14,6 @@ ezdap-inspect-repl	ezdap.txt	/*ezdap-inspect-repl*
 ezdap-installation	ezdap.txt	/*ezdap-installation*
 ezdap-keymaps	ezdap.txt	/*ezdap-keymaps*
 ezdap-lua-api	ezdap.txt	/*ezdap-lua-api*
-ezdap-new-run-file	ezdap.txt	/*ezdap-new-run-file*
 ezdap-output	ezdap.txt	/*ezdap-output*
 ezdap-panel	ezdap.txt	/*ezdap-panel*
 ezdap-persistence	ezdap.txt	/*ezdap-persistence*
@@ -26,4 +27,3 @@ ezdap-sessions	ezdap.txt	/*ezdap-sessions*
 ezdap-stepping	ezdap.txt	/*ezdap-stepping*
 ezdap-table-of-contents	ezdap.txt	/*ezdap-table-of-contents*
 ezdap-ui	ezdap.txt	/*ezdap-ui*
-ezdap.txt	ezdap.txt	/*ezdap.txt*

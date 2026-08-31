@@ -1,4 +1,4 @@
-*ezdap.txt*                         A Debug Adapter Protocol client for Neovim
+*ezdap*                             A Debug Adapter Protocol client for Neovim
 
 ==============================================================================
 Table of Contents                                    *ezdap-table-of-contents*
@@ -10,8 +10,8 @@ Table of Contents                                    *ezdap-table-of-contents*
 5. Starting a debug session                                   |ezdap-sessions|
   - Quick run via command row:              |ezdap-quick-run-via-command-row:|
   - Run files                                                |ezdap-run-files|
-  - :Debug new_run_file                                   |ezdap-new-run-file|
-  - :Debug adapter_info                           |ezdap-adapter-info-command|
+  - :Debug new_run_file                            |ezdap-:debug-new_run_file|
+  - :Debug adapter_info                            |ezdap-:debug-adapter_info|
   - From Lua                                                   |ezdap-lua-api|
 6. Breakpoints                                             |ezdap-breakpoints|
 7. The debug UI                                                     |ezdap-ui|
@@ -225,7 +225,7 @@ Use `:Debug run_file <file/dir>` to load and start a session from a run file.
 <
 
 
-:DEBUG NEW_RUN_FILE                                       *ezdap-new-run-file*
+:DEBUG NEW_RUN_FILE                                *ezdap-:debug-new_run_file*
 
 Generate a ready-to-edit, mode-based run file from one of the adapter’s
 modes. Required inputs are written active; every other input is listed
@@ -240,7 +240,7 @@ Fill in the `parameters`, then `:Debug run_file` it. It resolves through the
 same path as `:Debug run`.
 
 
-:DEBUG ADAPTER_INFO                               *ezdap-adapter-info-command*
+:DEBUG ADAPTER_INFO                                *ezdap-:debug-adapter_info*
 
 Load an adapter’s definition, check it, and show what it accepts, in a
 markdown float rendered from the definition itself: a `status` section —
