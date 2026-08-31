@@ -71,10 +71,11 @@ local function _input_lines(adapter, mode_name)
     for i, name in ipairs(names) do
         local comment = specs[name].description or ""
         -- An input that names its values says them here too, so the file shows what
-        -- may be written without having to run completion. Only a written-out set
-        -- reads as a comment; a source or a function is completion's to answer.
+        -- may be written without having to run completion — `e.g.`, since nothing
+        -- rejects a value written past them. Only a written-out set reads as a
+        -- comment; a source or a function is completion's to answer.
         if vim.islist(specs[name].completion) then
-            local listed = table.concat(specs[name].completion, "|")
+            local listed = "e.g. " .. table.concat(specs[name].completion, "|")
             comment = comment == "" and listed or (comment .. ": " .. listed)
         end
         local line = "        " .. codes[i]

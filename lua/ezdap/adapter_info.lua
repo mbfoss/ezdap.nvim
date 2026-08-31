@@ -82,17 +82,18 @@ local function _type_of(input)
     return kind
 end
 
----An input's description, with its enumerated values folded in — the set is
+---An input's description, with the values it completes with folded in — they are
 ---part of what the input means, and completion is not available in a float —
----behind a `[required]` marker for the inputs a run fails without. Only a
----written-out set is shown; a source or a function is completion's to answer.
+---behind a `[required]` marker for the inputs a run fails without. `e.g.`, not
+---"one of": nothing rejects a value written past them. Only a written-out set is
+---shown; a source or a function is completion's to answer.
 ---@param input ezdap.Input
 ---@return string
 local function _description_of(input)
     local text = input.description or ""
     if vim.islist(input.completion) and #input.completion > 0 then
-        local quoted = vim.tbl_map(function(c) return ("`%s`"):format(c) end, input.completion)
-        local listed = "one of " .. table.concat(quoted, ", ")
+        local quoted = vim.tbl_map(function(c) return ("`%s`"):format(c) end, input.completion --[[@as table]])
+        local listed = "e.g. " .. table.concat(quoted, ", ")
         text = text == "" and listed or (listed .. "; " .. text)
     end
     if input.required then
