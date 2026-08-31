@@ -86,9 +86,7 @@ local function _is_registered(bufnr)
     return false
 end
 
----Give the window back to the user, keeping its height for the next one we
----open. Like a quickfix window turned ordinary, it keeps the look and the
----pinned size it was given; only our hold on it goes.
+---Give the window back to the user, Like a quickfix window turned ordinary
 local function _disown()
     local win = _win
     _win, _shown = nil, nil
