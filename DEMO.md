@@ -59,10 +59,3 @@ Two debuggees paused at the same breakpoint at once, each with a panel row and a
 dock tab. `:Ezdap session` selects which one the stepping commands apply to.
 
 ![Parallel sessions](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/07-parallel-sessions.gif)
-
-## Persistence
-
-Breakpoints, their conditions and watch expressions are saved per project and
-restored on the next start.
-
-![Project-scoped persistence](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/08-persistence.gif)
