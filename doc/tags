@@ -1,6 +1,6 @@
 ezdap	ezdap.txt	/*ezdap*
-ezdap-:debug-adapter_info	ezdap.txt	/*ezdap-:debug-adapter_info*
-ezdap-:debug-new_run_file	ezdap.txt	/*ezdap-:debug-new_run_file*
+ezdap-:ezdap-adapter_info	ezdap.txt	/*ezdap-:ezdap-adapter_info*
+ezdap-:ezdap-new_run_file	ezdap.txt	/*ezdap-:ezdap-new_run_file*
 ezdap-adapters	ezdap.txt	/*ezdap-adapters*
 ezdap-breakpoints	ezdap.txt	/*ezdap-breakpoints*
 ezdap-commands	ezdap.txt	/*ezdap-commands*

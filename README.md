@@ -81,7 +81,7 @@ the REPL, watch expressions, parallel sessions, persistence.
 
 ## Installation
 
-- Install it with any plugin manager and call `setup()` on startup (setup() is required). 
+- Install it with any plugin manager. It works out of the box; `setup()` is only for changing options.
 
 - Install [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) alongside it to
 register ready-made definitions for the common debuggers. This is the easiest way to start,
@@ -98,7 +98,6 @@ vim.pack.add({
   "https://github.com/mbfoss/ezdap.nvim",
   "https://github.com/mbfoss/ezdap-adapters",  -- ready-made adapter definitions
 })
-require("ezdap").setup()
 ```
 </details>
 
@@ -109,38 +108,42 @@ require("ezdap").setup()
 {
   "mbfoss/ezdap.nvim",
   dependencies = { "mbfoss/ezdap-adapters" },  -- ready-made adapter definitions
-  opts = {},                                   -- passed to require("ezdap").setup()
+  opts = {},                                   -- optional; passed to require("ezdap").setup()
 }
 ```
 </details>
 
-Calling `setup()` is required; nothing exists until it runs. It registers the
-`:Debug` command (rename it with the `command` setup option), configures persistence,
-and initialises the UI.
+The `:Ezdap` command and the persistence autocmds are installed at startup, so
+there is nothing to call to get going. `setup()` is optional and only applies
+options — an extra name for the command with `command_alias`, and so on. Call it from anywhere
+that runs before `VimEnter`: `init.lua`, or a plugin manager's `config`
+function. `root_markers` and `data_filename` decide which project state is
+restored at `VimEnter`, so those two must be set by then; the rest are read
+where they are used and can be set later.
 
 ## Quick start
 
-The main entry point is `:Debug run`, which launches (or attaches to) an
+The main entry point is `:Ezdap run`, which launches (or attaches to) an
 adapter using one of its named modes, filled in with a few `input=value`
 arguments:
 
 ```vim
 " Launch a native binary under codelldb
-:Debug run codelldb binary command=./program\ argument
+:Ezdap run codelldb binary command=./program\ argument
 
 " Debug a Python file
-:Debug run debugpy script command=./main.py\ argument
+:Ezdap run debugpy script command=./main.py\ argument
 
 " Attach to a running process (opens process selector)
-:Debug run codelldb attach
+:Ezdap run codelldb attach
 ```
 
 Set a breakpoint on the current line and step through the program:
 
 ```vim
-:Debug breakpoint          " toggle a breakpoint at the cursor
-:Debug continue            " run to the next breakpoint
-:Debug step_over           " step over the current line
+:Ezdap breakpoint          " toggle a breakpoint at the cursor
+:Ezdap continue            " run to the next breakpoint
+:Ezdap step_over           " step over the current line
 ```
 
 The debug panel opens automatically when a session starts, showing the call
@@ -160,11 +163,11 @@ filename stem.
 
 The [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) plugin provides ready-made definitions for some common debuggers. Installing it makes those adapters available for `ezdap`.
 
-**Use `:Debug adapter_info` to inquire which modes an adapter has, and what inputs each mode takes.
+**Use `:Ezdap adapter_info` to inquire which modes an adapter has, and what inputs each mode takes.
 
 ```vim
-:Debug adapter_info            " every available adapter, by name
-:Debug adapter_info codelldb   " that adapter's modes and each mode's inputs
+:Ezdap adapter_info            " every available adapter, by name
+:Ezdap adapter_info codelldb   " that adapter's modes and each mode's inputs
 ```
 
 ezdap itself ships **one** adapter, `remote`, a generic TCP attach that connects
@@ -172,14 +175,14 @@ to a DAP server already listening on `host:port`, through its single `connect`
 mode:
 
 ```vim
-:Debug run remote connect host=127.0.0.1 port=4711
+:Ezdap run remote connect host=127.0.0.1 port=4711
 ```
 
 **A definition is read lazily on the first use** (for example, via a
-run, `:Debug run <adapter> ...`) 
-Listing do not load the adapter definitions (`:Debug adapter_info`, `:checkhealth ezdap`)
+run, `:Ezdap run <adapter> ...`) 
+Listing do not load the adapter definitions (`:Ezdap adapter_info`, `:checkhealth ezdap`)
 
-`:Debug adapter_info <adapter>` Loads and adapter configuration and reports it's supported modes and eventual configuration errors.
+`:Ezdap adapter_info <adapter>` Loads and adapter configuration and reports it's supported modes and eventual configuration errors.
 
 ## Starting a debug session <!-- tag: sessions -->
 
@@ -188,20 +191,20 @@ ezdap offers 2 main ways to start debug sessions.
 ### Quick run via command row:
 
 ```vim
-:Debug run <adapter> <mode> [input=value ...]
+:Ezdap run <adapter> <mode> [input=value ...]
 ```
 Arguments split on whitespace(`:h <f-args>`): 
 quotes are *not* special, and a value containing a space is written with a backslash
-Example: `:Debug run debugpy script command=./main.py\ --verbose cwd=/tmp/my\ project`.
+Example: `:Ezdap run debugpy script command=./main.py\ --verbose cwd=/tmp/my\ project`.
 
 On the command line a `list` or `map` input is one token: entries separated by
 commas, each entry `KEY=VALUE` for a map. Escape a comma inside an entry as
 `\,`, and a space as `\ `:
 
 ```vim
-:Debug run gdb binary command=./app env=RUST_LOG=debug,NO_COLOR=1
-:Debug run codelldb binary command=./app args=--input\ my\ file.txt,--verbose
-:Debug run codelldb binary command=./app args=--fields=a\,b,--verbose
+:Ezdap run gdb binary command=./app env=RUST_LOG=debug,NO_COLOR=1
+:Ezdap run codelldb binary command=./app args=--input\ my\ file.txt,--verbose
+:Ezdap run codelldb binary command=./app args=--fields=a\,b,--verbose
 ```
 
 **Tab-completion** offers adapters, then mode names, then the inputs
@@ -211,7 +214,7 @@ input can take: paths for the path-like ones, `true`/`false` for a boolean.
 ### Run files
 
 A run file is a Lua file that returns a table defining a debug session parameters. 
-It's the lua equivalent of the `:debug run ...` command arguments.
+It's the lua equivalent of the `:Ezdap run ...` command arguments.
 
 Example:
 
@@ -228,28 +231,28 @@ return {
 }
 ```
 
-Use `:Debug run_file <file/dir>` to load and start a session from a run file.
+Use `:Ezdap run_file <file/dir>` to load and start a session from a run file.
 
 ```vim
-:Debug run_file debug.lua
-:Debug run_file ./debug/   " picker over the folder's run files
+:Ezdap run_file debug.lua
+:Ezdap run_file ./debug/   " picker over the folder's run files
 ```
 
-### `:Debug new_run_file` <!-- tag: new-run-file -->
+### `:Ezdap new_run_file` <!-- tag: new-run-file -->
 
 Generate a ready-to-edit, mode-based run file from one of the adapter's
 modes. Required inputs are written active; every other input is listed
 commented out with its description, ready to be uncommented as needed:
 
 ```vim
-:Debug new_run_file codelldb binary
+:Ezdap new_run_file codelldb binary
 " → writes <project root>/codelldb_launch.lua and opens it
 ```
 
-Fill in the `parameters`, then `:Debug run_file` it. It resolves through the same
-path as `:Debug run`.
+Fill in the `parameters`, then `:Ezdap run_file` it. It resolves through the same
+path as `:Ezdap run`.
 
-### `:Debug adapter_info` <!-- tag: adapter-info-command -->
+### `:Ezdap adapter_info` <!-- tag: adapter-info-command -->
 
 Load an adapter's definition, check it, and show what it accepts, in a markdown
 float rendered from the definition itself: a `status` section — where its
@@ -273,29 +276,29 @@ ezdap.rerun()
 
 -- Adapters
 ezdap.available_adapters() -- Available adapter names, (inlcuding unloaded).
-                           -- Needs setup(); honours `enabled_adapters`.
+                           -- Honours `enabled_adapters`.
 local adapters = require("ezdap.adapters") -- loaded adapters
 ```
 
 ## Breakpoints
 
-All breakpoint operations are grouped under `:Debug breakpoint <sub>`. Breakpoints work
+All breakpoint operations are grouped under `:Ezdap breakpoint <sub>`. Breakpoints work
 before a session starts and are synced live to running sessions.
 
 ```vim
-:Debug breakpoint               " toggle a line breakpoint at the cursor
-:Debug breakpoint toggle        " the same, spelled out
-:Debug breakpoint set           " add a line breakpoint, never remove one
-:Debug breakpoint condition     " condition + hit condition (prompts)
-:Debug breakpoint logpoint      " logpoint (prompts for log message)
-:Debug breakpoint set cond=x>3  " conditional breakpoint
-:Debug breakpoint set col=here  " column bp at the word under the cursor
-:Debug breakpoint set col=pick  " column breakpoint, pick a valid column
-:Debug breakpoint fn <name>     " function breakpoint by name
-:Debug breakpoint data          " watchpoint on a variable/expression
-:Debug breakpoint list          " fuzzy-pick and jump to any breakpoint
-:Debug breakpoint exception_filter              " toggle an adapter filter
-:Debug breakpoint exception_type <name> [mode]  " named exception type
+:Ezdap breakpoint               " toggle a line breakpoint at the cursor
+:Ezdap breakpoint toggle        " the same, spelled out
+:Ezdap breakpoint set           " add a line breakpoint, never remove one
+:Ezdap breakpoint condition     " condition + hit condition (prompts)
+:Ezdap breakpoint logpoint      " logpoint (prompts for log message)
+:Ezdap breakpoint set cond=x>3  " conditional breakpoint
+:Ezdap breakpoint set col=here  " column bp at the word under the cursor
+:Ezdap breakpoint set col=pick  " column breakpoint, pick a valid column
+:Ezdap breakpoint fn <name>     " function breakpoint by name
+:Ezdap breakpoint data          " watchpoint on a variable/expression
+:Ezdap breakpoint list          " fuzzy-pick and jump to any breakpoint
+:Ezdap breakpoint exception_filter              " toggle an adapter filter
+:Ezdap breakpoint exception_type <name> [mode]  " named exception type
 ```
 
 `set` is the non-interactive form: `col=` takes a column number, `here` (the word
@@ -313,10 +316,10 @@ one to a guess.
 Enable/disable without removing, and clear in bulk:
 
 ```vim
-:Debug breakpoint toggle_enabled  " enable/disable the one at the cursor
-:Debug breakpoint disable_all
-:Debug breakpoint clear_file      " remove every breakpoint in the file
-:Debug breakpoint clear_all       " remove every breakpoint everywhere
+:Ezdap breakpoint toggle_enabled  " enable/disable the one at the cursor
+:Ezdap breakpoint disable_all
+:Ezdap breakpoint clear_file      " remove every breakpoint in the file
+:Ezdap breakpoint clear_all       " remove every breakpoint everywhere
 ```
 
 `clear_all` removes all source, function and exception-type breakpoints across
@@ -335,7 +338,7 @@ logpoint, disabled, exception). The full list of subcommands is in the
 The main panel is a tree of **sessions → threads → stack frames → scopes →
 variables**, plus **watch expressions** and **breakpoints**. It opens
 automatically when a session starts; open or focus it any time with
-`:Debug view`.
+`:Ezdap view`.
 
 Inside the panel:
 
@@ -358,7 +361,7 @@ messages. They share one bottom split, which holds whichever of them has the
 highest priority (the Terminal takes precedence over the Output, which takes
 precedence over the REPL, which takes precedence over the Log). It opens on the run's first buffer, follows along as
 higher-priority buffers appear or the shown one is deleted, and closes with the
-run's last buffer. `:Debug output` toggles it; `panel_auto_open` and
+run's last buffer. `:Ezdap output` toggles it; `panel_auto_open` and
 `panel_height_ratio` adjust it.
 
 Each run keeps its own log, `ezdap://<run>-log`, wiped with the run, rather
@@ -393,18 +396,18 @@ its own instead, chosen by the `external_terminal` option; see
 spawned, the request fails rather than falling back to an integrated terminal.
 
 ```vim
-:Debug clean            " drop finished runs and wipe their buffers
+:Ezdap clean            " drop finished runs and wipe their buffers
 ```
 
 ### Inspect, disassembly & REPL <!-- tag: inspect-repl -->
 
 ```vim
-:Debug inspect          " hover the word under the cursor (or, in visual
+:Ezdap inspect          " hover the word under the cursor (or, in visual
                         " mode, the selected expression)
-:Debug value            " same target, but shows the full value straight
+:Ezdap value            " same target, but shows the full value straight
                         " away instead of the expandable tree
-:Debug disassemble      " open the disassembly view for the current frame
-:Debug exception_info   " details of the exception at the current stop
+:Ezdap disassemble      " open the disassembly view for the current frame
+:Ezdap exception_info   " details of the exception at the current stop
 ```
 
 In the disassembly view, `<CR>` opens the corresponding source line and `K`
@@ -424,20 +427,20 @@ The entry needs a GUI or a terminal with mouse support.
 ## Stepping & execution control <!-- tag: stepping -->
 
 ```vim
-:Debug continue         " continue the active session
-:Debug continue_all     " continue every session
-:Debug step_over        " (alias: :Debug next)
-:Debug step_in
-:Debug step_out
-:Debug step_into_targets" pick which call on the line to step into
-:Debug step_back        " reverse debugging (adapter permitting)
-:Debug reverse_continue
-:Debug jump_to_cursor   " set the next statement to the cursor line
-:Debug restart_frame    " restart the selected stack frame
-:Debug pause
-:Debug restart          " DAP restart request on the live session
-:Debug stop             " stop the active session
-:Debug stop_all         " stop every session
+:Ezdap continue         " continue the active session
+:Ezdap continue_all     " continue every session
+:Ezdap step_over        " (alias: :Ezdap next)
+:Ezdap step_in
+:Ezdap step_out
+:Ezdap step_into_targets" pick which call on the line to step into
+:Ezdap step_back        " reverse debugging (adapter permitting)
+:Ezdap reverse_continue
+:Ezdap jump_to_cursor   " set the next statement to the cursor line
+:Ezdap restart_frame    " restart the selected stack frame
+:Ezdap pause
+:Ezdap restart          " DAP restart request on the live session
+:Ezdap stop             " stop the active session
+:Ezdap stop_all         " stop every session
 ```
 
 Stepping granularity follows the focused window: line-wise everywhere, and
@@ -446,9 +449,9 @@ instruction-wise while the disassembly view is current.
 Switch the active target with pickers:
 
 ```vim
-:Debug session          " choose the active session
-:Debug thread           " choose the active thread
-:Debug frame            " choose the active stack frame
+:Ezdap session          " choose the active session
+:Ezdap thread           " choose the active thread
+:Ezdap frame            " choose the active stack frame
 ```
 
 ## Configuration <!-- tag: config -->
@@ -457,15 +460,15 @@ Pass options to `setup()`. Defaults when `setup({})` is called are:
 
 ```lua
 require("ezdap").setup({
-  -- Name of the user command every subcommand is registered under, e.g. "Dbg"
-  -- for `:Dbg run`.
-  command             = "Debug",
+  -- A second name to register `:Ezdap` under, sharing its handler and
+  -- completion. Unset by default, so only `:Ezdap` exists.
+  -- command_alias    = "Debug",
   -- Project detection: the nearest ancestor holding one of these is
   -- the root.
   root_markers        = { ".git" },
   -- Adapters to make available, by name. Unset (the default) leaves every
   -- registered adapter available; a list narrows the registry to exactly
-  -- those names, hiding the rest from listing, completion and `:Debug run`.
+  -- those names, hiding the rest from listing, completion and `:Ezdap run`.
   -- enabled_adapters = { "debugpy", "codelldb" },
   -- Per-project state file, written at the project root.
   data_filename       = ".ezdap.json",
@@ -524,12 +527,12 @@ require("ezdap").setup({
 
 ## Command reference <!-- tag: commands -->
 
-Everything is under the `:Debug` command, with completion for every subcommand.
-Set `command` in `setup()` to register it under another name; the subcommands
-below are unchanged.
+Everything is under the `:Ezdap` command, with completion for every subcommand.
+Set `command_alias` in `setup()` to register it under a second name — an alias
+is the same command, with the same subcommands and completion.
 
 <details>
-<summary><b><code>:Debug</code> subcommands</b></summary>
+<summary><b><code>:Ezdap</code> subcommands</b></summary>
 
 | Subcommand            | Description                                        |
 | --------------------- | ------------------------------------------------- |
@@ -560,7 +563,7 @@ below are unchanged.
 </details>
 
 <details>
-<summary><b><code>:Debug breakpoint</code> subcommands</b></summary>
+<summary><b><code>:Ezdap breakpoint</code> subcommands</b></summary>
 
 | Subcommand           | Description                            |
 | -------------------- | -------------------------------------- |
@@ -595,7 +598,7 @@ entering one. Outside any project, ezdap warns once that state will not be
 persisted. The current project is reported by:
 
 ```vim
-:Debug project
+:Ezdap project
 ```
 
 > Consider adding `.ezdap.json` to the project's `.gitignore`, or commit it to
@@ -607,7 +610,7 @@ persisted. The current project is reported by:
 :checkhealth ezdap
 ```
 
-Reports the Neovim version, whether `setup()` has run, the resolved project
+Reports the Neovim version, whether the plugin is initialised, the resolved project
 state, and which adapters are available.
 
 ## Keymaps example <!-- tag: keymaps -->
@@ -684,7 +687,7 @@ The full contract is in WRITING-DEFINITIONS.md in the repository.
 
 Added adapters are listed by `:checkhealth ezdap` and `ezdap.available_adapters()`
 too, and document themselves:
-`:Debug adapter_info myadapter` renders the modes and inputs declared above, and
+`:Ezdap adapter_info myadapter` renders the modes and inputs declared above, and
 reports whether the definition resolves and its `command` is present on this
 machine, the same as for any shipped definition.
 
@@ -692,12 +695,12 @@ machine, the same as for any shipped definition.
 
 Why do modes declare `inputs` rather than taking a raw DAP body?
 
-- **Completion.** `:Debug run lldb binary <Tab>` lists that mode's inputs, and
+- **Completion.** `:Ezdap run lldb binary <Tab>` lists that mode's inputs, and
   `command=<Tab>` completes paths because the input is declared path-like.
 - **Validation before launch.** Missing required inputs, a port outside
   0–65535, or a malformed `A=1,B=2` are reported during resolution, with the
   input named, instead of as adapter stderr.
-- **Derived scaffolding.** `:Debug new_run_file` generates a run file from
+- **Derived scaffolding.** `:Ezdap new_run_file` generates a run file from
   `inputs`, including each field's description, so no template can diverge from
   what the adapter accepts.
 - **One value, two entry points.** An input can be supplied on the command line

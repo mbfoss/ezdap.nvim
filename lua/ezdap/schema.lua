@@ -1,9 +1,9 @@
----@brief Schema engine behind `:Debug new_run_file` and `:Debug run`.
+---@brief Schema engine behind `:Ezdap new_run_file` and `:Ezdap run`.
 ---
 ---Adapters carry no launch/attach schema of their own — each adapter's
 ---`modes` (named `ezdap.Mode` entries, in `ezdap.adapters`)
 ---are wholly self-describing. A mode declares its inputs up front in an
----`inputs` table — `name -> ezdap.Input` — which both `:Debug run` and a
+---`inputs` table — `name -> ezdap.Input` — which both `:Ezdap run` and a
 ---scaffolded run file read, then resolve the same way: `resolve_task` runs the
 ---mode's `build` over the supplied values to assemble a runnable task.
 ---
@@ -52,7 +52,7 @@ function M.mode_inputs(adapter, mode_name)
 end
 
 ---The input names a mode declares, sorted. These are the `name=value`
----tokens `:Debug run` accepts, and the `parameters` keys a tasks file may set.
+---tokens `:Ezdap run` accepts, and the `parameters` keys a tasks file may set.
 ---@param adapter string
 ---@param mode_name string
 ---@return string[]
@@ -117,7 +117,7 @@ end
 ---Everything wrong with one registered adapter's definition, as messages — a
 ---file that does not load, a mode that requests neither launch nor attach, an
 ---input that cannot be read. An empty list is a definition that resolves, not
----one that runs: whether its tooling is in place is `:Debug adapter_info`.
+---one that runs: whether its tooling is in place is `:Ezdap adapter_info`.
 ---@param adapter string
 ---@return string[] problems
 function M.validate(adapter)
@@ -138,7 +138,7 @@ function M.validate(adapter)
 
     local names = M.mode_names(adapter)
     if #names == 0 then
-        out[#out + 1] = "declares no modes: `:Debug run` cannot reach it"
+        out[#out + 1] = "declares no modes: `:Ezdap run` cannot reach it"
     end
     for _, name in ipairs(names) do _check_mode(adapter, name, out) end
     return out
@@ -156,7 +156,7 @@ local function _read_inputs(mode, values)
     local inputs, missing, errs = {}, {}, {}
     for name, spec in pairs(mode.inputs or {}) do
         local raw = values[name]
-        -- An input cleared rather than answered (`:Debug run … cwd=`) is one that was
+        -- An input cleared rather than answered (`:Ezdap run … cwd=`) is one that was
         -- not supplied: `build` assigns it unconditionally, and only nil drops the field.
         if raw == nil or raw == "" then
             if spec.required then missing[#missing + 1] = name end

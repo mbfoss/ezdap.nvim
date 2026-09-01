@@ -1,7 +1,7 @@
 ---@brief Standalone task runner for ezdap.
 ---
 ---Runs a debug task by supplying run callbacks to `ezdap.task.start`, which
----stays provider-agnostic. Every run — `:Debug run`, a run file, or another
+---stays provider-agnostic. Every run — `:Ezdap run`, a run file, or another
 ---plugin's task — goes through here, so resolving a mode, tracking the run and
 ---cancelling it are written once.
 ---
@@ -121,7 +121,7 @@ end
 
 ---Drop every finished run ezdap owns and wipe their buffers, leaving live runs —
 ---and every run a caller presents, which is that caller's to drop — untouched.
----Bound to `:Debug clean`.
+---Bound to `:Ezdap clean`.
 function M.clean()
     local kept, finished = {}, {}
     for _, r in ipairs(_runs) do
@@ -237,7 +237,7 @@ local function _run_spec(spec, presenter)
 end
 
 ---Re-launch the most recently run task from scratch, skipping the resolve it
----already went through. Unlike `:Debug restart` (a DAP request on the live
+---already went through. Unlike `:Ezdap restart` (a DAP request on the live
 ---session) this works after the session has ended and for adapters without
 ---restart support. Runs alongside the others: it replaces its own previous
 ---finished run, not theirs. Warns when no task has been run yet.
@@ -326,7 +326,7 @@ function M.run_file(path)
     end
 
     -- A mode-based run file names a mode and answers its inputs under
-    -- `parameters`; resolve it through the mode's `build`, as `:Debug run` does.
+    -- `parameters`; resolve it through the mode's `build`, as `:Ezdap run` does.
     if type(spec.mode) == "string" then
         return _run_spec({
             adapter = spec.adapter,
@@ -352,8 +352,7 @@ function M.run_mode(adapter, mode_name, inputs, presenter)
     local schema = require("ezdap.schema")
 
     if not adapter or adapter == "" then
-        _warn(("run: usage: :%s run <adapter> <mode> [input=value]…")
-            :format(require("ezdap.config").command))
+        _warn("run: usage: :Ezdap run <adapter> <mode> [input=value]…")
         return
     end
     local def, load_err = require("ezdap").load_adapter(adapter)
@@ -364,8 +363,7 @@ function M.run_mode(adapter, mode_name, inputs, presenter)
         return
     end
     if not mode_name or mode_name == "" then
-        _warn("run: usage: :" .. require("ezdap.config").command
-            .. " run " .. adapter .. " <mode> [input=value]…"
+        _warn("run: usage: :Ezdap run " .. adapter .. " <mode> [input=value]…"
             .. " (modes: " .. table.concat(schema.mode_names(adapter), ", ") .. ")")
         return
     end
@@ -379,7 +377,7 @@ function M.run_mode(adapter, mode_name, inputs, presenter)
 end
 
 ---Cancel every live run. Stops their sessions, or aborts a run still in adapter
----setup (before any session exists, where `:Debug stop` has nothing to act on yet).
+---setup (before any session exists, where `:Ezdap stop` has nothing to act on yet).
 function M.cancel()
     for _, r in ipairs(_runs) do
         if r.state == "running" then r.cancel() end

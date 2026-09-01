@@ -1,6 +1,6 @@
 ---@brief The full-value hover: an evaluated expression's type above its
 ---untruncated value, in a floating preview. Independent of any view — it is what
----`K` shows on a DebugView/InspectView node and what `:Debug value` shows for an
+---`K` shows on a DebugView/InspectView node and what `:Ezdap value` shows for an
 ---expression, so all three render through here.
 
 local DetailBlock = require("ezdap.ui.DetailBlock")

@@ -12,7 +12,7 @@ local format = require("ezdap.ui.format")
 local M      = {}
 
 ---Whether this panel was started. The dock operations below are inert until it
----is, so `:Debug output` reaches the panel in play — and nothing here requires
+---is, so `:Ezdap output` reaches the panel in play — and nothing here requires
 ---`dock` before `setup` has established that it is there.
 local _enabled = false
 

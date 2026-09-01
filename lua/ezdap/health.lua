@@ -3,7 +3,7 @@
 ---Reports the Neovim version, whether `setup()` has run, the resolved project /
 ---store state, the options that differ from the defaults, and which adapters
 ---are registered — by name only, since inspecting a definition is what
----`:Debug adapter_info <adapter>` is for.
+---`:Ezdap adapter_info <adapter>` is for.
 
 local M = {}
 
@@ -19,19 +19,18 @@ local function _check_requirements()
     end
 end
 
----Report whether setup() has run and the resolved project / store state.
+---Report whether the plugin came up, and the resolved project / store state.
 local function _check_setup()
     health.start("ezdap: setup")
 
-    -- Read through package.loaded rather than requiring: an unloaded ezdap is
-    -- itself the answer, and loading it here would not have run setup anyway.
-    local ezdap = package.loaded["ezdap"]
-    if ezdap and ezdap.is_setup() then
-        health.ok(("setup() has been called (:%s is registered)")
-            :format(require("ezdap.config").command))
+    -- Ask `bootstrap`, not `ezdap`: an unloaded `ezdap` is the ordinary state of
+    -- a Neovim that has not debugged yet, not a fault. Everything below is
+    -- explicit demand, so it may load what it needs.
+    if require("ezdap.bootstrap").is_initialised() then
+        health.ok("initialised (:Ezdap is registered)")
     else
-        health.warn("setup() has not been called", {
-            "Add require('ezdap').setup() to your config",
+        health.warn("not initialised: plugin/ezdap.lua has not run", {
+            "Check that ezdap.nvim is on 'runtimepath' (an opt package needs :packadd)",
         })
     end
 
@@ -53,6 +52,7 @@ end
 -- Options whose default is `nil`, which no table can hold. Without this an
 -- unset-by-default option would be indistinguishable from a misspelled one.
 local _OPTIONAL = {
+    command_alias = true,
     enabled_adapters = true,
     external_terminal = true,
 }
@@ -90,11 +90,11 @@ end
 local function _check_config()
     health.start("ezdap: configuration")
 
-    local ezdap = package.loaded["ezdap"]
-    if not (ezdap and ezdap.is_setup()) then
-        health.info("setup() has not been called, so every option is at its default")
+    if not require("ezdap.bootstrap").is_initialised() then
+        health.info("not initialised, so every option is at its default")
         return
     end
+    local ezdap = require("ezdap")
 
     local diffs = _diff_config(require("ezdap.config"), ezdap.get_default_config(), "", {})
     table.sort(diffs, function(a, b) return a.path < b.path end)
@@ -122,17 +122,17 @@ end
 
 ---List the registered adapters. Their names come from the registry's filenames,
 ---so nothing here loads a definition; inspecting one is what
----`:Debug adapter_info <adapter>` is for.
----Needs `setup()`: it is what settles the `enabled_adapters` filter, so before
+---`:Ezdap adapter_info <adapter>` is for.
+---Needs an initialised plugin: `enabled_adapters` filters the list, and before
 ---then there is no list to report.
 local function _check_adapters()
     health.start("ezdap: adapters")
 
-    local ezdap = package.loaded["ezdap"]
-    if not (ezdap and ezdap.is_setup()) then
-        health.warn("setup() has not been called, so no adapters are registered yet")
+    if not require("ezdap.bootstrap").is_initialised() then
+        health.warn("not initialised, so no adapters are registered yet")
         return
     end
+    local ezdap = require("ezdap")
 
     local names = ezdap.available_adapters()
     local allowed = require("ezdap.config").enabled_adapters
@@ -141,8 +141,7 @@ local function _check_adapters()
         health.info(("`enabled_adapters` is set (%s), so only those are available")
             :format(table.concat(allowed, ", ")))
     end
-    health.info(("Run :%s adapter_info <adapter> to see an adapter's modes, inputs and tooling")
-        :format(require("ezdap.config").command))
+    health.info("Run :Ezdap adapter_info <adapter> to see an adapter's modes, inputs and tooling")
 end
 
 function M.check()

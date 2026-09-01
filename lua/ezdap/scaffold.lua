@@ -1,11 +1,11 @@
----@brief run_file scaffolding for `:Debug new_run_file`.
+---@brief run_file scaffolding for `:Ezdap new_run_file`.
 ---
 ---Writes a runnable Lua run_file for an adapter + one of its `modes`. The
----generated file is mode-based, exactly like `:Debug run`: it names the
+---generated file is mode-based, exactly like `:Ezdap run`: it names the
 ---`adapter` and `mode` and lists that mode's declared inputs under
 ---`parameters`, each seeded with a starting value (`ezdap.inputs`' `seed`) and
----annotated with its `description`. `:Debug run_file` resolves it through the
----mode's `build` (see `ezdap.schema`), so a run file and `:Debug run`
+---annotated with its `description`. `:Ezdap run_file` resolves it through the
+---mode's `build` (see `ezdap.schema`), so a run file and `:Ezdap run`
 ---share one description of a mode — its `inputs` — and never drift.
 
 local schema = require("ezdap.schema")
@@ -88,7 +88,7 @@ local function _input_lines(adapter, mode_name)
 end
 
 ---Scaffold a run_file for an `adapter` + one of its `modes` and open it for
----editing; run it with `:Debug run_file`. `assignments` is positional: adapter, then
+---editing; run it with `:Ezdap run_file`. `assignments` is positional: adapter, then
 ---optional mode (defaults to the sole one) and path. Fails if the path exists.
 ---@param assignments string[]  positional adapter, mode, path, e.g. { "codelldb", "binary", "./foo.lua" }
 ---@return string? path  the file that was created

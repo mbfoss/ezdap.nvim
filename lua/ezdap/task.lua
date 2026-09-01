@@ -4,7 +4,7 @@ local ui_util      = require "ezdap.util.ui"
 
 ---A debug task — native DAP, sent as-is. `parameters` is the adapter's raw
 ---launch/attach body, produced by a mode's `build`. This is the resolved shape
----`ezdap.runner` runs, which run files and `:Debug run` both produce via
+---`ezdap.runner` runs, which run files and `:Ezdap run` both produce via
 ---`ezdap.schema`'s `resolve_task`.
 ---@class ezdap.Task
 ---@field name?         string                     run group name (defaults to "debug")

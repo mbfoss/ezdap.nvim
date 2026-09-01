@@ -30,7 +30,7 @@
 ---@alias ezdap.DebugViewPosition "left"|"right"
 
 ---@class ezdap.Config
----@field command              string    name of the user command every subcommand lives under, e.g. "Dbg" for `:Dbg run`
+---@field command_alias?       string    a second name to register `:Ezdap` under, e.g. "Debug" for `:Debug run`; unset (the default) registers only `:Ezdap`
 ---@field root_markers         string[]  filenames/dirs whose presence identifies a project root
 ---@field enabled_adapters?    string[]  names of the only adapters to make available; unset (the default) leaves every registered adapter available
 ---@field data_filename string
@@ -49,7 +49,6 @@
 
 ---@type ezdap.Config
 local M = {
-	command                = "Debug",
 	root_markers           = { ".git" },
 	data_filename          = ".ezdap.json",
 	stack_trace_limit      = 10,

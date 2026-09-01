@@ -8,13 +8,34 @@ Internals and contributor notes for ezdap.nvim. For user-facing usage, see the
 ezdap is a Neovim DAP client that speaks the Debug Adapter Protocol directly —
 no `nvim-dap` dependency. It manages adapter processes, tracks debug
 sessions/breakpoints, and renders a tree-based debug UI. Requires Neovim >= 0.10
-(guarded in `setup()`).
+(guarded in `bootstrap.init()` and `setup()`).
 
-The entry point is [lua/ezdap/init.lua](lua/ezdap/init.lua): `setup(opts)`
-merges config, wires autocmds/signals, and registers the user command. Nothing
-is installed before `setup()` runs — there is no `plugin/` script — so options
-that decide what is read off disk (`root_markers`, `data_filename`) or what the
-command is called (`command`, default `Debug`) are always in place first.
+[plugin/ezdap.lua](plugin/ezdap.lua) calls `require("ezdap.bootstrap").init()`
+at startup. [bootstrap.lua](lua/ezdap/bootstrap.lua) is a module of its own
+precisely so that startup never touches [init.lua](lua/ezdap/init.lua): it
+registers the user command and the autocmds with callbacks that
+`require("ezdap")` lazily, and a Neovim that never debugs loads only
+`bootstrap`, `config` and `project` — around 300 lines.
+
+Restoring saved project state is deferred to `VimEnter`, which is what lets
+`setup()` be optional: it fires after `init.lua` and after a plugin manager's
+`config` function, so `root_markers` and `data_filename` are settled before the
+state file is looked for. The probe asks [project.lua](lua/ezdap/project.lua),
+which needs nothing but `config`, and pulls the plugin proper in only when a
+state file actually exists. The autocmds are guarded the same way: cold means
+there is no state to persist and no session to disconnect, so `VimLeavePre` on
+an unused Neovim loads nothing.
+
+The command name is hardcoded: `:Ezdap` is registered at startup and never
+moves, so every message and doc line names it outright and nothing has to be
+deferred to get the name right. `command_alias` registers one further name
+sharing the same handler and completion function. That shared callback is also
+the ownership proof — `nvim_get_commands()` hands back the very same function —
+so dropping an alias a later `setup()` removed can never delete someone else's
+command. A `:Ezdap` already taken when `plugin/` runs is left alone with a
+warning; the rest of the plugin still comes up.
+
+`setup(opts)` is optional and only merges config.
 
 ## Architecture
 
@@ -40,7 +61,7 @@ depend only on `manager`.
 
 **Command surface** — [lua/ezdap/command.lua](lua/ezdap/command.lua)
 The user-facing command tables `M.debug.*`, `M.breakpoint.*`, `M.view.*` reached
-through `:Debug …`. Owns all user interaction — pickers, prompts, notifications,
+through `:Ezdap …`. Owns all user interaction — pickers, prompts, notifications,
 cursor reads — and resolves it into the concrete details it hands to `manager`,
 its only path to the DAP layer.
 
@@ -67,7 +88,7 @@ its only path to the DAP layer.
 - [task.lua](lua/ezdap/task.lua) — the task runner backend. Consumes a native
   task (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`) and
   sends `parameters` as the DAP request body verbatim.
-- [runner.lua](lua/ezdap/runner.lua) — the run tracker behind `:Debug
+- [runner.lua](lua/ezdap/runner.lua) — the run tracker behind `:Ezdap
   run`/`run_file`/`rerun`/`clean`, and the single path from a mode to a running
   session: it resolves the mode, tracks every run and cancels it. Every run is
   handed a `runner.Presenter` that takes its buffers, progress and outcome;
@@ -86,14 +107,14 @@ its only path to the DAP layer.
   as JSON Schema for a typed file, seeded into a scaffolded document, completed),
   and `M.sources`, the completion an input may ask for by name. Nothing else
   switches on a type name, so adding one is a single row.
-- [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Debug run`, the
+- [schema.lua](lua/ezdap/schema.lua) — the engine behind `:Ezdap run`, the
   reader for `new_run_file`, and the mode engine `runner` resolves every run through.
   `resolve_task` reads a mode's declared `inputs` from a table of values
   and calls its `build`, delivering a complete `ezdap.Task` to a `done` callback —
   a `build` may stop to ask the user something first, and the returned `cancel`
   drops the answer if the caller has given up by then. Only `runner` resolves:
   every front end names a mode and lets the run do the rest.
-- [scaffold.lua](lua/ezdap/scaffold.lua) — `:Debug new_run_file`: writes a runnable
+- [scaffold.lua](lua/ezdap/scaffold.lua) — `:Ezdap new_run_file`: writes a runnable
   Lua run file naming the `adapter` and `mode` and listing that mode's
   declared inputs under `parameters`, each seeded via `ezdap.inputs` and commented
   with its `description`, then opens it.
@@ -173,7 +194,7 @@ behaviours a `build` line each expresses.
 
 An input declares a *value space*, and there are two ways to write into it:
 
-- the **string form** — a command line, where everything is text. `:Debug run
+- the **string form** — a command line, where everything is text. `:Ezdap run
   codelldb launch command='./a.out --verbose'` is this.
 - the **typed form** — a structured file that already has types, e.g. an easytasks
   `tasks.toml` writing `env = { A = "1" }` rather than `env=A=1`.
@@ -201,14 +222,14 @@ argument list).
 `inputs` is the only description of a mode, and both commands resolve through it:
 
 ```
-:Debug run     values     ─→ build ─→ body ─→ task
+:Ezdap run     values     ─→ build ─→ body ─→ task
 run_file       parameters ─→ build ─→ body ─→ task
 new_run_file   inputs ─→ seeded parameters ─→ (you edit it) ─→ run_file
 ```
 
 A scaffolded run file names the `adapter` and `mode` and lists that mode's
 declared inputs under `parameters`, each seeded by its row and commented with its
-`description` — so it and `:Debug run` cannot drift, and there is no second field
+`description` — so it and `:Ezdap run` cannot drift, and there is no second field
 list to keep in step.
 
 - **`build(inputs)`** returns everything a run needs: the request body, and
@@ -247,10 +268,10 @@ list to keep in step.
 An input's `description` is what explains the scaffolded file, since it becomes that
 field's comment — write it for someone reading the generated run file, not just the
 command line. Scaffold a mode after editing it
-(`:Debug new_run_file <adapter> <mode> /tmp/x.lua`) to see what it reads like.
+(`:Ezdap new_run_file <adapter> <mode> /tmp/x.lua`) to see what it reads like.
 
 Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are ezdap's
-own user-facing vocabulary — the `name=value` tokens typed at `:Debug run` — not
+own user-facing vocabulary — the `name=value` tokens typed at `:Ezdap run` — not
 the adapter's. The `params` keys they fill keep whatever casing the adapter's
 wire protocol uses, so pairings like `params.stopOnEntry = inputs.stop_on_entry`
 are normal and correct.
@@ -281,9 +302,9 @@ connection (`java-debug-server`).
 :checkhealth ezdap
 ```
 
-verifies the Neovim version, whether `setup()` has run, the resolved project
+verifies the Neovim version, whether the plugin is initialised, the resolved project
 state, and which adapters are registered — by name, since it loads no definition.
-`:Debug adapter_info <adapter>` loads one and reports what is wrong with it
+`:Ezdap adapter_info <adapter>` loads one and reports what is wrong with it
 (`schema.validate` plus its tooling); `schema.validate_all()` does the same for
 every registered definition at once — the quickest smoke test that a local change
 hasn't broken adapter resolution.

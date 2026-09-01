@@ -1,6 +1,6 @@
 ---@brief The exception hover: the exception that stopped the session — id,
 ---description, type and adapter stack trace — in a float. View-independent, so
----`:Debug exception_info` and the automatic hover on an exception stop share it.
+---`:Ezdap exception_info` and the automatic hover on an exception stop share it.
 
 local DetailBlock = require("ezdap.ui.DetailBlock")
 local manager     = require("ezdap.manager")

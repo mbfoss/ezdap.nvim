@@ -18,7 +18,7 @@ local config       = require("ezdap.config")
 local M            = {}
 
 ---Whether this window is the run panel in play, established by `init`. Everything
----below is inert until then, so `:Debug output` reaches the dock instead.
+---below is inert until then, so `:Ezdap output` reaches the dock instead.
 local _enabled     = false
 
 ---One buffer a run registered for display, as passed to `ezdap.AddBufOpts`.

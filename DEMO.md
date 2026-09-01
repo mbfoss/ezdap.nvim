@@ -2,7 +2,7 @@
 
 Each clip is a recorded Neovim session debugging the same small Python program
 through [debugpy](https://github.com/microsoft/debugpy). Commands are typed in
-full (`:Debug …`) to show what each step does; map them to keys for daily use —
+full (`:Ezdap …`) to show what each step does; map them to keys for daily use —
 see [Keymaps example](README.md#keymaps-example).
 
 The editor is Neovim with ezdap,
@@ -26,13 +26,13 @@ every scaling operation without pausing the program.
 ## Function and exception breakpoints
 
 Break on `scale` by name wherever it is called from, then run into the
-program's uncaught `ValueError` and read it with `:Debug exception_info`.
+program's uncaught `ValueError` and read it with `:Ezdap exception_info`.
 
 ![Function and exception breakpoints](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/03-function-exception.gif)
 
 ## Inspecting and changing values
 
-`:Debug inspect` expands the identifier under the cursor, `i` in the panel adds
+`:Ezdap inspect` expands the identifier under the cursor, `i` in the panel adds
 a watch expression, and `c` on a variable writes a new value back into the
 running program.
 
@@ -56,7 +56,7 @@ then step into a call and back out. The return value appears in the locals.
 ## Parallel sessions
 
 Two debuggees paused at the same breakpoint at once, each with a panel row and a
-dock tab. `:Debug session` selects which one the stepping commands apply to.
+dock tab. `:Ezdap session` selects which one the stepping commands apply to.
 
 ![Parallel sessions](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/07-parallel-sessions.gif)
 

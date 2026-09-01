@@ -1,11 +1,11 @@
----@brief The adapter reference behind `:Debug adapter_info`.
+---@brief The adapter reference behind `:Ezdap adapter_info`.
 ---
 ---An adapter definition documents itself: every mode carries a `description`
 ---and a `request`, every input a type, the values it completes with and a line on
 ---what it means (see `ezdap.Input` in `adapter_def.lua`). This module is the
 ---reader for that — it loads one adapter's definition, checks it, and renders
 ---what it declares as markdown in a float, so the same declaration that
----`:Debug run` validates against and `new_run_file` seeds from is what is shown.
+---`:Ezdap run` validates against and `new_run_file` seeds from is what is shown.
 ---
 ---Nothing here is written by hand, so an adapter you wrote yourself, or a
 ---definition you edited in your own config, documents itself exactly as the
@@ -148,7 +148,7 @@ local function _mode_block(adapter, mode_name, out)
     _table({ "input", "type", "description" }, rows, out)
 end
 
----Every registered adapter name. What `:Debug adapter_info` shows when it is not
+---Every registered adapter name. What `:Ezdap adapter_info` shows when it is not
 ---asked about one in particular: names only, so listing them loads no definition.
 ---@return string[]
 function M.overview()
@@ -158,8 +158,7 @@ function M.overview()
     for _, name in ipairs(names) do out[#out + 1] = "- `" .. name .. "`" end
     vim.list_extend(out, {
         "",
-        (":%s adapter_info <adapter> loads one and reports its modes, inputs and tooling")
-        :format(require("ezdap.config").command),
+        ":Ezdap adapter_info <adapter> loads one and reports its modes, inputs and tooling",
     })
     return out
 end
@@ -270,7 +269,7 @@ end
 ---Show the adapter reference in a float: every registered name when `adapter` is
 ---nil, otherwise that adapter loaded and checked — what the check turned up, then
 ---its modes and their inputs, narrowed to `mode_name` when given. Behind
----`:Debug adapter_info`.
+---`:Ezdap adapter_info`.
 ---@param adapter? string
 ---@param mode_name? string
 function M.show(adapter, mode_name)

@@ -1,5 +1,5 @@
 ---@brief User-facing command surface: the `breakpoint`, `debug` and `view`
----command tables reached through `:Debug …`. These sit on top of `manager`
+---command tables reached through `:Ezdap …`. These sit on top of `manager`
 ---(active session + control primitives) and own all the command-level UI —
 ---pickers, prompts, notifications and cursor handling.
 
@@ -271,7 +271,7 @@ local function _resolve_column(file, row, spec, cb)
     end)
 end
 
----Fields `:Debug breakpoint set` can write. `column` is the unresolved `col=`
+---Fields `:Ezdap breakpoint set` can write. `column` is the unresolved `col=`
 ---spec; `""` clears a string field, as in `breakpoints.patch`.
 ---@class ezdap.command.BpSetOpts
 ---@field column        string?
