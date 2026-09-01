@@ -153,50 +153,92 @@ local function _word_start(line, col)
     return i
 end
 
----Add or remove a column breakpoint at (file, row, column).
----@param file   string
----@param row    integer
----@param column integer
-local function _toggle_column_bp(file, row, column)
-    local bps    = manager.breakpoints
-    local exists = false
-    for _, bp in ipairs(bps.for_source(file)) do
-        if bp.line == row and bp.column == column then
-            exists = true; break
-        end
+---A breakpoint's registry key: what `breakpoints.patch`/`remove` identify it by.
+---@class ezdap.command.BpKey
+---@field line   integer
+---@field column integer?
+
+---Every breakpoint in `file` shown on `row` — the adapter-resolved line when the
+---session moved it, else the stored one — line breakpoint first, then by column.
+---@param file string
+---@param row  integer
+---@return ezdap.dap.SourceBreakpoint[]
+local function _bps_at_row(file, row)
+    local out = {}
+    for _, bp in ipairs(manager.breakpoints.for_source(file)) do
+        local st    = manager.bp_status(bp.internal_id)
+        local shown = (st and st.line) or bp.line
+        if shown == row then out[#out + 1] = bp end
     end
-    if exists then
-        bps.remove(file, row, column)
-    else
-        bps.add(file, row, { column = column })
-    end
+    table.sort(out, function(a, b) return (a.column or 0) < (b.column or 0) end)
+    return out
 end
 
----Set a column breakpoint on the current line. With a running session that
----supports breakpointLocations, prompts to pick among the valid column
----positions on the line; otherwise sets one at the cursor column.
-function M.breakpoint.column()
-    local file, row = _cursor_location()
-    if not file then return end
+---Resolve which breakpoint on the cursor row a command acts on. A column
+---breakpoint under the cursor always wins; otherwise the line breakpoint is
+---assumed, unless `opts.ask` — for destructive commands, where guessing costs
+---the user a breakpoint — which puts every candidate to a picker instead.
+---`cb(nil)` when the row carries none, and cb is not called at all if the picker
+---is dismissed.
+---@param file string
+---@param row  integer
+---@param opts { ask?: boolean }?
+---@param cb   fun(key: ezdap.command.BpKey?, bp: ezdap.dap.SourceBreakpoint?)
+local function _resolve_target(file, row, opts, cb)
+    local cands = _bps_at_row(file, row)
+    local function key(bp) return { line = bp.line, column = bp.column }, bp end
+    if #cands == 0 then return cb(nil, nil) end
+    if #cands == 1 then return cb(key(cands[1])) end
+    local cursor_col = vim.api.nvim_win_get_cursor(0)[2] + 1
+    for _, bp in ipairs(cands) do
+        if bp.column == cursor_col then return cb(key(bp)) end
+    end
+    if not (opts and opts.ask) then
+        for _, bp in ipairs(cands) do
+            if bp.column == nil then return cb(key(bp)) end
+        end
+    end
+    select.open({
+        prompt = "Breakpoint on line " .. row,
+        items  = vim.tbl_map(function(bp)
+            local label = tostring(bp.line) .. (bp.column and (":" .. bp.column) or "  (whole line)")
+            if bp.condition then label = label .. "  if: " .. bp.condition end
+            if bp.log_message then label = label .. "  log: " .. bp.log_message end
+            return { label = label, data = bp }
+        end, cands),
+        sort_by_score = false,
+    }, function(bp)
+        if bp then cb(key(bp)) end
+    end)
+end
+
+---Resolve a `col=` spec to a concrete 1-based column: a literal number, `here`
+---(the word start under the cursor) or `pick` (choose among the adapter's valid
+---breakpoint locations, falling back to `here` when it can't answer).
+---@param file string
+---@param row  integer
+---@param spec string
+---@param cb   fun(column: integer?)
+local function _resolve_column(file, row, spec, cb)
     local bufnr      = vim.api.nvim_get_current_buf()
     local cursor_col = vim.api.nvim_win_get_cursor(0)[2] + 1
     local linetext   = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
-    local col        = _word_start(linetext, cursor_col)
-    local sess       = manager.session()
+    local here       = _word_start(linetext, cursor_col)
 
-    -- If a column bp already exists at this position, clear it directly so
-    -- existing bps can always be removed even when a session is active.
-    local bps_mod    = manager.breakpoints
-    for _, bp in ipairs(bps_mod.for_source(file)) do
-        if bp.line == row and bp.column == col then
-            _toggle_column_bp(file, row, col)
-            return
-        end
+    local n = tonumber(spec)
+    if n then return cb(math.max(1, math.floor(n))) end
+    if spec == "here" then return cb(here) end
+    if spec ~= "pick" then
+        vim.notify("[dap] col: expected a number, 'here' or 'pick', got '" .. spec .. "'",
+            vim.log.levels.WARN)
+        return cb(nil)
     end
 
+    local sess = manager.session()
     if not (sess and sess:capable("supportsBreakpointLocationsRequest")) then
-        _toggle_column_bp(file, row, col)
-        return
+        vim.notify("[dap] col=pick needs a running session that reports breakpoint locations; using the cursor column",
+            vim.log.levels.WARN)
+        return cb(here)
     end
     ---@type ezdap.dap.proto.Source
     local source = { path = file, name = vim.fn.fnamemodify(file, ":t") }
@@ -209,36 +251,72 @@ function M.breakpoint.column()
                 cols[#cols + 1] = c
             end
         end
-        if #cols == 0 then
-            _toggle_column_bp(file, row, cursor_col); return
+        table.sort(cols)
+        if #cols == 0 then return cb(here) end
+        if #cols == 1 then return cb(cols[1]) end
+        local initial = 1
+        for i, c in ipairs(cols) do
+            if math.abs(c - cursor_col) < math.abs(cols[initial] - cursor_col) then initial = i end
         end
-        local nearest = cols[1]
-        for _, c in ipairs(cols) do
-            if math.abs(c - cursor_col) < math.abs(nearest - cursor_col) then
-                nearest = c
-            end
-        end
-        _toggle_column_bp(file, row, nearest)
+        select.open({
+            prompt        = "Breakpoint column on line " .. row,
+            items         = vim.tbl_map(function(c)
+                return { label = ("%d  %s"):format(c, vim.trim(linetext:sub(c))), data = c }
+            end, cols),
+            initial       = initial,
+            sort_by_score = false,
+        }, function(c)
+            if c then cb(c) end
+        end)
     end)
 end
 
----@param condition? string
-function M.breakpoint.add(condition)
+---Fields `:Debug breakpoint set` can write. `column` is the unresolved `col=`
+---spec; `""` clears a string field, as in `breakpoints.patch`.
+---@class ezdap.command.BpSetOpts
+---@field column        string?
+---@field condition     string?
+---@field hit_condition string?
+---@field log_message   string?
+
+---Create or update a breakpoint at the cursor. Bare, that is a plain line
+---breakpoint; with `col=` it targets that column, and without one it edits
+---whichever breakpoint on the row `_resolve_target` picks.
+---@param opts ezdap.command.BpSetOpts
+function M.breakpoint.set(opts)
     local file, row = _cursor_location()
     if not file then return end
     local bps = manager.breakpoints
-    bps.add(file, row, { condition = condition })
+    if not (opts.column or opts.condition or opts.hit_condition or opts.log_message) then
+        bps.add(file, row)
+        return
+    end
+    ---@param key ezdap.command.BpKey
+    local function apply(key)
+        bps.patch(file, key.line, {
+            column        = key.column,
+            condition     = opts.condition,
+            hit_condition = opts.hit_condition,
+            log_message   = opts.log_message,
+        })
+    end
+    if opts.column then
+        _resolve_column(file, row, opts.column, function(col)
+            if col then apply({ line = row, column = col }) end
+        end)
+    else
+        _resolve_target(file, row, nil, function(key) apply(key or { line = row }) end)
+    end
 end
 
 function M.breakpoint.remove()
     local file, row = _cursor_location()
     if not file then return end
-    local bps = manager.breakpoints
-    -- Remove the breakpoint shown at the cursor (resolved or stored line).
-    local existing = _existing_bp_line(file, row)
-    if existing then
-        bps.remove(file, existing)
-    end
+    -- Removal is destructive, so a line carrying both a line and column
+    -- breakpoints asks rather than assuming the line one.
+    _resolve_target(file, row, { ask = true }, function(key)
+        if key then manager.breakpoints.remove(file, key.line, key.column) end
+    end)
 end
 
 function M.breakpoint.clear_file()
@@ -263,53 +341,32 @@ function M.breakpoint.clear_fn()
     for _, bp in ipairs(bps.function_breakpoints()) do bps.remove_function(bp.name) end
 end
 
-function M.breakpoint.enable()
+---Set the disabled flag on the breakpoint the cursor resolves to.
+---@param disabled boolean?  nil flips the current state
+local function _set_disabled(disabled)
     local file, row = _cursor_location()
     if not file then return end
-    local bps   = manager.breakpoints
-    local found = false
-    for _, bp in ipairs(bps.for_source(file)) do
-        if bp.line == row then
-            found = true; break
+    _resolve_target(file, row, nil, function(key, bp)
+        if not key then
+            vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return
         end
-    end
-    if not found then
-        vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return
-    end
-    bps.patch(file, row, { disabled = false })
+        local want = disabled
+        if want == nil then want = not bp.disabled end
+        manager.breakpoints.patch(file, key.line, { column = key.column, disabled = want })
+    end)
+end
+
+function M.breakpoint.enable()
+    _set_disabled(false)
 end
 
 function M.breakpoint.disable()
-    local file, row = _cursor_location()
-    if not file then return end
-    local bps   = manager.breakpoints
-    local found = false
-    for _, bp in ipairs(bps.for_source(file)) do
-        if bp.line == row then
-            found = true; break
-        end
-    end
-    if not found then
-        vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return
-    end
-    bps.patch(file, row, { disabled = true })
+    _set_disabled(true)
 end
 
 ---Toggle the enabled/disabled state of the breakpoint at the current line.
 function M.breakpoint.toggle_enabled()
-    local file, row = _cursor_location()
-    if not file then return end
-    local bps = manager.breakpoints
-    local bp
-    for _, b in ipairs(bps.for_source(file)) do
-        if b.line == row then
-            bp = b; break
-        end
-    end
-    if not bp then
-        vim.notify("[dap] no breakpoint at current line", vim.log.levels.WARN); return
-    end
-    bps.patch(file, row, { disabled = not bp.disabled })
+    _set_disabled(nil)
 end
 
 function M.breakpoint.enable_all()
@@ -324,41 +381,35 @@ function M.breakpoint.condition()
     local file, row = _cursor_location()
     if not file then return end
     local bps = manager.breakpoints
-    local bp
-    for _, b in ipairs(bps.for_source(file)) do
-        if b.line == row then
-            bp = b; break
-        end
-    end
-    inputwin.open({ prompt = "Condition (empty to clear): ", default = bp and bp.condition or "" },
-        function(cond)
-            if cond == nil then return end
-            inputwin.open({ prompt = "Hit condition (empty to clear): ", default = bp and bp.hit_condition or "" },
-                function(hit)
-                    if hit == nil then return end
-                    bps.patch(file, row, { condition = cond, hit_condition = hit })
-                end)
-        end)
+    _resolve_target(file, row, nil, function(key, bp)
+        key = key or { line = row }
+        inputwin.open({ prompt = "Condition (empty to clear): ", default = bp and bp.condition or "" },
+            function(cond)
+                if cond == nil then return end
+                inputwin.open({ prompt = "Hit condition (empty to clear): ", default = bp and bp.hit_condition or "" },
+                    function(hit)
+                        if hit == nil then return end
+                        bps.patch(file, key.line,
+                            { column = key.column, condition = cond, hit_condition = hit })
+                    end)
+            end)
+    end)
 end
 
 function M.breakpoint.logpoint()
     local file, row = _cursor_location()
     if not file then return end
     local bps = manager.breakpoints
-    local bp
-    for _, b in ipairs(bps.for_source(file)) do
-        if b.line == row then
-            bp = b; break
-        end
-    end
-    inputwin.open({ prompt = "Log message (empty to clear): ", default = bp and bp.log_message or "" },
-        function(input)
-            if input == nil then return end
-            bps.patch(file, row, { log_message = input })
-        end)
+    _resolve_target(file, row, nil, function(key, bp)
+        key = key or { line = row }
+        inputwin.open({ prompt = "Log message (empty to clear): ", default = bp and bp.log_message or "" },
+            function(input)
+                if input == nil then return end
+                bps.patch(file, key.line, { column = key.column, log_message = input })
+            end)
+    end)
 end
 
----@param name? string
 function M.breakpoint.fn(name)
     local bps = manager.breakpoints
     local function _toggle(n)

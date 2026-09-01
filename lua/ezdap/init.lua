@@ -118,7 +118,7 @@ local function _cmd()
 end
 
 local _bp_subs = {
-    "toggle", "add", "remove", "column",
+    "toggle", "set", "remove",
     "clear_file", "clear_all", "clear_fn",
     "enable", "disable", "toggle_enabled", "enable_all", "disable_all",
     "condition", "logpoint",
@@ -126,6 +126,31 @@ local _bp_subs = {
     "data", "data_clear", "data_list",
     "list",
 }
+
+---`set` argument keys, mapped to the fields `command.breakpoint.set` takes.
+local _BP_SET_KEYS = {
+    col = "column", cond = "condition", hit = "hit_condition", log = "log_message",
+}
+
+---Read `:Debug breakpoint set [col=here|pick|N] [cond=…] [hit=…] [log=…]`. Values are
+---split by Vim's rules, so escape any space (`cond=x\ >\ 3`); an empty value clears
+---the field. No arguments at all sets a plain line breakpoint at the cursor.
+---@param args string[]
+---@return ezdap.command.BpSetOpts?
+local function _parse_bp_set_args(args)
+    local opts = {}
+    for _, tok in ipairs(args) do
+        local key, value = tok:match("^([%w_]+)=(.*)$")
+        local field = key and _BP_SET_KEYS[key]
+        if not field then
+            vim.notify("[ezdap] breakpoint set: expected col=/cond=/hit=/log=, got '" .. tok .. "'",
+                vim.log.levels.WARN)
+            return
+        end
+        opts[field] = value
+    end
+    return opts
+end
 
 ---Run the `breakpoint` subcommand. Also reachable via `:Debug breakpoint …`.
 ---@param args string[]
@@ -138,12 +163,11 @@ local function _bp_run(args)
         else
             cmd.breakpoint.toggle()
         end
-    elseif sub == "add" then
-        cmd.breakpoint.add(args[2])
+    elseif sub == "set" then
+        local set_opts = _parse_bp_set_args({ unpack(args, 2) })
+        if set_opts then cmd.breakpoint.set(set_opts) end
     elseif sub == "remove" then
         cmd.breakpoint.remove()
-    elseif sub == "column" then
-        cmd.breakpoint.column()
     elseif sub == "clear_file" then
         cmd.breakpoint.clear_file()
     elseif sub == "clear_all" then
@@ -188,6 +212,9 @@ end
 ---@return string[]
 local function _bp_complete(rest)
     if #rest == 0 then return _bp_subs end
+    if rest[1] == "set" then
+        return { "cond=", "hit=", "log=", "col=", "col=here", "col=pick" }
+    end
     if rest[1] == "fn" and #rest == 1 then
         return vim.tbl_map(function(bp) return bp.name end,
             require("ezdap.dap.breakpoints").function_breakpoints())
