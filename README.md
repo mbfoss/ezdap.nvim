@@ -283,23 +283,26 @@ All breakpoint operations are grouped under `:Debug breakpoint <sub>`. Breakpoin
 before a session starts and are synced live to running sessions.
 
 ```vim
-:Debug breakpoint             " toggle a line breakpoint at the cursor
-:Debug breakpoint condition   " condition + hit condition on that line
-:Debug breakpoint logpoint    " make it a logpoint (log, don't stop)
-:Debug breakpoint set col=pick            " breakpoint on a column of that line
-:Debug breakpoint set col=here cond=x>3   " conditional column breakpoint
-:Debug breakpoint fn <name>   " function breakpoint by name
-:Debug breakpoint data        " watchpoint on a variable/expression
-:Debug breakpoint exception_filter        " toggle an adapter filter
+:Debug breakpoint               " toggle a line breakpoint at the cursor
+:Debug breakpoint toggle        " the same, spelled out
+:Debug breakpoint set           " add a line breakpoint, never remove one
+:Debug breakpoint condition     " condition + hit condition (prompts)
+:Debug breakpoint logpoint      " logpoint (prompts for log message)
+:Debug breakpoint set cond=x>3  " conditional breakpoint
+:Debug breakpoint set col=here  " column breakpoint
+:Debug breakpoint set col=pick  " column breakpoint, pick a valid column
+:Debug breakpoint fn <name>     " function breakpoint by name
+:Debug breakpoint data          " watchpoint on a variable/expression
+:Debug breakpoint list          " fuzzy-pick and jump to any breakpoint
+:Debug breakpoint exception_filter              " toggle an adapter filter
 :Debug breakpoint exception_type <name> [mode]  " named exception type
-:Debug breakpoint list        " fuzzy-pick and jump to any breakpoint
 ```
 
 `set` is the non-interactive form: `col=` takes a column number, `here` (the word
 under the cursor) or `pick` (choose among the columns the adapter reports as valid),
 and `cond=`/`hit=`/`log=` write the condition, hit condition and log message. Values
-are split by Vim's rules, so escape spaces (`cond=x\ >\ 3`) — or use `condition` /
-`logpoint`, which prompt in an input window. An empty value clears a field.
+are split by Vim's rules, so escape spaces (`cond=x\ >\ 3`), and an empty value
+clears a field.
 
 Every per-breakpoint subcommand — `condition`, `logpoint`, `remove`, the enable
 state — acts on the breakpoint the cursor resolves to. A column breakpoint under
