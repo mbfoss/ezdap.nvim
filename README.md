@@ -289,7 +289,7 @@ before a session starts and are synced live to running sessions.
 :Debug breakpoint condition     " condition + hit condition (prompts)
 :Debug breakpoint logpoint      " logpoint (prompts for log message)
 :Debug breakpoint set cond=x>3  " conditional breakpoint
-:Debug breakpoint set col=here  " column breakpoint
+:Debug breakpoint set col=here  " column bp at the word under the cursor
 :Debug breakpoint set col=pick  " column breakpoint, pick a valid column
 :Debug breakpoint fn <name>     " function breakpoint by name
 :Debug breakpoint data          " watchpoint on a variable/expression
