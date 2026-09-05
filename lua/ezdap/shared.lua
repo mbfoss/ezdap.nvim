@@ -47,22 +47,19 @@ function M.expand_path(path, cwd)
     return vim.fs.normalize(path)
 end
 
----One path input as the DAP server should receive it: `~`, `$VAR` and redundant
----separators resolved. Nil passes through, so an unset optional input stays unset
----and its key is dropped from the body; a `list`/`map` of paths is normalized
----entry by entry. Not `expand()`: that reads a leading `%`/`#`/`<` as a
----cmdline-special name, which rewrites a path starting with one and *raises* when
----there is nothing to name.
----@param path string|string[]|table<string,string>|nil  a path input's value
----@return string|table|nil
+---@return string
 function M.normalize_path(path)
-    if path == nil then return nil end
-    if type(path) == "table" then
-        local out = {}
-        for key, entry in pairs(path) do out[key] = M.normalize_path(entry) end
-        return out
-    end
-    return vim.fs.normalize(path)
+    if type(path) ~= "string" then return "" end
+    return path and vim.fs.normalize(path) or ""
+end
+
+---@param path string[]
+---@return string[]
+function M.normalize_paths(path)
+    if type(path) ~= "table" then return {} end
+    local out = {}
+    for _, entry in ipairs(path) do out[#out + 1] = M.normalize_path(entry) end
+    return out
 end
 
 ---One port input, held to the range a port has. Returns the port unchanged, or nil
