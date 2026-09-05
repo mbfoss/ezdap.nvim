@@ -109,6 +109,24 @@ local function _cmd()
     return _command_mod
 end
 
+---Warn about an unrecognised subcommand, pointing at the nearest known names.
+---`prefix` names the level it was typed at (e.g. "breakpoint"), so the message
+---says which list the suggestions come from.
+---@param sub string|nil
+---@param subs string[]
+---@param prefix string?
+local function _warn_unknown(sub, subs, prefix)
+    local where = prefix and (prefix .. ": ") or ""
+    local msg = ("[ezdap] %sunknown subcommand '%s'"):format(where, tostring(sub))
+    local near = vim.fn.matchfuzzy(subs, tostring(sub))
+    if #near > 0 then
+        msg = msg .. "; did you mean " .. table.concat({ unpack(near, 1, 3) }, ", ") .. "?"
+    else
+        msg = msg .. "; :help ezdap-commands for the full list"
+    end
+    vim.notify(msg, vim.log.levels.WARN)
+end
+
 local _bp_subs = {
     "toggle", "set", "remove",
     "clear_file", "clear_all", "clear_fn",
@@ -195,7 +213,7 @@ local function _bp_run(args)
     elseif sub == "list" then
         cmd.breakpoint.list()
     else
-        vim.notify("[dap] unknown subcommand: " .. tostring(sub), vim.log.levels.WARN)
+        _warn_unknown(sub, _bp_subs, "breakpoint")
     end
 end
 
@@ -219,6 +237,26 @@ local function _bp_complete(rest)
         return { "always", "unhandled", "userUnhandled", "never" }
     end
     return {}
+end
+
+local _view_subs = { "toggle", "hide" }
+
+---Run the `view` subcommand: bare `:Ezdap view` opens (or focuses) the debug
+---panel, so it never closes a panel the user asked for; `toggle` and `hide` are
+---the explicit ways to close it.
+---@param args string[]
+local function _view_cmd(args)
+    local cmd = _cmd()
+    local sub = args[1]
+    if sub == nil or sub == "" then
+        cmd.view.open()
+    elseif sub == "toggle" then
+        cmd.view.toggle()
+    elseif sub == "hide" then
+        cmd.view.hide()
+    else
+        _warn_unknown(sub, _view_subs, "view")
+    end
 end
 
 local _debug_subs = {
@@ -263,7 +301,11 @@ end
 local function _debug_run(_, args, opts)
     local cmd = _cmd()
     local sub = args[1]
-    if sub == "run_file" then
+    -- Bare `:Ezdap` opens the debug panel: the one thing that is useful at any
+    -- point, session or not, and the way in for everything the panel offers.
+    if sub == nil or sub == "" then
+        cmd.view.open()
+    elseif sub == "run_file" then
         M.run_file(args[2])
     elseif sub == "run" then
         local adapter, mode, inputs = _parse_run_args({ unpack(args, 2) })
@@ -275,7 +317,7 @@ local function _debug_run(_, args, opts)
     elseif sub == "rerun" then
         M.rerun()
     elseif sub == "view" then
-        cmd.view.toggle()
+        _view_cmd({ unpack(args, 2) })
     elseif sub == "output" then
         cmd.view.output_toggle()
     elseif sub == "continue" then
@@ -331,7 +373,7 @@ local function _debug_run(_, args, opts)
     elseif sub == "breakpoint" then
         _bp_run({ unpack(args, 2) })
     else
-        vim.notify("[ezdap] unknown command: " .. tostring(sub), vim.log.levels.WARN)
+        _warn_unknown(sub, _debug_subs, nil)
     end
 end
 
@@ -388,6 +430,9 @@ local function _debug_complete_subs(_, rest, arg_lead)
     if #rest == 0 then return _debug_subs end
     if rest[1] == "breakpoint" then
         return _bp_complete({ unpack(rest, 2) })
+    end
+    if rest[1] == "view" then
+        return #rest == 1 and _view_subs or {}
     end
     if rest[1] == "run_file" and #rest == 1 then
         return vim.fn.getcompletion(arg_lead, "file")
@@ -532,6 +577,13 @@ end
 function M.open_debug_view()
     _require_init("open_debug_view")
     M.debug_view():open()
+end
+
+---Close the DebugView if it is visible. No-op when it is not.
+function M.close_debug_view()
+    _require_init("close_debug_view")
+    if not _debug_view then return end
+    _debug_view:close()
 end
 
 ---Close the DebugView if it is visible, otherwise open and focus it.

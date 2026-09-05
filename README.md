@@ -338,7 +338,8 @@ logpoint, disabled, exception). The full list of subcommands is in the
 The main panel is a tree of **sessions → threads → stack frames → scopes →
 variables**, plus **watch expressions** and **breakpoints**. It opens
 automatically when a session starts; open or focus it any time with
-`:Ezdap view`.
+`:Ezdap` (or `:Ezdap view`). `:Ezdap view hide` closes it, and
+`:Ezdap view toggle` does one or the other.
 
 Inside the panel:
 
@@ -528,8 +529,9 @@ require("ezdap").setup({
 ## Command reference <!-- tag: commands -->
 
 Everything is under the `:Ezdap` command, with completion for every subcommand.
-Set `command_alias` in `setup()` to register it under a second name — an alias
-is the same command, with the same subcommands and completion.
+Bare `:Ezdap`, with no subcommand, opens the debug panel. Set `command_alias`
+in `setup()` to register it under a second name — an alias is the same command,
+with the same subcommands and completion.
 
 <details>
 <summary><b><code>:Ezdap</code> subcommands</b></summary>
@@ -541,7 +543,8 @@ is the same command, with the same subcommands and completion.
 | `new_run_file …`      | Scaffold a run file from a mode's inputs        |
 | `adapter_info [adapter] [mode]` | Report an adapter's modes, inputs and tooling |
 | `rerun`               | Re-launch the most recent run                     |
-| `view`                | Open/focus the debug panel                        |
+| *(none)* / `view`     | Open/focus the debug panel                        |
+| `view toggle` / `view hide` | Close the panel if open / close it            |
 | `output`              | Toggle the bottom output window                   |
 | `continue` / `continue_all` | Continue the active / every session         |
 | `step_over` (`next`) / `step_in` / `step_out` | Stepping             |

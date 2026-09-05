@@ -946,6 +946,16 @@ end
 
 M.view = {}
 
+---Open the DebugView split, focusing it when it is already visible.
+function M.view.open()
+    require("ezdap").open_debug_view()
+end
+
+---Close the DebugView split. No-op when it is not visible.
+function M.view.hide()
+    require("ezdap").close_debug_view()
+end
+
 ---Toggle the DebugView split: close it if visible, otherwise open and focus it.
 function M.view.toggle()
     require("ezdap").toggle_debug_view()
