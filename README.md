@@ -1,8 +1,5 @@
 # ezdap.nvim
 
-> **Status:** ezdap is under active development. The core is usable day to day,
-> but some areas are incomplete and breaking changes are still possible.
-
 A full-featured **Debug Adapter Protocol (DAP) client for Neovim**.
 
 ezdap brings an interactive debugger to Neovim: pause a program on a
