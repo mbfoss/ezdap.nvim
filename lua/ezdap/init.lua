@@ -616,7 +616,7 @@ function M.run_file(path)
     return runner.run_file(path)
 end
 
----Scaffold a run_file for one of an adapter's modes (`adapter`/`mode`/
+---Write a run_file for one of an adapter's modes (`adapter`/`mode`/
 ---`parameters`, seeded and commented) and open it for editing. `assignments` is
 ---positional: adapter, optional mode (defaults to the sole one), optional path.
 ---@param assignments string[]  positional adapter, mode, path, e.g. { "codelldb", "binary", "./foo.lua" }

@@ -91,7 +91,7 @@ An `ezdap.Input` describes one value:
 ## Modes
 
 A definition without `modes` cannot be run at all: nothing completes, and nothing can be
-scaffolded, because a raw DAP body describes nothing about itself (see
+generated, because a raw DAP body describes nothing about itself (see
 [Why inputs](README.md#why-inputs-and-not-raw-dap)). Each mode declares
 the `inputs` it accepts and a `build` that turns supplied values into the native body:
 
@@ -148,8 +148,8 @@ How the pieces fit:
   `fun(partial): string[]` when they can only be computed: the targets in a workspace,
   the containers running now. On a `list`/`map` it describes one entry. A written-out set
   is also what a typed file's schema lists as `examples` and what
-  `:Ezdap new_run_file` writes into the scaffolded comment; a source or a function has
-  nothing to serialize. Nothing rejects a value outside what completes. A boolean input
+  `:Ezdap new_run_file` writes into the generated file's comments; a source or a
+  function has nothing to serialize. Nothing rejects a value outside what completes. A boolean input
   completes as `true`/`false` on its own.
 - **Paths and ports**: a path input is a `string` and a port a plain `integer`; what
   either additionally is, `build` says: `shared.normalize_path(inputs.cwd)` resolves `~`

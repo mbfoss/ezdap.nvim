@@ -537,7 +537,7 @@ with the same subcommands and completion.
 | --------------------- | ------------------------------------------------- |
 | `run …`               | Launch/attach from `input=value` tokens           |
 | `run_file [path]`     | Run a Lua run file, or pick from a directory     |
-| `new_run_file …`      | Scaffold a run file from a mode's inputs        |
+| `new_run_file …`      | Generate a run file from a mode's inputs        |
 | `adapter_info [adapter] [mode]` | Report an adapter's modes, inputs and tooling |
 | `rerun`               | Re-launch the most recent run                     |
 | *(none)* / `view`     | Open/focus the debug panel                        |
@@ -700,7 +700,7 @@ Why do modes declare `inputs` rather than taking a raw DAP body?
 - **Validation before launch.** Missing required inputs, a port outside
   0–65535, or a malformed `A=1,B=2` are reported during resolution, with the
   input named, instead of as adapter stderr.
-- **Derived scaffolding.** `:Ezdap new_run_file` generates a run file from
+- **Generated run files.** `:Ezdap new_run_file` writes a run file from
   `inputs`, including each field's description, so no template can diverge from
   what the adapter accepts.
 - **One value, two entry points.** An input can be supplied on the command line

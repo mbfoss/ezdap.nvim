@@ -87,7 +87,7 @@ local function _input_lines(adapter, mode_name)
     return lines
 end
 
----Scaffold a run_file for an `adapter` + one of its `modes` and open it for
+---Write a run_file for an `adapter` + one of its `modes` and open it for
 ---editing; run it with `:Ezdap run_file`. `assignments` is positional: adapter, then
 ---optional mode (defaults to the sole one) and path. Fails if the path exists.
 ---@param assignments string[]  positional adapter, mode, path, e.g. { "codelldb", "binary", "./foo.lua" }
