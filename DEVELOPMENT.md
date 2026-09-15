@@ -268,10 +268,10 @@ Which names a mode takes is up to it, and there is no portable role
 vocabulary across adapters, but by convention a `launch` mode takes one
 `command` input (a string completing as `"command"`) carrying the whole command line, and
 `build` splits it into that adapter's own program/args fields via
-`shared.split_command`. See each file under `ezdap-adapters/` for worked examples
-of every shape, including custom-launch command strings (`codelldb`'s `core`), a
-`connect`-only mode (the shipped `remote`), and one input feeding both body and
-connection (`java-debug-server`).
+`shared.split_command`. The shipped `remote` (under `ezdap-adapters/`) is the
+`connect`-only shape; the definitions in
+[ezdap-adapters.nvim](https://github.com/mbfoss/ezdap-adapters.nvim) are worked
+examples of the rest, such as inputs that feed both the body and the connection.
 
 ## Conventions
 

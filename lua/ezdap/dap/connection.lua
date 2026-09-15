@@ -187,7 +187,7 @@ function M.stdio(cmd, opts)
 
     local env         = nil
     if opts.env and next(opts.env) then env = opts.env end
-    if opts.cwd and not vim.fn.has("win32") == 1 then
+    if opts.cwd and vim.fn.has("win32") == 0 then
         env = env and vim.deepcopy(env) or {}
         env.PWD = opts.cwd
     end
