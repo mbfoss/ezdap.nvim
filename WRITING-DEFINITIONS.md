@@ -199,15 +199,34 @@ this run resolved from, so a `setup` can gate one mode rather than the whole def
 unrecognized name as "none of mine" and let the run proceed.
 
 ```lua
+local shared = require("ezdap.shared")
+
 return {
     setup = function(config, ctx, callback)
-        local handle = start_the_server()          -- e.g. via ezdap.tk.term.spawn
+        local handle, err
+        local done = false -- callback must fire exactly once
+        handle, err = shared.spawn({ "my-dap", "--listen", "127.0.0.1:0" }, {
+            cwd           = config.cwd,
+            line_buffered = true,
+            on_stdout     = function(_, lines)
+                for _, line in ipairs(lines) do
+                    local port = not done and line:match("listening on port (%d+)")
+                    if port then
+                        done = true
+                        config.host, config.port = "127.0.0.1", tonumber(port)
+                        callback(nil, { handle = handle })
+                    end
+                end
+            end,
+            on_exit       = function(code)
+                if done then return end
+                done = true
+                callback(("my-dap exited (code %d) before reporting a port"):format(code))
+            end,
+        })
+        if not handle then return callback("failed to start my-dap: " .. tostring(err)) end
         ctx.add_bufnr(handle.bufnr, { label = "my-dap server" })
         ctx.report("waiting for server port")
-        wait_for_port(handle, function(port)
-            config.host, config.port = "127.0.0.1", port
-            callback(nil, { handle = handle })
-        end)
     end,
     teardown = function(_, state)
         if state and state.handle then state.handle.stop() end
