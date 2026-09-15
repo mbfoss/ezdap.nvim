@@ -3,7 +3,7 @@
 An adapter definition is a single Lua file under an `ezdap-adapters/` directory on the
 runtimepath (beside `lsp/` and `plugin/`, not under `lua/`; it is a definition read by
 filename, not a Lua module),
-registered under its filename: `debugpy.lua` becomes the `debugpy` adapter, the name
+registered under its filename: `myadapter.lua` becomes the `myadapter` adapter, the name
 `:Ezdap run` takes. It is configuration only: it says how to reach the debug adapter (the
 program that actually speaks DAP, such as `codelldb` or `gdb --interpreter=dap`) and what
 that adapter can be asked to do.
@@ -13,8 +13,7 @@ Three things get named in these files, and DAP keeps them distinct:
 - **debug adapter**: the program ezdap spawns or dials, the one speaking DAP:
   `codelldb`, `lldb-dap`, `gdb --interpreter=dap`, `dlv dap`.
 - **debugger**: what that adapter drives underneath. Sometimes a separate program
-  (`codelldb` drives LLDB, `php-debug` drives Xdebug, `java-debug-server` drives JDI),
-  sometimes the adapter itself (`gdb`, `dlv`, `debugpy`, `rdbg`, `netcoredbg` speak DAP
+  (`codelldb` drives LLDB), sometimes the adapter itself (`gdb` and `dlv` speak DAP
   directly).
 - **debuggee**: the program being debugged.
 
@@ -60,9 +59,9 @@ the adapter is reached and what it can run.
 | --- | --- | --- |
 | `command` | `string` \| `string[]` | The adapter process to spawn, spoken to over stdio. A string is split on shell whitespace, so `"python3 -m debugpy"` works; a list is used verbatim. A missing executable is reported before the session starts. **`command` takes priority**: a definition with both `command` and `host`/`port` spawns `command`, and its `host`/`port` are ignored. |
 | `host` | `string` | Host of an already-running adapter to connect to, used only when there is no `command`. Defaults to `127.0.0.1`. |
-| `port` | `integer` | Port to connect to, used only when there is no `command`; ezdap dials `host:port`, retrying for ~3s. A port that `setup` or a mode's `build` sets for the run still selects TCP over `command`: definitions whose `setup` starts a server (debugpy, delve, js-debug) do this. |
+| `port` | `integer` | Port to connect to, used only when there is no `command`; ezdap dials `host:port`, retrying for ~3s. A port that `setup` or a mode's `build` sets for the run still selects TCP over `command`: that is how a definition whose `setup` starts the adapter as a server connects to it. |
 | `cwd` | `string` | Working directory for the spawned adapter. Defaults to Neovim's cwd. |
-| `env` | `table<string,string>` | Environment for the spawned adapter, meaning the adapter's own environment, not the debuggee's (`local-lua-debugger.lua` sets `LUA_PATH` this way). |
+| `env` | `table<string,string>` | Environment for the spawned adapter, meaning the adapter's own environment, not the debuggee's; merged over Neovim's, so set only what the adapter needs, such as a search path or a flag it reads from the environment. |
 | `type` | `string` | DAP `adapterID` override. Defaults to the adapter's name, i.e. the filename stem. |
 | `defer_launch_attach` | `boolean` | Send `launch`/`attach` after `configurationDone` rather than straight after `initialize`, for adapters that require that order. |
 | `modes` | `table<string, ezdap.Mode>` | The named modes this definition offers, keyed by the name `:Ezdap run <adapter> <mode>` takes. |
@@ -184,8 +183,7 @@ the connection at it, see the `setup`/`teardown` example below.
 ## Setup and teardown
 
 `setup` runs before ezdap connects. Use it to start the adapter as a server and report its
-port (debugpy, delve, js-debug), or to locate its binary and fail with a readable
-message. Return errors through `callback("...")`. Pass state as the second argument,
+port, or to locate its binary and fail with a readable message. Return errors through `callback("...")`. Pass state as the second argument,
 `callback(nil, { handle = h })`, and it arrives as `teardown`'s second argument, which is
 how `teardown` stops what `setup` started. It must call `callback(err, state)` exactly
 once, so the run either proceeds or aborts.
@@ -235,9 +233,9 @@ return {
 ```
 
 When a definition has a `setup`, ezdap leaves `config.host`/`port` entirely to it and
-ignores the task's: the definition knows where it put the server. `delve` is the canonical
-example: it spawns `dlv dap`, scrapes the "DAP server listening at:" line, and points the
-connection there.
+ignores the task's: the definition knows where it put the server. Any adapter that
+announces its port on startup fits this shape; only the pattern matched against its
+output changes.
 
 ## Helpers
 
@@ -252,18 +250,16 @@ local exe, tried = shared.resolve_path({ "dlv", "$GOBIN/dlv" }, shared.is_execut
 ```
 
 Use `shared.is_directory` for directories, your own predicate when working means more than
-present (`gdb.lua` checks the version), and `opts.transform` to test a file inside a found
-directory (`debugpy.lua` maps a venv to its `bin/python`).
+present (a minimum version, say), and `opts.transform` to test a file inside a found
+directory (a virtualenv mapped to its `bin/python`, for instance).
 
 ## Templates
 
-The definitions in [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) are the
-worked examples: [`bash-debug-adapter.lua`](https://github.com/mbfoss/ezdap-adapters/blob/main/ezdap-adapters/bash-debug-adapter.lua)
-is the smallest, [`netcoredbg.lua`](https://github.com/mbfoss/ezdap-adapters/blob/main/ezdap-adapters/netcoredbg.lua)
-adds a binary lookup, and [`debugpy.lua`](https://github.com/mbfoss/ezdap-adapters/blob/main/ezdap-adapters/debugpy.lua)
-shows shared input groups and a spawned server. The
-full contract is in the `ezdap.AdapterDef` and `ezdap.Mode` annotations in
-`lua/ezdap/adapter_def.lua`.
+The definitions in [ezdap-adapters.nvim](https://github.com/mbfoss/ezdap-adapters.nvim) are
+worked examples of the common shapes: an adapter spoken to over stdio, one located on
+`PATH` or in a package directory, and one started as a server and then connected to. Pick
+the one closest to your adapter and adapt it. The full contract is in the
+`ezdap.AdapterDef` and `ezdap.Mode` annotations in `lua/ezdap/adapter_def.lua`.
 
 Contributions of new definitions are welcome. Please follow the structure and comment style
 of the existing files, and cite the adapter's own documentation that the field set is
