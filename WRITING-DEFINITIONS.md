@@ -58,9 +58,9 @@ the adapter is reached and what it can run.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `command` | `string` \| `string[]` | The adapter process to spawn, spoken to over stdio. A string is split on shell whitespace, so `"python3 -m debugpy"` works; a list is used verbatim. A missing executable is reported before the session starts. |
-| `host` | `string` | Host of an already-running adapter to connect to instead of spawning one. Defaults to `127.0.0.1`. |
-| `port` | `integer` | Port to connect to. **Setting a port selects TCP**: with a port, `command` is not spawned and ezdap dials `host:port`, retrying for ~3s. Definitions whose `setup` starts a server (debugpy, delve, js-debug) set this from `setup`. |
+| `command` | `string` \| `string[]` | The adapter process to spawn, spoken to over stdio. A string is split on shell whitespace, so `"python3 -m debugpy"` works; a list is used verbatim. A missing executable is reported before the session starts. **`command` takes priority**: a definition with both `command` and `host`/`port` spawns `command`, and its `host`/`port` are ignored. |
+| `host` | `string` | Host of an already-running adapter to connect to, used only when there is no `command`. Defaults to `127.0.0.1`. |
+| `port` | `integer` | Port to connect to, used only when there is no `command`; ezdap dials `host:port`, retrying for ~3s. A port that `setup` or a mode's `build` sets for the run still selects TCP over `command`: definitions whose `setup` starts a server (debugpy, delve, js-debug) do this. |
 | `cwd` | `string` | Working directory for the spawned adapter. Defaults to Neovim's cwd. |
 | `env` | `table<string,string>` | Environment for the spawned adapter, meaning the adapter's own environment, not the debuggee's (`local-lua-debugger.lua` sets `LUA_PATH` this way). |
 | `type` | `string` | DAP `adapterID` override. Defaults to the adapter's name, i.e. the filename stem. |

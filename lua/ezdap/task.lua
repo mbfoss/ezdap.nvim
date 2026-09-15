@@ -65,7 +65,8 @@ M.start            = function(task, callbacks)
 
     -- Resolve the adapter definition + this task into the per-run dap config.
     -- setup/teardown stay on the adapter def (`base`); the runtime config carries
-    -- only what the dap layer consumes.
+    -- only what the dap layer consumes. A definition's `command` outranks its host/port.
+    local spawns = base.command ~= nil
     ---@type ezdap.dap.Config
     local config = {
         name                = task.name,
@@ -75,8 +76,8 @@ M.start            = function(task, callbacks)
         cwd                 = base.cwd,
         env                 = base.env,
         defer_launch_attach = base.defer_launch_attach,
-        host                = base.host,
-        port                = base.port,
+        host                = not spawns and base.host or nil,
+        port                = not spawns and base.port or nil,
         request             = request,
         request_args        = vim.deepcopy(task.parameters or {}),
     }

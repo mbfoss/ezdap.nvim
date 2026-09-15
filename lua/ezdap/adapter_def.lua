@@ -51,8 +51,8 @@ error("do not require a meta file")
 ---@field command?               string|string[]
 ---@field cwd?                   string
 ---@field env?                   table<string,string>
----@field host?                  string
----@field port?                  integer
+---@field host?                  string   ignored when `command` is set
+---@field port?                  integer  ignored when `command` is set
 ---@field type?                  string   DAP adapterID override (defaults to the adapter name)
 ---@field defer_launch_attach?   boolean
 ---@field modes?                 table<string, ezdap.Mode>
