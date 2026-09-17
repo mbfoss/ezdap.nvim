@@ -3,17 +3,13 @@ local uiutil = require("ezdap.util.ui")
 ---@class ezdap.util.fixedwin
 local M = {}
 
--- A "fixed window" is a split whose size along one axis is pinned:
---   * axis = "height" → a full-width horizontal split with 'winfixheight'
---   * axis = "width"  → a full-height vertical split with 'winfixwidth'
--- The size is expressed as a ratio of the total editor lines/columns, tracked
--- live as the user resizes, and re-applied when the layout changes (e.g. the
--- user opens a new split) so the window recovers its intended size.
+-- A split pinned along one axis to a ratio of the editor lines/columns,
+-- re-applied on layout changes.
 
 ---@class ezdap.util.fixedwin.AxisSpec
 ---@field split string                    :split subcommand, combined with a placement modifier
 ---@field fix   string                    window option that pins the axis
----@field frame "col"|"row"               parent frame kind that makes re-pinning safe
+---@field frame "col"|"row"               ancestor frame kind along which the axis is resized
 ---@field total fun(): integer            total lines/columns available
 ---@field get   fun(win: integer): integer
 ---@field set   fun(win: integer, n: integer)
@@ -40,37 +36,42 @@ local _AXES = {
 
 local win_setlocal = uiutil.win_setlocal
 
--- Find the frame node ("col"/"row") directly containing `target` as a leaf.
+-- Frames from the layout root down to `target`, with the child index taken.
 ---@param node   table    a vim.fn.winlayout() node
 ---@param target integer  window id
----@return table|nil  the containing frame node, or nil if not found
-local function parent_frame(node, target)
-    if node[1] == "leaf" then return nil end
-    for _, child in ipairs(node[2]) do
-        if child[1] == "leaf" and child[2] == target then return node end
-    end
-    for _, child in ipairs(node[2]) do
-        local frame = parent_frame(child, target)
-        if frame then return frame end
+---@param path?  {node: table, index: integer}[]
+---@return {node: table, index: integer}[]|nil  nil if `target` is not in `node`
+local function frame_path(node, target, path)
+    path = path or {}
+    if node[1] == "leaf" then return node[2] == target and path or nil end
+    for i, child in ipairs(node[2]) do
+        path[#path + 1] = { node = node, index = i }
+        if frame_path(child, target, path) then return path end
+        path[#path] = nil
     end
     return nil
+end
+
+-- Whether some window in `node` lacks `fix`, so it can absorb freed space.
+---@param node table   a vim.fn.winlayout() node
+---@param fix  string  'winfixheight' or 'winfixwidth'
+---@return boolean
+local function has_flexible_leaf(node, fix)
+    if node[1] == "leaf" then return not vim.wo[node[2]][fix] end
+    for _, child in ipairs(node[2]) do
+        if has_flexible_leaf(child, fix) then return true end
+    end
+    return false
 end
 
 ---@class ezdap.util.fixedwin.Opts
 ---@field min?   integer  minimum size (lines/columns); default 1
 ---@field enter? boolean  leave the cursor in the new window; default false (returns to the previous window)
----@field pos?   nil|"topleft"|"botright"|"leftabove" placement modifier for the split
+---@field pos?   nil|"topleft"|"botright" placement modifier for the split
 
---- Create a fixed-size split that recovers its size across layout changes.
----
---- The window is pinned along `axis` and sized to `ratio` of the total editor
---- lines (height) or columns (width). It re-applies that size whenever a new
---- split appears, but only when it has a neighbour on the fixed axis that can
---- absorb the freed space (a window above/below for height, beside it for
---- width). Without such a neighbour, shrinking would strand the freed space
---- since 'winfix{height,width}' forbids siblings from reclaiming it, so the
---- re-pin is skipped. The ratio is updated as the user resizes the window, and
---- the last-known ratio is handed to `on_delete` when the window closes.
+--- Create a split pinned to `ratio` along `axis`, re-applied on layout changes.
+--- Moved to the other side (e.g. <C-w>L), it is pinned along the cross axis with
+--- the same ratio. The ratio follows user resizes and is passed to `on_delete`.
 ---@param axis "height"|"width"
 ---@param ratio number                     fraction of total lines/columns (0..1)
 ---@param on_delete? fun(ratio: number)     called when the window closes, with the last-known ratio
@@ -78,6 +79,7 @@ end
 ---@return integer winid, integer group
 function M.create_fixed_win(axis, ratio, on_delete, opts)
     local spec = assert(_AXES[axis], "fixedwin: unknown axis " .. tostring(axis))
+    local cross = axis == "height" and _AXES.width or _AXES.height
     opts = opts or {}
     local min = opts.min or 1
     local pos = opts.pos or "botright"
@@ -89,60 +91,120 @@ function M.create_fixed_win(axis, ratio, on_delete, opts)
 
     win_setlocal(win, spec.fix, true)
 
-    -- last-known ratio, kept current as the user resizes; closed over by the
-    -- autocmds below and reported to on_delete.
+    -- last-known ratio, updated on user resizes
     local state = { ratio = ratio }
 
+    -- the axis currently pinned (`spec`, `cross`, or nil when neither is safe)
+    local active = spec ---@type ezdap.util.fixedwin.AxisSpec?
+
+    ---@param s ezdap.util.fixedwin.AxisSpec
     ---@param r number
     ---@return integer
-    local function size_for(r)
-        return math.max(min, math.floor(spec.total() * r))
+    local function size_for(s, r)
+        return math.max(min, math.floor(s.total() * r))
     end
 
-    -- Our own sizing and nvim's transient equalisation both emit WinResized just
-    -- like a user drag. `last_applied` ignores echoes of sizes we set; `settling`
-    -- ignores the transients emitted while a layout change is being absorbed.
+    -- ignore WinResized echoes of our own sizing and of layout transients
     local last_applied ---@type integer?
-    local settling = false
+    local settling = 0
 
+    ---@param s ezdap.util.fixedwin.AxisSpec
     ---@param n integer
-    local function apply_size(n)
-        spec.set(win, n)
-        last_applied = spec.get(win)
+    local function apply_size(s, n)
+        s.set(win, n)
+        last_applied = s.get(win)
     end
 
-    apply_size(size_for(ratio))
+    apply_size(spec, size_for(spec, ratio))
 
     if not opts.enter then
         vim.api.nvim_set_current_win(prev_win)
     end
 
-    -- Whether re-pinning the window to its fixed size is safe: its parent frame
-    -- must be on the fixed axis (a "col" frame for height, a "row" frame for
-    -- width) AND hold at least one neighbour that can absorb the freed space. If
-    -- the window is the only one on that axis, the freed space is stranded.
+    -- the window's own tabpage layout (winlayout() defaults to the current tab)
+    ---@return table
+    local function layout_of_win()
+        local tabnr = vim.api.nvim_tabpage_get_number(vim.api.nvim_win_get_tabpage(win))
+        return vim.fn.winlayout(tabnr)
+    end
+
+    -- layout events fire for every tabpage; only our own tab can move this window
+    ---@param other integer  window id
     ---@return boolean
-    local function pinnable()
+    local function same_tab(other)
         if not win or not vim.api.nvim_win_is_valid(win) then return false end
-        local frame = parent_frame(vim.fn.winlayout(), win)
-        local p = frame ~= nil and frame[1] == spec.frame and #frame[2] > 1
-        return p
+        if not vim.api.nvim_win_is_valid(other) then return false end
+        return vim.api.nvim_win_get_tabpage(other) == vim.api.nvim_win_get_tabpage(win)
     end
 
-    -- Re-pin to the tracked ratio, but only when a neighbour can absorb the
-    -- freed space (see pinnable()).
+    -- Pinning along `s` is safe when the nearest ancestor frame on that axis
+    -- has another branch with a non-fixed window to absorb the freed space.
+    ---@param s ezdap.util.fixedwin.AxisSpec
+    ---@param layout table  vim.fn.winlayout()
+    ---@return boolean
+    local function pinnable(s, layout)
+        local path = frame_path(layout, win) or {}
+        for i = #path, 1, -1 do
+            local step = path[i]
+            if step.node[1] == s.frame then
+                for j, sibling in ipairs(step.node[2]) do
+                    if j ~= step.index and has_flexible_leaf(sibling, s.fix) then
+                        return true
+                    end
+                end
+                return false
+            end
+        end
+        return false
+    end
+
+    -- whether we set the cross fix option (one set by the caller is left alone)
+    local cross_owned = false
+
+    -- Pick the axis to pin (requested first, else cross) and set only its fix
+    -- option, so an unmanaged axis does not freeze enclosing frames.
+    local function sync_fix()
+        if not win or not vim.api.nvim_win_is_valid(win) then active = nil return end
+        local layout = layout_of_win()
+        active = (pinnable(spec, layout) and spec)
+            or (pinnable(cross, layout) and cross)
+            or nil
+        local on = active == spec
+        if vim.wo[win][spec.fix] ~= on then win_setlocal(win, spec.fix, on) end
+        if active == cross and not vim.wo[win][cross.fix] then
+            win_setlocal(win, cross.fix, true)
+            cross_owned = true
+        elseif active ~= cross and cross_owned then
+            win_setlocal(win, cross.fix, false)
+            cross_owned = false
+        end
+    end
+
+    -- re-pin to the tracked ratio along the active axis
     local function repin()
-        if win and pinnable() then apply_size(size_for(state.ratio)) end
+        sync_fix()
+        if active then apply_size(active, size_for(active, state.ratio)) end
     end
 
-    -- Absorb a layout change on the next tick, holding `settling` across the
-    -- re-pin and one tick past it so both the change's transient resizes and
-    -- the re-pin's own resize are ignored by the WinResized handler.
+    -- clear the fix option if the new window cannot be managed
+    sync_fix()
+
+    -- layout structure (no sizes), to detect <C-w>HJKL moves on WinResized
+    local last_layout = vim.inspect(layout_of_win())
+
+    -- Re-pin on the next tick, twice so fix options settle across fixed windows.
+    -- `settling` counts pending absorptions to ignore their transient resizes.
     local function absorb_layout_change()
-        settling = true
+        settling = settling + 1
         vim.schedule(function()
             repin()
-            vim.schedule(function() settling = false end)
+            vim.schedule(function()
+                repin()
+                if win and vim.api.nvim_win_is_valid(win) then
+                    last_layout = vim.inspect(layout_of_win())
+                end
+                vim.schedule(function() settling = settling - 1 end)
+            end)
         end)
     end
 
@@ -154,28 +216,34 @@ function M.create_fixed_win(axis, ratio, on_delete, opts)
         callback = function()
             -- the just-created window is transiently current during WinNew
             local new = vim.api.nvim_get_current_win()
-            if vim.api.nvim_win_get_config(new).relative == "" then
+            if vim.api.nvim_win_get_config(new).relative == "" and same_tab(new) then
                 absorb_layout_change()
             end
         end,
     })
 
-    -- the editor resize changes total lines/columns, so re-pin to keep the ratio
-    -- (treated like a layout change; `settling` guards the transient resizes)
+    -- total lines/columns changed: re-pin to keep the ratio
     vim.api.nvim_create_autocmd("VimResized", {
         group    = group,
         callback = absorb_layout_change,
     })
 
-    -- track manual resizes so the pinned size and the ratio handed to on_delete
-    -- follow the user's latest adjustment (ignoring our own/transient resizes)
+    -- a changed layout means a window moved; otherwise track manual resizes
     vim.api.nvim_create_autocmd("WinResized", {
         group    = group,
         callback = function()
-            if settling or not win or not pinnable() then return end
-            local size = spec.get(win)
+            if not same_tab(vim.api.nvim_get_current_win()) then return end
+            local layout = vim.inspect(layout_of_win())
+            if layout ~= last_layout then
+                last_layout = layout
+                absorb_layout_change()
+                return
+            end
+            if settling > 0 or not active then return end
+            local size = active.get(win)
             if size ~= last_applied then
-                state.ratio = size / spec.total()
+                state.ratio = size / active.total()
+                last_applied = size
             end
         end,
     })
@@ -189,10 +257,8 @@ function M.create_fixed_win(axis, ratio, on_delete, opts)
                 win = nil
                 vim.api.nvim_del_augroup_by_id(group)
                 if on_delete then on_delete(state.ratio) end
-            elseif vim.api.nvim_win_is_valid(closed) then
-                if vim.api.nvim_win_get_config(closed).relative == "" then
-                    absorb_layout_change()
-                end
+            elseif same_tab(closed) and vim.api.nvim_win_get_config(closed).relative == "" then
+                absorb_layout_change()
             end
         end,
     })

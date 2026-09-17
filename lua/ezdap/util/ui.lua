@@ -5,8 +5,13 @@ local M = {}
 -- inherit our settings. Force `scope = "local"` to confine them to `win`.
 ---@param win integer
 ---@param opt string
----@param val any  nil resets the option to its default
+---@param val any  nil resets the option to its global value
 function M.win_setlocal(win, opt, val)
+    if val == nil then
+        -- the API ignores nil; `:setlocal opt<` resets to the global value
+        vim.api.nvim_win_call(win, function() vim.cmd("setlocal " .. opt .. "<") end)
+        return
+    end
     vim.api.nvim_set_option_value(opt, val, { win = win, scope = "local" })
 end
 
