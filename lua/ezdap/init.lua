@@ -662,10 +662,13 @@ end
 ---Every adapter that can be run, sorted: each definition file on the
 ---runtimepath, named by its filename stem, plus anything registered by hand in
 ---`ezdap.adapters`, narrowed to `enabled_adapters` when that is set. Naming them
----reads no definition. `enabled_adapters` settles the filter.
+---reads no definition.
+---
+---A projection, not an entry point: it needs no `setup()` and brings nothing
+---up, so a caller can ask before one has run. Only the `enabled_adapters`
+---filter comes from `setup()`, and unset it lets every name through.
 ---@return string[]
 function M.available_adapters()
-    _require_setup("available_adapters")
     local out, seen = {}, {}
     local function add(name)
         if not seen[name] and _enabled(name) then out[#out + 1], seen[name] = name, true end
@@ -681,10 +684,10 @@ end
 ---error: `available_adapters()` says which names there are, and a name left out
 ---of `enabled_adapters` is nil the same way; a file that fails to load is nil and
 ---why, and is re-read on the next call rather than remembered broken.
+---Needs no `setup()`, for the reason `available_adapters` gives.
 ---@param adapter string
 ---@return ezdap.AdapterDef? def, string? err
 function M.load_adapter(adapter)
-    _require_setup("load_adapter")
     if not _enabled(adapter) then return nil end
 
     local loaded = require("ezdap.adapters")
@@ -791,8 +794,7 @@ end
 local COMMAND = "Ezdap"
 
 ---Register the command under `name`. `:Ezdap` and any `command_alias` share one
----callback and one completion function, so an alias is the command under a
----second name, not a forwarder.
+---callback and one completion, so an alias is the command, not a forwarder.
 ---@param name string
 local function _register_command(name)
     vim.api.nvim_create_user_command(name, function(opts)
@@ -812,10 +814,9 @@ local function _register_command(name)
     })
 end
 
----Register `:Ezdap` and, when `command_alias` is set, that second name beside
----it. A name someone else already holds is never taken silently: `:Ezdap` is
----left alone, an alias is registered anyway (the user asked for that name), and
----either way whoever is displaced is named in the warning.
+---Register `:Ezdap` and, when set, `command_alias` beside it. A name someone
+---else holds is never taken silently: `:Ezdap` is left alone, an alias is taken
+---anyway (the user asked for it), and the displaced command is named either way.
 ---@param alias? string
 local function _register_commands(alias)
     if vim.api.nvim_get_commands({})[COMMAND] then
@@ -836,8 +837,7 @@ local function _register_commands(alias)
     _register_command(alias)
 end
 
----Install the project-state autocmds. Every callback is a no-op while cold, so
----a Neovim that never debugs pays nothing for them.
+---Install the project-state autocmds. Each is a no-op while cold.
 local function _create_autocmds()
     local group = vim.api.nvim_create_augroup("ezdap", { clear = true })
 
@@ -883,17 +883,12 @@ function M.get_default_config()
     return vim.deepcopy(_default_config or require("ezdap.config"))
 end
 
----Initialise the plugin. Nothing exists before this runs, so options deciding
----what gets read off disk (`root_markers`, `data_filename`) or what the command
----answers to besides `:Ezdap` (`command_alias`) are in place by the time they
----are first used.
+---Initialise the plugin. Nothing exists before this runs, so `root_markers`,
+---`data_filename` and `command_alias` are in place before anything reads them.
 ---
----Only the config, the command and the autocmds are installed here. The plugin
----proper waits for demand -- a `:Ezdap` invocation or an API call -- or for a
----project that has saved breakpoints to restore.
----
----Calling it a second time is a no-op: the later `opts` are dropped rather
----than half-applied over a plugin that is already wired up.
+---Only the config, the command and the autocmds are installed here; the plugin
+---proper waits for demand, or for a project with saved breakpoints to restore.
+---A second call is refused rather than half-applied.
 ---@param opts? ezdap.Config
 function M.setup(opts)
     if _setup_done then

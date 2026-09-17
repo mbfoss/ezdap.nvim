@@ -13,37 +13,29 @@ sessions/breakpoints, and renders a tree-based debug UI. Requires Neovim >= 0.10
 `require("ezdap").setup(opts)` is the one entry point and is **mandatory**:
 nothing exists before it runs. It merges `opts` into
 [config.lua](lua/ezdap/config.lua), registers the user command, installs the
-project-state autocmds, and stops there. There is no `plugin/` script and no
-startup hook, so ezdap costs nothing until a config asks for it.
+project-state autocmds, and stops there. There is no `plugin/` script, so ezdap
+costs nothing until a config asks for it. Because `setup()` is the only door,
+`root_markers` and `data_filename` are settled before the saved-state lookup,
+which happens inline rather than deferred; it asks
+[project.lua](lua/ezdap/project.lua) and decodes nothing unless a file exists.
 
-Because `setup()` is the only door, the options that decide what gets read off
-disk (`root_markers`, `data_filename`) are settled before anything looks for a
-state file, and the lookup happens right there rather than being deferred. It
-asks [project.lua](lua/ezdap/project.lua), which needs nothing but `config`, and
-nothing is decoded unless a state file actually exists.
+Everything past that is lazy. `_ensure_loaded()` brings up the plugin proper --
+UI wiring, DAP subscriptions, restored state -- once, on the first `:Ezdap` or
+API call, or when a state file is found at `setup()` or after a cwd change.
+Every public entry point calls `_require_setup()`, which both raises the "call
+setup() first" error and *is* that demand, so each body can assume a loaded
+plugin. The exceptions are the projections -- `available_adapters`,
+`load_adapter`, and the `inputs`/`schema` modules -- which read the runtimepath
+and the config, bring nothing up, and so answer before any `setup()`. The autocmds are guarded the same way: cold means nothing to persist and
+no session to disconnect.
 
-Everything past that is lazy. `setup()` deliberately stops short of the plugin
-proper -- the UI wiring, the DAP subscriptions and the restored state -- which
-`_ensure_loaded()` brings up once, on the first `:Ezdap` invocation, the first
-public API call, or a project state file found at `setup()` or after a cwd
-change. Every public entry point runs `_require_setup()`, which both raises a
-clear error when `setup()` has not run and *is* that demand, so the body of each
-function can assume a loaded plugin. The autocmds are guarded the same way: cold
-means there is no state to persist and no session to disconnect, so
-`VimLeavePre` on an unused Neovim does nothing.
+The command name is hardcoded, so every message and doc line names `:Ezdap`
+outright. `command_alias` registers one further name sharing the same handler
+and completion. A name someone else holds is never taken silently: `:Ezdap` is
+left alone with a warning (the API and the saved state do not go through the
+command), while an alias is taken anyway, since the user asked for that name.
 
-The command name is hardcoded: `:Ezdap` is registered by `setup()` and never
-moves, so every message and doc line names it outright. `command_alias`
-registers one further name sharing the same handler and completion function, so
-an alias is the command under a second name, not a forwarder. A name someone
-else already holds is never taken silently: `:Ezdap` is left alone with a
-warning (the rest of the plugin still comes up, since neither the Lua API nor
-the saved state goes through the command), while an alias is registered anyway,
-because the user asked for that name -- but the displaced command is named in
-the warning either way.
-
-A second `setup()` call is refused rather than half-applied over a plugin that
-is already wired up.
+A second `setup()` call is refused, not merged.
 
 ## Architecture
 
