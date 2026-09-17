@@ -8,34 +8,42 @@ Internals and contributor notes for ezdap.nvim. For user-facing usage, see the
 ezdap is a Neovim DAP client that speaks the Debug Adapter Protocol directly,
 no `nvim-dap` dependency. It manages adapter processes, tracks debug
 sessions/breakpoints, and renders a tree-based debug UI. Requires Neovim >= 0.10
-(guarded in `bootstrap.init()` and `setup()`).
+(guarded in `setup()`).
 
-[plugin/ezdap.lua](plugin/ezdap.lua) calls `require("ezdap.bootstrap").init()`
-at startup. [bootstrap.lua](lua/ezdap/bootstrap.lua) is a module of its own
-precisely so that startup never touches [init.lua](lua/ezdap/init.lua): it
-registers the user command and the autocmds with callbacks that
-`require("ezdap")` lazily, and a Neovim that never debugs loads only
-`bootstrap`, `config` and `project`, around 300 lines.
+`require("ezdap").setup(opts)` is the one entry point and is **mandatory**:
+nothing exists before it runs. It merges `opts` into
+[config.lua](lua/ezdap/config.lua), registers the user command, installs the
+project-state autocmds, and stops there. There is no `plugin/` script and no
+startup hook, so ezdap costs nothing until a config asks for it.
 
-Restoring saved project state is deferred to `VimEnter`, which is what lets
-`setup()` be optional: it fires after `init.lua` and after a plugin manager's
-`config` function, so `root_markers` and `data_filename` are settled before the
-state file is looked for. The probe asks [project.lua](lua/ezdap/project.lua),
-which needs nothing but `config`, and pulls the plugin proper in only when a
-state file actually exists. The autocmds are guarded the same way: cold means
-there is no state to persist and no session to disconnect, so `VimLeavePre` on
-an unused Neovim loads nothing.
+Because `setup()` is the only door, the options that decide what gets read off
+disk (`root_markers`, `data_filename`) are settled before anything looks for a
+state file, and the lookup happens right there rather than being deferred. It
+asks [project.lua](lua/ezdap/project.lua), which needs nothing but `config`, and
+nothing is decoded unless a state file actually exists.
 
-The command name is hardcoded: `:Ezdap` is registered at startup and never
-moves, so every message and doc line names it outright and nothing has to be
-deferred to get the name right. `command_alias` registers one further name
-sharing the same handler and completion function. That shared callback is also
-the ownership proof (`nvim_get_commands()` hands back the very same function)
-so dropping an alias a later `setup()` removed can never delete someone else's
-command. A `:Ezdap` already taken when `plugin/` runs is left alone with a
-warning; the rest of the plugin still comes up.
+Everything past that is lazy. `setup()` deliberately stops short of the plugin
+proper -- the UI wiring, the DAP subscriptions and the restored state -- which
+`_ensure_loaded()` brings up once, on the first `:Ezdap` invocation, the first
+public API call, or a project state file found at `setup()` or after a cwd
+change. Every public entry point runs `_require_setup()`, which both raises a
+clear error when `setup()` has not run and *is* that demand, so the body of each
+function can assume a loaded plugin. The autocmds are guarded the same way: cold
+means there is no state to persist and no session to disconnect, so
+`VimLeavePre` on an unused Neovim does nothing.
 
-`setup(opts)` is optional and only merges config.
+The command name is hardcoded: `:Ezdap` is registered by `setup()` and never
+moves, so every message and doc line names it outright. `command_alias`
+registers one further name sharing the same handler and completion function, so
+an alias is the command under a second name, not a forwarder. A name someone
+else already holds is never taken silently: `:Ezdap` is left alone with a
+warning (the rest of the plugin still comes up, since neither the Lua API nor
+the saved state goes through the command), while an alias is registered anyway,
+because the user asked for that name -- but the displaced command is named in
+the warning either way.
+
+A second `setup()` call is refused rather than half-applied over a plugin that
+is already wired up.
 
 ## Architecture
 

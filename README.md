@@ -78,7 +78,7 @@ the REPL, watch expressions, parallel sessions, persistence.
 
 ## Installation
 
-- Install it with any plugin manager. It works out of the box; `setup()` is only for changing options.
+- Install it with any plugin manager, then call `require("ezdap").setup()` once from your config. Nothing is registered until you do.
 
 - Install [ezdap-adapters](https://github.com/mbfoss/ezdap-adapters) alongside it to
 register ready-made definitions for the common debuggers. This is the easiest way to start,
@@ -95,6 +95,8 @@ vim.pack.add({
   "https://github.com/mbfoss/ezdap.nvim",
   "https://github.com/mbfoss/ezdap-adapters",  -- ready-made adapter definitions
 })
+
+require("ezdap").setup({})                     -- required; pass options here
 ```
 </details>
 
@@ -105,18 +107,17 @@ vim.pack.add({
 {
   "mbfoss/ezdap.nvim",
   dependencies = { "mbfoss/ezdap-adapters" },  -- ready-made adapter definitions
-  opts = {},                                   -- optional; passed to require("ezdap").setup()
+  opts = {},                                   -- required; passed to require("ezdap").setup()
 }
 ```
 </details>
 
-The `:Ezdap` command and the persistence autocmds are installed at startup, so
-there is nothing to call to get going. `setup()` is optional and only applies
-options, such as an extra name for the command with `command_alias`. Call it from anywhere
-that runs before `VimEnter`: `init.lua`, or a plugin manager's `config`
-function. `root_markers` and `data_filename` decide which project state is
-restored at `VimEnter`, so those two must be set by then; the rest are read
-where they are used and can be set later.
+`setup()` is the one thing you have to call: it applies your options, registers
+the `:Ezdap` command (plus any `command_alias`) and installs the persistence
+autocmds. `setup({})` with no options is fine -- everything you leave out keeps
+its default. Nothing beyond that is built until you actually debug: the first
+`:Ezdap` invocation or API call brings the rest up, as does a project with
+saved breakpoints to restore.
 
 ## Quick start
 

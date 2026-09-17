@@ -4,10 +4,10 @@ local M = {}
 local _debug_view
 ---@type ezdap.DisassemblyView?
 local _disassembly_view
--- Startup wiring: the command, the autocmds and the saved-state probe. It is
--- deliberately a module of its own: `plugin/ezdap.lua` loads it on every
--- startup, and this file is what it exists to keep out of that path.
-local bootstrap = require("ezdap.bootstrap")
+-- Whether `setup()` has run. The public API relies on the config, command and
+-- autocmds it installs; calling in before then would silently do the wrong
+-- thing, so those entry points fail loudly instead.
+local _setup_done = false
 
 -- Whether the plugin proper is up: UI wiring, DAP subscriptions and the
 -- restored project state. `setup()` deliberately stops short of this, so a
@@ -17,23 +17,30 @@ local _loaded = false
 ---@type fun()
 local _ensure_loaded
 
--- The defaults, snapshotted before any `opts` are merged over them. See
--- `_snapshot_defaults`.
+-- The defaults, snapshotted by `setup()` before the user's `opts` are merged
+-- over them. Held here rather than on the config module, whose table *is* the
+-- live config: a key there would turn up in the merge and in every walk of it.
 ---@type ezdap.Config?
 local _default_config
 
 ---Guard a public API entry point: raise a clear error, pointed at the caller,
----when the plugin has not been initialised. `plugin/ezdap.lua` does that at
----startup, so this only fires for an ezdap required off a runtimepath it is not
----on. Otherwise this *is* the demand that brings the plugin up, so every entry
----point below can assume a loaded plugin.
+---when `setup()` has not been called yet. Otherwise this *is* the demand that
+---brings the plugin up, so every entry point below can assume a loaded plugin.
 ---@param fn string  the API name, for the message
-local function _require_init(fn)
-    if not bootstrap.is_initialised() then
-        error(("[ezdap] ezdap is not initialised (plugin/ezdap.lua did not run); " ..
-            "call require('ezdap').setup() before %s()"):format(fn), 3)
+local function _require_setup(fn)
+    if not _setup_done then
+        error(("[ezdap] require('ezdap').setup() must be called before %s()"):format(fn), 3)
     end
     _ensure_loaded()
+end
+
+---Whether the current project has a state file on disk. Deliberately goes to
+---`project` rather than `store`: this runs while cold, and `store` would drag
+---the read/write machinery in behind it. Nothing is decoded.
+---@return boolean
+local function _has_saved_state()
+    local path = require("ezdap.project").data_path()
+    return path ~= nil and vim.uv.fs_stat(path) ~= nil
 end
 
 -- Persistence seam: the engine deals in absolute source paths; on-disk state
@@ -97,7 +104,7 @@ local function _warn_if_unpersisted()
         vim.log.levels.WARN)
 end
 
--- The user-command surface. `bootstrap` registers `:Ezdap` (and any
+-- The user-command surface. `setup()` registers `:Ezdap` (and any
 -- `command_alias`) and routes it here through `M.command`/`M.complete`.
 
 ---@type table?
@@ -469,7 +476,7 @@ end
 ---command.
 ---@type ezdap.util.usercmd.run_fn
 function M.command(cmd, args, opts)
-    _require_init("command")
+    _require_setup("command")
     _debug_run(cmd, args, opts)
 end
 
@@ -479,7 +486,7 @@ function M.complete(cmd, rest, arg_lead)
     return _debug_complete_subs(cmd, rest, arg_lead)
 end
 
--- Autocmd handlers. `setup()` creates the autocmds, so these fire from startup
+-- Autocmd handlers. `setup()` creates the autocmds, so these fire from then
 -- on, including in a session that never brought the plugin up. Each one is a
 -- no-op while cold: there are no breakpoints, expressions or sessions yet.
 
@@ -496,9 +503,9 @@ function M.reload_state()
     _warned_rootless = false
 
     -- Still cold: the new project's state file is the trigger, exactly as at
-    -- `VimEnter`. Without one there is nothing to restore and nothing to clear.
+    -- `setup()`. Without one there is nothing to restore and nothing to clear.
     if not _loaded then
-        bootstrap.probe()
+        if _has_saved_state() then _ensure_loaded() end
         return
     end
 
@@ -559,14 +566,10 @@ function _ensure_loaded()
     _load()
 end
 
--- The demand `bootstrap` acts on when it finds a state file. Not public API:
--- the leading underscore is the contract.
-M._ensure_loaded = _ensure_loaded
-
 ---Return the singleton DebugView, creating it on first call.
 ---@return ezdap.DebugView
 function M.debug_view()
-    _require_init("debug_view")
+    _require_setup("debug_view")
     if not _debug_view then
         _debug_view = require("ezdap.ui.DebugView").new()
     end
@@ -575,27 +578,27 @@ end
 
 ---Open the DebugView in a vertical split (or focus if already visible).
 function M.open_debug_view()
-    _require_init("open_debug_view")
+    _require_setup("open_debug_view")
     M.debug_view():open()
 end
 
 ---Close the DebugView if it is visible. No-op when it is not.
 function M.close_debug_view()
-    _require_init("close_debug_view")
+    _require_setup("close_debug_view")
     if not _debug_view then return end
     _debug_view:close()
 end
 
 ---Close the DebugView if it is visible, otherwise open and focus it.
 function M.toggle_debug_view()
-    _require_init("toggle_debug_view")
+    _require_setup("toggle_debug_view")
     M.debug_view():toggle()
 end
 
 ---Return the singleton DisassemblyView, creating it on first call.
 ---@return ezdap.DisassemblyView
 function M.disassembly_view()
-    _require_init("disassembly_view")
+    _require_setup("disassembly_view")
     if not _disassembly_view then
         _disassembly_view = require("ezdap.ui.DisassemblyView").new()
     end
@@ -604,13 +607,13 @@ end
 
 ---Open the disassembly pane for the active session's current frame.
 function M.open_disassembly_view()
-    _require_init("open_disassembly_view")
+    _require_setup("open_disassembly_view")
     M.disassembly_view():open()
 end
 
 ---@param path string a Lua file returning a single task, or a folder to pick one from
 function M.run_file(path)
-    _require_init("run_file")
+    _require_setup("run_file")
     M.clean()
     local runner = require("ezdap.runner")
     return runner.run_file(path)
@@ -621,7 +624,7 @@ end
 ---positional: adapter, optional mode (defaults to the sole one), optional path.
 ---@param assignments string[]  positional adapter, mode, path, e.g. { "codelldb", "binary", "./foo.lua" }
 function M.new_run_file(assignments)
-    _require_init("new_run_file")
+    _require_setup("new_run_file")
     return require("ezdap.scaffold").new_run_file(assignments)
 end
 
@@ -662,7 +665,7 @@ end
 ---reads no definition. `enabled_adapters` settles the filter.
 ---@return string[]
 function M.available_adapters()
-    _require_init("available_adapters")
+    _require_setup("available_adapters")
     local out, seen = {}, {}
     local function add(name)
         if not seen[name] and _enabled(name) then out[#out + 1], seen[name] = name, true end
@@ -681,7 +684,7 @@ end
 ---@param adapter string
 ---@return ezdap.AdapterDef? def, string? err
 function M.load_adapter(adapter)
-    _require_init("load_adapter")
+    _require_setup("load_adapter")
     if not _enabled(adapter) then return nil end
 
     local loaded = require("ezdap.adapters")
@@ -709,7 +712,7 @@ end
 ---@param adapter? string  adapter name, e.g. "debugpy"
 ---@param mode? string  a single mode to show, e.g. "script"
 function M.adapter_info(adapter, mode)
-    _require_init("adapter_info")
+    _require_setup("adapter_info")
     return require("ezdap.adapter_info").show(adapter, mode)
 end
 
@@ -726,7 +729,7 @@ end
 ---@param presenter? ezdap.runner.Presenter  a caller showing the run itself
 ---@return ezdap.runner.Run?
 function M.run_mode(adapter, mode, inputs, presenter)
-    _require_init("run_mode")
+    _require_setup("run_mode")
     -- Cleaning is ezdap tidying its own runs before adding another; a run shown
     -- elsewhere is not one of them, and its presenter decides when to drop it.
     if not presenter then M.clean() end
@@ -740,14 +743,14 @@ end
 ---run is no reason to build one.
 ---@param run ezdap.runner.Run
 function M.remove_run(run)
-    _require_init("remove_run")
+    _require_setup("remove_run")
     require("ezdap.runner").remove(run)
     if _debug_view then _debug_view:clear_sessions(run.sessions) end
 end
 
 ---Re-run the most recently run task from scratch. Warns when nothing has run yet.
 function M.rerun()
-    _require_init("rerun")
+    _require_setup("rerun")
     M.clean()
     require("ezdap.runner").rerun()
 end
@@ -756,7 +759,7 @@ end
 ---they produced, leaving live runs and sessions untouched. The debug view is
 ---only cleaned when it exists; cleaning is no reason to create one.
 function M.clean()
-    _require_init("clean")
+    _require_setup("clean")
     require("ezdap.runner").clean()
     if _debug_view then _debug_view:clear_finished_sessions() end
 end
@@ -765,7 +768,7 @@ end
 ---data file (and whether that file exists on disk yet). Echoed to the command
 ---line rather than notified, so it reads as a status query.
 function M.project_info()
-    _require_init("project_info")
+    _require_setup("project_info")
     local store = require("ezdap.store")
     local root  = store.root()
     if not root then
@@ -782,12 +785,92 @@ function M.project_info()
     vim.api.nvim_echo(chunks, false, {})
 end
 
----Whether the plugin is initialised: the command and the autocmds are in
----place. `plugin/ezdap.lua` sees to that at startup, with or without a
----`setup()` call; `:checkhealth ezdap` reports on the strength of it.
+-- The canonical command. Hardcoded on purpose: every message, every doc line
+-- and every `:help` reference can name it outright, and nothing has to be
+-- deferred or re-registered to get the name right.
+local COMMAND = "Ezdap"
+
+---Register the command under `name`. `:Ezdap` and any `command_alias` share one
+---callback and one completion function, so an alias is the command under a
+---second name, not a forwarder.
+---@param name string
+local function _register_command(name)
+    vim.api.nvim_create_user_command(name, function(opts)
+        require("ezdap.util.usercmd").handle(opts, function(cmd, args, cmd_opts)
+            return M.command(cmd, args, cmd_opts)
+        end)
+    end, {
+        nargs = "*",
+        range = true,
+        desc = "ezdap commands",
+        complete = function(arg_lead, cmd_line, _)
+            return require("ezdap.util.usercmd").complete(arg_lead, cmd_line,
+                function(cmd, rest, lead)
+                    return M.complete(cmd, rest, lead)
+                end)
+        end,
+    })
+end
+
+---Register `:Ezdap` and, when `command_alias` is set, that second name beside
+---it. A name someone else already holds is never taken silently: `:Ezdap` is
+---left alone, an alias is registered anyway (the user asked for that name), and
+---either way whoever is displaced is named in the warning.
+---@param alias? string
+local function _register_commands(alias)
+    if vim.api.nvim_get_commands({})[COMMAND] then
+        vim.notify(("[ezdap] :%s is already taken, so it was left alone; " ..
+            "set `command_alias` for a command under another name"):format(COMMAND),
+            vim.log.levels.WARN)
+    else
+        _register_command(COMMAND)
+    end
+
+    if not alias or alias == COMMAND then return end
+    local existing = vim.api.nvim_get_commands({})[alias]
+    if existing then
+        vim.notify(("[ezdap] command_alias %q replaces an existing command (%s)")
+            :format(alias, existing.definition ~= "" and existing.definition or "no description"),
+            vim.log.levels.WARN)
+    end
+    _register_command(alias)
+end
+
+---Install the project-state autocmds. Every callback is a no-op while cold, so
+---a Neovim that never debugs pays nothing for them.
+local function _create_autocmds()
+    local group = vim.api.nvim_create_augroup("ezdap", { clear = true })
+
+    -- Persist before leaving the current project (cwd change) and on exit.
+    vim.api.nvim_create_autocmd({ "DirChangedPre", "VimLeavePre" }, {
+        group    = group,
+        callback = function() M.save_state() end,
+        desc     = "ezdap: persist breakpoints and expressions",
+    })
+
+    -- Gracefully stop active sessions on exit: an adapter killed without a
+    -- completed `disconnect` orphans its debuggee, and nvim SIGKILLs adapter
+    -- jobs as it exits.
+    vim.api.nvim_create_autocmd("VimLeavePre", {
+        group    = group,
+        callback = function() M.shutdown() end,
+        desc     = "ezdap: disconnect sessions so debuggees are terminated on exit",
+    })
+
+    -- After a cwd change, re-resolve the project root and restore its state
+    -- (or clear it, when the new cwd is not inside a project).
+    vim.api.nvim_create_autocmd("DirChanged", {
+        group    = group,
+        callback = function() M.reload_state() end,
+        desc     = "ezdap: restore project state after cwd change",
+    })
+end
+
+---Whether `setup()` has run: the config is applied and the command and the
+---autocmds are in place. `:checkhealth ezdap` reports on the strength of it.
 ---@return boolean
 function M.is_setup()
-    return bootstrap.is_initialised()
+    return _setup_done
 end
 
 ---The configuration as it shipped, before `setup()` merged the user's options
@@ -795,53 +878,52 @@ end
 ---`:checkhealth ezdap` diffs the live config against it.
 ---@return ezdap.Config
 function M.get_default_config()
-    -- Before the first snapshot the config module has not been written to yet,
-    -- so it is itself the defaults.
+    -- Before setup() the config module has not been written to yet, so it is
+    -- itself the defaults.
     return vim.deepcopy(_default_config or require("ezdap.config"))
 end
 
----Snapshot the defaults, once, before anything merges over them. They live
----here rather than on the config module, whose table *is* the live config: a
----key there would turn up in the merge and in every walk of it.
-local function _snapshot_defaults()
-    if not _default_config then
-        _default_config = vim.deepcopy(require("ezdap.config"))
-    end
-end
-
----Apply configuration. Optional: `plugin/ezdap.lua` brings the plugin up on its
----own, and every option not passed keeps its default. Call it from anywhere
----that runs before `VimEnter`: init.lua, or a plugin manager's `config`
----function.
+---Initialise the plugin. Nothing exists before this runs, so options deciding
+---what gets read off disk (`root_markers`, `data_filename`) or what the command
+---answers to besides `:Ezdap` (`command_alias`) are in place by the time they
+---are first used.
 ---
----`:Ezdap` exists either way; `command_alias` adds a name beside it. The options
----are read where they are used, so a later call is honoured by everything not
----already built. The exception is `root_markers` and `data_filename`: once
----project state has been restored, changing them does not move it. Set those
----two before `VimEnter`, which any ordinary config does.
+---Only the config, the command and the autocmds are installed here. The plugin
+---proper waits for demand -- a `:Ezdap` invocation or an API call -- or for a
+---project that has saved breakpoints to restore.
+---
+---Calling it a second time is a no-op: the later `opts` are dropped rather
+---than half-applied over a plugin that is already wired up.
 ---@param opts? ezdap.Config
 function M.setup(opts)
+    if _setup_done then
+        vim.notify("[ezdap] setup() already called; ignoring this call", vim.log.levels.ERROR)
+        return
+    end
+
     if vim.fn.has("nvim-0.10") ~= 1 then
         error("[ezdap] ezdap.nvim requires Neovim >= 0.10")
     end
-    _snapshot_defaults()
 
     local config = require("ezdap.config")
+    -- Snapshot first: the merge below writes into the config module in place,
+    -- and the defaults are unrecoverable afterwards.
+    _default_config = vim.deepcopy(config)
     local tmp = vim.tbl_deep_extend("force", config or {}, opts or {})
     for k, v in pairs(tmp) do
         config[k] = v
     end
 
-    if not bootstrap.is_initialised() then
-        -- Required by hand, without `plugin/ezdap.lua`.
-        bootstrap.init()
-    else
-        bootstrap.sync_alias(config.command_alias)
-    end
+    -- Set first: the wiring below reaches guarded entry points (a session added
+    -- during `_init` opens the debug view).
+    _setup_done = true
+    _register_commands(config.command_alias)
+    _create_autocmds()
 
-    -- A probe that already ran found nothing, but it ran against the defaults,
-    -- and these `opts` may point at a project it could not see.
-    if bootstrap.probed() and not _loaded then bootstrap.probe() end
+    -- Everything past this point is deferred to the first `:Ezdap` or API call,
+    -- except when the project has saved breakpoints, which have to show up as
+    -- signs without being asked for.
+    if _has_saved_state() then _ensure_loaded() end
 end
 
 return M

@@ -9,6 +9,14 @@ local M = {}
 
 local health = vim.health
 
+---Whether `setup()` has run, asked without loading the plugin: an ezdap that
+---was never required is not a fault, it is what a config missing the `setup()`
+---call looks like, and that is precisely what this reports.
+---@return boolean
+local function _is_setup()
+    return package.loaded["ezdap"] ~= nil and require("ezdap").is_setup()
+end
+
 ---Check the Neovim version against the plugin's minimum (see `ezdap.setup`).
 local function _check_requirements()
     health.start("ezdap: requirements")
@@ -23,13 +31,11 @@ end
 local function _check_setup()
     health.start("ezdap: setup")
 
-    -- Ask `bootstrap`, not `ezdap`: an unloaded `ezdap` is the ordinary state of
-    -- a Neovim that has not debugged yet, not a fault. Everything below is
-    -- explicit demand, so it may load what it needs.
-    if require("ezdap.bootstrap").is_initialised() then
-        health.ok("initialised (:Ezdap is registered)")
+    if _is_setup() then
+        health.ok("setup() has run (:Ezdap is registered)")
     else
-        health.warn("not initialised: plugin/ezdap.lua has not run", {
+        health.warn("setup() has not been called", {
+            "Call require('ezdap').setup() from your config (or set `opts` with your plugin manager)",
             "Check that ezdap.nvim is on 'runtimepath' (an opt package needs :packadd)",
         })
     end
@@ -90,8 +96,8 @@ end
 local function _check_config()
     health.start("ezdap: configuration")
 
-    if not require("ezdap.bootstrap").is_initialised() then
-        health.info("not initialised, so every option is at its default")
+    if not _is_setup() then
+        health.info("setup() has not run, so every option is at its default")
         return
     end
     local ezdap = require("ezdap")
@@ -123,13 +129,13 @@ end
 ---List the registered adapters. Their names come from the registry's filenames,
 ---so nothing here loads a definition; inspecting one is what
 ---`:Ezdap adapter_info <adapter>` is for.
----Needs an initialised plugin: `enabled_adapters` filters the list, and before
----then there is no list to report.
+---Needs `setup()`: `enabled_adapters` filters the list, and before then there
+---is no list to report.
 local function _check_adapters()
     health.start("ezdap: adapters")
 
-    if not require("ezdap.bootstrap").is_initialised() then
-        health.warn("not initialised, so no adapters are registered yet")
+    if not _is_setup() then
+        health.warn("setup() has not run, so no adapters are registered yet")
         return
     end
     local ezdap = require("ezdap")
