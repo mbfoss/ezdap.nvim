@@ -9,7 +9,7 @@
 ---deliberately not handled here.
 
 local manager   = require("ezdap.manager")
-local config    = require("ezdap.config")
+local config    = require("ezdap.config").current
 local format    = require("ezdap.ui.format")
 local ui_util   = require("ezdap.util.ui")
 local throttle  = require("ezdap.util.throttle")

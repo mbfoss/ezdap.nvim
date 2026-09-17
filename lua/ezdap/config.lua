@@ -1,3 +1,13 @@
+---@brief The plugin's options: the shipped defaults, and the live table
+---`setup()` merges the user's `opts` into.
+---
+---Capture the live options once at a module's top
+---(`local config = require("ezdap.config").current`) and read options off that.
+---`apply()` refills the table rather than replacing it, so the capture stays
+---current. Requires nothing, so the lazy-load path can consult it while the
+---plugin proper is still cold.
+local M = {}
+
 ---@class ezdap.Symbols
 ---@field debug_frame              string  current execution position
 ---@field active_breakpoint        string  enabled + verified
@@ -48,38 +58,75 @@
 ---@field symbols              ezdap.Symbols  glyphs for every debug state, in the gutter and in the panels alike
 
 ---@type ezdap.Config
-local M = {
-	root_markers           = { ".git" },
-	data_filename          = ".ezdap.json",
-	stack_trace_limit      = 10,
-	antiflicker_delay      = 200,
-	output_max_lines       = 10000,
-	panel_auto_open        = true,
-	panel_height_ratio     = 0.25,
-	debug_view_width_ratio = 0.2,
-	debug_view_position    = "left",
-	inline_vars            = "eol",
-	raw_messages           = false,
-	popup_menu             = true,
-	symbols                = {
-		debug_frame              = "▶",
-		active_breakpoint        = "●",
-		inactive_breakpoint      = "○",
-		cond_breakpoint          = "■",
-		inactive_cond_breakpoint = "□",
-		logpoint                 = "◆",
-		inactive_logpoint        = "◇",
-		disabled_breakpoint      = "ø",
-		disabled_cond_breakpoint = "ø",
-		disabled_logpoint        = "ø",
-		exception_breakpoint     = "↯",
-		unsupported_breakpoint   = "✗",
-		data_breakpoint          = "◉",
-		inactive_data_breakpoint = "◌",
-		session_running          = "▶",
-		session_paused           = "■",
-		session_stopped          = "●",
-	},
+local defaults = {
+    root_markers           = { ".git" },
+    data_filename          = ".ezdap.json",
+    stack_trace_limit      = 10,
+    antiflicker_delay      = 200,
+    output_max_lines       = 10000,
+    panel_auto_open        = true,
+    panel_height_ratio     = 0.25,
+    debug_view_width_ratio = 0.2,
+    debug_view_position    = "left",
+    inline_vars            = "eol",
+    raw_messages           = false,
+    popup_menu             = true,
+    symbols                = {
+        debug_frame              = "▶",
+        active_breakpoint        = "●",
+        inactive_breakpoint      = "○",
+        cond_breakpoint          = "■",
+        inactive_cond_breakpoint = "□",
+        logpoint                 = "◆",
+        inactive_logpoint        = "◇",
+        disabled_breakpoint      = "ø",
+        disabled_cond_breakpoint = "ø",
+        disabled_logpoint        = "ø",
+        exception_breakpoint     = "↯",
+        unsupported_breakpoint   = "✗",
+        data_breakpoint          = "◉",
+        inactive_data_breakpoint = "◌",
+        session_running          = "▶",
+        session_paused           = "■",
+        session_stopped          = "●",
+    },
 }
+
+---The live options, at the defaults until `setup()` applies the user's. Always
+---this same table: `apply()` refills it in place, so a captured reference —
+---this table or any table under it — never goes stale.
+---@type ezdap.Config
+M.current = vim.deepcopy(defaults)
+
+---The configuration as it shipped. A fresh deep copy every call, so the caller
+---may keep or mutate it.
+---@return ezdap.Config
+function M.defaults()
+    return vim.deepcopy(defaults)
+end
+
+---Overwrite `dst` from `src` key by key: a key `src` lacks is dropped, and a
+---table on both sides recurses instead of being swapped in. Nothing reachable
+---from `current` is ever replaced, and nothing stale is left behind.
+local function _refill(dst, src)
+    for k in pairs(dst) do
+        if src[k] == nil then dst[k] = nil end
+    end
+    for k, v in pairs(src) do
+        if type(v) == "table" and type(dst[k]) == "table" then
+            _refill(dst[k], v)
+        else
+            dst[k] = v
+        end
+    end
+end
+
+---Merge `opts` over the defaults to make the live config. Called once, by
+---`setup()`: merging into a copy of the defaults rather than into `current`
+---means no key of an earlier call can survive into a later one.
+---@param opts? ezdap.Config
+function M.apply(opts)
+    _refill(M.current, vim.tbl_deep_extend("force", vim.deepcopy(defaults), opts or {}))
+end
 
 return M

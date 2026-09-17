@@ -4,7 +4,7 @@
 ---groups is this module's only side effect; nothing else touches buffers,
 ---windows or state.
 
-local config   = require("ezdap.config")
+local config   = require("ezdap.config").current
 local str_util = require("ezdap.util.strutil")
 
 local M        = {}

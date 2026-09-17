@@ -85,7 +85,7 @@ local function _check_config()
     end
     local ezdap = require("ezdap")
 
-    local diffs = _diff_config(require("ezdap.config"), ezdap.get_default_config(), "", {})
+    local diffs = _diff_config(require("ezdap.config").current, ezdap.get_default_config(), "", {})
     table.sort(diffs, function(a, b) return a.path < b.path end)
 
     if #diffs == 0 then
@@ -117,7 +117,7 @@ local function _check_adapters()
     health.start("ezdap: adapters")
 
     local names = require("ezdap").available_adapters()
-    local allowed = require("ezdap.config").enabled_adapters
+    local allowed = require("ezdap.config").current.enabled_adapters
     health.ok(("%d registered: %s"):format(#names, table.concat(names, ", ")))
     if allowed then
         health.info(("`enabled_adapters` is set (%s), so only those are available")

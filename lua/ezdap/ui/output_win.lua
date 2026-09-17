@@ -13,7 +13,7 @@
 
 local fixedwin     = require("ezdap.util.fixedwin")
 local ui_util      = require("ezdap.util.ui")
-local config       = require("ezdap.config")
+local config       = require("ezdap.config").current
 
 local M            = {}
 

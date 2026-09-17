@@ -5,7 +5,7 @@ local exception_info = require("ezdap.ui.exception_info")
 local fileextmarks   = require("ezdap.util.fileextmarks")
 local manager        = require("ezdap.manager")
 local ui_util        = require("ezdap.util.ui")
-local config         = require("ezdap.config")
+local config         = require("ezdap.config").current
 local format         = require("ezdap.ui.format")
 local timer          = require("ezdap.util.timer")
 

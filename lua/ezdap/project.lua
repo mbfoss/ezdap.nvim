@@ -10,7 +10,7 @@
 
 local M = {}
 
-local config            = require("ezdap.config")
+local config            = require("ezdap.config").current
 
 local _default_filename = ".ezdap.json"
 local _root             = nil ---@type string|nil

@@ -11,7 +11,7 @@
 
 local OutputBuffer = require "ezdap.ui.OutputBuffer"
 local ui_util      = require "ezdap.util.ui"
-local _config      = require "ezdap.config"
+local _config      = require("ezdap.config").current
 
 local M            = {}
 

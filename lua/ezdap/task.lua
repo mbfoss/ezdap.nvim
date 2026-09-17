@@ -1,5 +1,5 @@
 local OutputBuffer = require "ezdap.ui.OutputBuffer"
-local _config      = require "ezdap.config"
+local _config      = require("ezdap.config").current
 local ui_util      = require "ezdap.util.ui"
 
 ---A debug task, native DAP, sent as-is. `parameters` is the adapter's raw

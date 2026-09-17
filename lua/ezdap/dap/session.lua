@@ -980,7 +980,7 @@ end
 ---@param args ezdap.dap.proto.RunInTerminalRequestArguments
 ---@return integer? pid,string? error  the emulator's process id
 local function _spawn_external(cmd, args)
-    local emu = str_util.cmd_to_string_array(require("ezdap.config").external_terminal)
+    local emu = str_util.cmd_to_string_array(require("ezdap.config").current.external_terminal)
     if not (emu[1] and emu[1] ~= "") then
         return nil, "no terminal emulator configured (set `external_terminal` in setup)"
     end

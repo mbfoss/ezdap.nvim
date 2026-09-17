@@ -3,7 +3,7 @@
 ---the stock menu is untouched when nothing is being debugged.
 
 local manager = require("ezdap.manager")
-local config  = require("ezdap.config")
+local config  = require("ezdap.config").current
 
 local M       = {}
 

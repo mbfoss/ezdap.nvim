@@ -2,7 +2,7 @@ local M              = {}
 
 local str_util       = require("ezdap.util.strutil")
 local manager        = require("ezdap.manager")
-local config         = require("ezdap.config")
+local config         = require("ezdap.config").current
 local fileextmarks   = require("ezdap.util.fileextmarks")
 local themed_hl      = require("ezdap.util.themed_hl")
 

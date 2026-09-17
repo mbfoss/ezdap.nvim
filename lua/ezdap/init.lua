@@ -17,11 +17,11 @@ local _loaded = false
 ---@type fun()
 local _ensure_loaded
 
--- The defaults, snapshotted by `setup()` before the user's `opts` are merged
--- over them. Held here rather than on the config module, whose table *is* the
--- live config: a key there would turn up in the merge and in every walk of it.
----@type ezdap.Config?
-local _default_config
+--- The live options: read an option off it directly
+--- (`require("ezdap").config.inline_vars`). `setup()` refills this same table,
+--- so holding it is safe; copying an option out of it is not.
+---@type ezdap.Config
+M.config = require("ezdap.config").current
 
 ---Guard a public API entry point: raise a clear error, pointed at the caller,
 ---when `setup()` has not been called yet. Otherwise this *is* the demand that
@@ -655,7 +655,7 @@ end
 ---@param name string
 ---@return boolean
 local function _enabled(name)
-    local allowed = require("ezdap.config").enabled_adapters
+    local allowed = M.config.enabled_adapters
     return allowed == nil or vim.tbl_contains(allowed, name)
 end
 
@@ -878,9 +878,7 @@ end
 ---`:checkhealth ezdap` diffs the live config against it.
 ---@return ezdap.Config
 function M.get_default_config()
-    -- Before setup() the config module has not been written to yet, so it is
-    -- itself the defaults.
-    return vim.deepcopy(_default_config or require("ezdap.config"))
+    return require("ezdap.config").defaults()
 end
 
 ---Initialise the plugin. Nothing exists before this runs, so `root_markers`,
@@ -900,19 +898,12 @@ function M.setup(opts)
         error("[ezdap] ezdap.nvim requires Neovim >= 0.10")
     end
 
-    local config = require("ezdap.config")
-    -- Snapshot first: the merge below writes into the config module in place,
-    -- and the defaults are unrecoverable afterwards.
-    _default_config = vim.deepcopy(config)
-    local tmp = vim.tbl_deep_extend("force", config or {}, opts or {})
-    for k, v in pairs(tmp) do
-        config[k] = v
-    end
+    require("ezdap.config").apply(opts)
 
     -- Set first: the wiring below reaches guarded entry points (a session added
     -- during `_init` opens the debug view).
     _setup_done = true
-    _register_commands(config.command_alias)
+    _register_commands(M.config.command_alias)
     _create_autocmds()
 
     -- Everything past this point is deferred to the first `:Ezdap` or API call,
