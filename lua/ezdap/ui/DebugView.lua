@@ -985,12 +985,13 @@ function DebugView:_open(focus)
     local bufnr = self:get_bufnr(function() end)
     -- fixedwin owns the split's creation, width pinning, resize/ratio tracking
     -- and re-pinning across layout changes; we only layer on the view-specific
-    -- window options and swap in the tree buffer.
+    -- window options.
     local pos = config.debug_view_position == "right" and "botright" or "topleft"
-    local win = fixedwin.create_fixed_win("width", self._width_ratio or config.debug_view_width_ratio,
-        function(ratio) self._width_ratio = ratio end,
-        { enter = focus, pos = pos })
-    vim.api.nvim_win_set_buf(win, bufnr)
+    local win = fixedwin.create_fixed_win(bufnr, {
+        axis = "width", ratio = self._width_ratio or config.debug_view_width_ratio,
+        enter = focus, pos = pos,
+        on_delete = function(ratio) self._width_ratio = ratio end,
+    })
     _win_setlocal(win, "winfixbuf", true)
     _win_setlocal(win, "signcolumn", "no")
     _win_setlocal(win, "number", false)
