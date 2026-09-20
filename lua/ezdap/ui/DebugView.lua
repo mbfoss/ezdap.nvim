@@ -8,7 +8,7 @@ local format        = require("ezdap.ui.format")
 local inputwin      = require("ezdap.util.inputwin")
 local select        = require("ezdap.util.select")
 local timer         = require("ezdap.util.timer")
-local floatwin      = require("ezdap.util.floatwin")
+local hover         = require("ezdap.util.hover")
 local fixedwin      = require("ezdap.util.fixedwin")
 local ui            = require("ezdap.util.ui")
 local UndoStack     = require("ezdap.util.UndoStack")
@@ -162,7 +162,7 @@ local function _fmt_breakpoint(data, chunks)
         unsupported   = data.unsupported,
     }, true)
     chunks[#chunks + 1] = { icon .. " ", hl }
-    local name_hl = data.disabled and "NonText" or nil
+    local name_hl       = data.disabled and "NonText" or nil
 
     if data.bp_kind == "exception_type" and data.unsupported then
         chunks[#chunks + 1] = { data.name, name_hl }
@@ -184,13 +184,13 @@ local function _fmt_breakpoint(data, chunks)
         -- Source breakpoint: the whole path, then the condition/logpoint suffix.
         chunks[#chunks + 1] = { data.name, name_hl }
         if data.condition then
-            chunks[#chunks + 1] = { " • if: " .. data.condition, "Comment" }
+            chunks[#chunks + 1] = { " if: " .. data.condition, "Comment" }
         end
         if data.hit_condition then
-            chunks[#chunks + 1] = { " • hit: " .. data.hit_condition, "Comment" }
+            chunks[#chunks + 1] = { " hit: " .. data.hit_condition, "Comment" }
         end
         if data.log_message then
-            chunks[#chunks + 1] = { " • log: " .. data.log_message, "Comment" }
+            chunks[#chunks + 1] = { " log: " .. data.log_message, "Comment" }
         end
     end
 end
@@ -988,8 +988,10 @@ function DebugView:_open(focus)
     -- window options.
     local pos = config.debug_view_position == "right" and "botright" or "topleft"
     local win = fixedwin.create_fixed_win(bufnr, {
-        axis = "width", ratio = self._width_ratio or config.debug_view_width_ratio,
-        enter = focus, pos = pos,
+        axis = "width",
+        ratio = self._width_ratio or config.debug_view_width_ratio,
+        enter = focus,
+        pos = pos,
         on_delete = function(ratio) self._width_ratio = ratio end,
     })
     _win_setlocal(win, "winfixbuf", true)
@@ -1131,7 +1133,7 @@ function DebugView:_bp_enabled_fn(d, enabled)
         local data_id = d.bp_data_id
         return function()
             local sess = manager.session()
-            if sess then sess:set_data_breakpoint_enabled(data_id, enabled) end
+            if sess and data_id then sess:set_data_breakpoint_enabled(data_id, enabled) end
         end
     end
 end
@@ -1191,7 +1193,9 @@ function DebugView:_setup_keymaps(bufnr)
                 if not name or name == "" then return end
                 local existed = false
                 for _, bp in ipairs(breakpoints.function_breakpoints()) do
-                    if bp.name == name then existed = true; break end
+                    if bp.name == name then
+                        existed = true; break
+                    end
                 end
                 breakpoints.add_function(name)
                 if not existed then
@@ -1406,7 +1410,7 @@ function DebugView:_setup_keymaps(bufnr)
     end)
 
     map("g?", "Show keymaps", function()
-        floatwin.open(table.concat({
+        hover.show(table.concat({
             "<CR>  Select session / switch frame / jump to breakpoint source",
             "K     Show full value / session info / frame details / breakpoint details",
             "i     Add: watch expression (expressions) / function breakpoint (breakpoints) / data breakpoint (variable)",
