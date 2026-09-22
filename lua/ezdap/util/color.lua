@@ -18,38 +18,34 @@ function M.mix(fg, bg, pct)
     return out
 end
 
----The background colours fade into: the one of `Normal`, or black/white when it has none.
+---The colour faded into: the background of `bg`, or black/white when it has none.
+---@param bg string
 ---@return integer
-function M.backdrop()
-    local normal = vim.api.nvim_get_hl(0, { name = "Normal", link = false })
-    return normal.bg or (vim.o.background == "light" and 0xffffff or 0x000000)
+local function _backdrop(bg)
+    local hl = vim.api.nvim_get_hl(0, { name = bg, link = false })
+    return hl.bg or (vim.o.background == "light" and 0xffffff or 0x000000)
 end
 
----Spec for the text colour of `src` faded `pct` percent into the background.
----Only the text colour is taken, so no block is painted behind the text; with
----`reverse` that is the one drawn as its background. `ctermfg` comes over
----unfaded. Links to `src` when it has no text colour.
+---Highlight info for the text colour of `src` faded `pct` percent into the
+---background of `bg`, `Normal` by default. Only the text colour is taken, so no
+---block is painted behind the text; with `reverse` that is the one drawn as its
+---background. `ctermfg` comes over unfaded. Links to `src` when it has no text
+---colour.
 ---@param src string
 ---@param pct integer
+---@param bg string?  -- group the background is taken from, default `Normal`
 ---@return vim.api.keyset.highlight
-local function _faded_spec(src, pct)
+function M.faded_hl_info(src, pct, bg)
+    local backdrop = _backdrop(bg or "Normal")
     local hl = vim.api.nvim_get_hl(0, { name = src, link = false })
     local fg, ctermfg = hl.fg, hl.ctermfg
-    if hl.reverse then fg = hl.bg or M.backdrop() end
+    if hl.reverse then fg = hl.bg or backdrop end
     if hl.cterm and hl.cterm.reverse then ctermfg = hl.ctermbg end
     if not (fg or ctermfg) then return { link = src } end
     return {
-        fg = fg and M.mix(fg, M.backdrop(), math.min(pct, 100)) or nil,
+        fg = fg and M.mix(fg, backdrop, math.min(pct, 100)) or nil,
         ctermfg = ctermfg,
     }
-end
-
----Define `dst` as `src` faded `pct` percent into the background, once.
----@param src string
----@param dst string
----@param pct integer
-function M.fade(src, dst, pct)
-    vim.api.nvim_set_hl(0, dst, _faded_spec(src, pct))
 end
 
 ---@class ezdap.util.color.CreateThemedHlOpts
@@ -70,21 +66,6 @@ function M.create_themed_hl(opts)
             end,
         })
     end
-end
-
----@class ezdap.util.color.CreateFadedHlOpts
----@field src string  -- source group
----@field dst string  -- group to define
----@field pct integer  -- percent faded into the background, 0-100
-
----Define `opts.dst` as `opts.src` faded `opts.pct` percent into the background,
----and keep it in sync on every colorscheme change.
----@param opts ezdap.util.color.CreateFadedHlOpts
-function M.create_faded_hl(opts)
-    M.create_themed_hl({
-        name = opts.dst,
-        spec = function() return _faded_spec(opts.src, opts.pct) end,
-    })
 end
 
 return M

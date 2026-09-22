@@ -33,8 +33,7 @@ local color = require("ezdap.util.color")
 ---@field collapsible boolean?  -- whether nodes can be expanded/collapsed (default true)
 ---@field indent_guides boolean?  -- draw vertical indent guides (default true)
 ---@field indent_guide_char string?
----@field indent_guide_hl string?
----@field indent_guide_fade integer?  -- percent the guides fade into the background, 0-100
+---@field indent_guide_hl string?  -- group the guides are drawn with (default EzdapTreeIndentGuide)
 
 ---@class ezdap.util.TreeBuffer.Indent
 ---@field text string
@@ -65,16 +64,28 @@ local color = require("ezdap.util.color")
 local TreeBuffer = {}
 TreeBuffer.__index = TreeBuffer
 
+-- The guides are drawn with `_HL_GUIDE`, which links to `_HL_GUIDE_DEFAULT` --
+-- `NonText` faded into the background, recomputed on every colorscheme change.
+-- The link is a `default` one, so redefining `_HL_GUIDE` wins over it.
+local _HL_GUIDE = "EzdapTreeIndentGuide"
+local _HL_GUIDE_DEFAULT = "EzdapTreeIndentGuideDefault"
+local _GUIDE_FADE_PCT = 50
+
+local function _setup_guide_hl()
+    color.create_themed_hl({
+        name = _HL_GUIDE_DEFAULT,
+        spec = function() return color.faded_hl_info("NonText", _GUIDE_FADE_PCT) end,
+    })
+    vim.api.nvim_set_hl(0, _HL_GUIDE, { link = _HL_GUIDE_DEFAULT, default = true })
+end
+
 ---@param opts ezdap.util.TreeBuffer.Opts
 ---@return ezdap.util.TreeBuffer
 function TreeBuffer.new(opts)
     local indent_str = opts.indent_string or "  "
     local expand_symbol = opts.expand_symbol or "›"
     local indent_guide_char = opts.indent_guide_char or "│"
-    local guide_src = opts.indent_guide_hl or "NonText"
-    local guide_pct = opts.indent_guide_fade or 50
-    local guide_hl = ("EzdapTreeFaded_%s_%d"):format(guide_src:gsub("[^%w_]", "_"), guide_pct)
-    color.create_faded_hl({ src = guide_src, dst = guide_hl, pct = guide_pct })
+    _setup_guide_hl()
     local guide_pad_width = math.max(0, vim.fn.strdisplaywidth(indent_str) - vim.fn.strdisplaywidth(indent_guide_char))
     local indent_guide_pad = string.rep(" ", guide_pad_width)
     return setmetatable({
@@ -88,7 +99,7 @@ function TreeBuffer.new(opts)
         _indent_cache       = {},
         _indent_guides      = opts.indent_guides ~= false,
         _indent_guide_char  = indent_guide_char,
-        _indent_guide_hl    = guide_hl,
+        _indent_guide_hl    = opts.indent_guide_hl or _HL_GUIDE,
         _indent_guide_pad   = indent_guide_pad,
         _on_selection       = Signal.new(), ---@type ezdap.util.Signal<fun(id:any,data:any)>
         _on_toggle          = Signal.new(), ---@type ezdap.util.Signal<fun(id:any,data:any,expanded:boolean)>
