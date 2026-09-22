@@ -28,8 +28,13 @@ color.create_themed_hl({
 	spec = function()
 		vim.api.nvim_set_hl(0, "EzdapPill", { link = "Visual", default = true })
 		local hl = vim.api.nvim_get_hl(0, { name = "EzdapPill", link = false })
+		-- `reverse` (e.g. sorbet) swaps fg/bg on screen; follow what is drawn.
+		local shown_bg = hl.bg or hl.fg
+		if hl.reverse then
+			shown_bg = hl.fg or vim.api.nvim_get_hl(0, { name = "Normal", link = false }).fg
+		end
 		return {
-			fg = hl.bg or hl.fg,
+			fg = shown_bg,
 			bg = "NONE",
 		}
 	end,

@@ -25,18 +25,22 @@ function M.backdrop()
     return normal.bg or (vim.o.background == "light" and 0xffffff or 0x000000)
 end
 
----Spec for the foreground of `src` faded `pct` percent into the background.
----Only the foreground is taken, so no block is painted behind the text. `ctermfg`
----comes over unfaded. Links to `src` when it has no foreground.
+---Spec for the text colour of `src` faded `pct` percent into the background.
+---Only the text colour is taken, so no block is painted behind the text; with
+---`reverse` that is the one drawn as its background. `ctermfg` comes over
+---unfaded. Links to `src` when it has no text colour.
 ---@param src string
 ---@param pct integer
 ---@return vim.api.keyset.highlight
 local function _blended_spec(src, pct)
     local hl = vim.api.nvim_get_hl(0, { name = src, link = false })
-    if not (hl.fg or hl.ctermfg) then return { link = src } end
+    local fg, ctermfg = hl.fg, hl.ctermfg
+    if hl.reverse then fg = hl.bg or M.backdrop() end
+    if hl.cterm and hl.cterm.reverse then ctermfg = hl.ctermbg end
+    if not (fg or ctermfg) then return { link = src } end
     return {
-        fg = hl.fg and M.mix(hl.fg, M.backdrop(), math.min(pct, 100)) or nil,
-        ctermfg = hl.ctermfg,
+        fg = fg and M.mix(fg, M.backdrop(), math.min(pct, 100)) or nil,
+        ctermfg = ctermfg,
     }
 end
 
