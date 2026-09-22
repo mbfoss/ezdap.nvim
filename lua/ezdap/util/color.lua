@@ -32,7 +32,7 @@ end
 ---@param src string
 ---@param pct integer
 ---@return vim.api.keyset.highlight
-local function _blended_spec(src, pct)
+local function _faded_spec(src, pct)
     local hl = vim.api.nvim_get_hl(0, { name = src, link = false })
     local fg, ctermfg = hl.fg, hl.ctermfg
     if hl.reverse then fg = hl.bg or M.backdrop() end
@@ -48,8 +48,8 @@ end
 ---@param src string
 ---@param dst string
 ---@param pct integer
-function M.blend(src, dst, pct)
-    vim.api.nvim_set_hl(0, dst, _blended_spec(src, pct))
+function M.fade(src, dst, pct)
+    vim.api.nvim_set_hl(0, dst, _faded_spec(src, pct))
 end
 
 ---@class ezdap.util.color.CreateThemedHlOpts
@@ -72,18 +72,18 @@ function M.create_themed_hl(opts)
     end
 end
 
----@class ezdap.util.color.CreateBlendedHlOpts
+---@class ezdap.util.color.CreateFadedHlOpts
 ---@field src string  -- source group
 ---@field dst string  -- group to define
 ---@field pct integer  -- percent faded into the background, 0-100
 
 ---Define `opts.dst` as `opts.src` faded `opts.pct` percent into the background,
 ---and keep it in sync on every colorscheme change.
----@param opts ezdap.util.color.CreateBlendedHlOpts
-function M.create_blended_hl(opts)
+---@param opts ezdap.util.color.CreateFadedHlOpts
+function M.create_faded_hl(opts)
     M.create_themed_hl({
         name = opts.dst,
-        spec = function() return _blended_spec(opts.src, opts.pct) end,
+        spec = function() return _faded_spec(opts.src, opts.pct) end,
     })
 end
 

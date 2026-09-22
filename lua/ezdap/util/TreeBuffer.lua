@@ -34,7 +34,7 @@ local color = require("ezdap.util.color")
 ---@field indent_guides boolean?  -- draw vertical indent guides (default true)
 ---@field indent_guide_char string?
 ---@field indent_guide_hl string?
----@field indent_guide_blend integer?  -- percent the guides fade into the background, 0-100
+---@field indent_guide_fade integer?  -- percent the guides fade into the background, 0-100
 
 ---@class ezdap.util.TreeBuffer.Indent
 ---@field text string
@@ -72,9 +72,9 @@ function TreeBuffer.new(opts)
     local expand_symbol = opts.expand_symbol or "›"
     local indent_guide_char = opts.indent_guide_char or "│"
     local guide_src = opts.indent_guide_hl or "NonText"
-    local guide_pct = opts.indent_guide_blend or 50
+    local guide_pct = opts.indent_guide_fade or 50
     local guide_hl = ("EzdapTreeFaded_%s_%d"):format(guide_src:gsub("[^%w_]", "_"), guide_pct)
-    color.create_blended_hl({ src = guide_src, dst = guide_hl, pct = guide_pct })
+    color.create_faded_hl({ src = guide_src, dst = guide_hl, pct = guide_pct })
     local guide_pad_width = math.max(0, vim.fn.strdisplaywidth(indent_str) - vim.fn.strdisplaywidth(indent_guide_char))
     local indent_guide_pad = string.rep(" ", guide_pad_width)
     return setmetatable({
