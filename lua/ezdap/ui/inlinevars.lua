@@ -4,7 +4,7 @@ local str_util       = require("ezdap.util.strutil")
 local manager        = require("ezdap.manager")
 local config         = require("ezdap.config").current
 local fileextmarks   = require("ezdap.util.fileextmarks")
-local themed_hl      = require("ezdap.util.themed_hl")
+local color          = require("ezdap.util.color")
 
 fileextmarks.init("ezdap")
 
@@ -21,18 +21,19 @@ local _unsubs        = {}
 local _mark_id       = 0
 local _clear_timer   = nil
 
-themed_hl.define_themed_hl("EzdapPill", function()
-	return { link = "Visual", default = true }
-end)
+vim.api.nvim_set_hl(0, "EzdapPill", { link = "Visual", default = true })
 
-themed_hl.define_themed_hl("EzdapPillSep", function()
-	vim.api.nvim_set_hl(0, "EzdapPill", { link = "Visual", default = true })
-	local hl = vim.api.nvim_get_hl(0, { name = "EzdapPill", link = false })
-	return {
-		fg = hl.bg or hl.fg,
-		bg = "NONE",
-	}
-end)
+color.create_themed_hl({
+	name = "EzdapPillSep",
+	spec = function()
+		vim.api.nvim_set_hl(0, "EzdapPill", { link = "Visual", default = true })
+		local hl = vim.api.nvim_get_hl(0, { name = "EzdapPill", link = false })
+		return {
+			fg = hl.bg or hl.fg,
+			bg = "NONE",
+		}
+	end,
+})
 
 ---Configured placement of inline values; defaults to "inline".
 ---@return ezdap.InlineVarsMode
