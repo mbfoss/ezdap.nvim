@@ -526,12 +526,12 @@ require("ezdap").setup({
 Everything is under the `:Ezdap` command, with completion for every subcommand.
 Bare `:Ezdap`, with no subcommand, opens the debug panel.
 
-To use it under another name, forward that name to `:Ezdap`, completion
-included. For `:Debug`:
+To use another name such as `:Debug`, define a command that forwards its
+arguments and completion to `:Ezdap`:
 
 ```lua
 vim.api.nvim_create_user_command("Debug", function(o) vim.cmd { cmd = "Ezdap", args = o.fargs } end,
-  { nargs = "*", complete = function(_, l) return vim.fn.getcompletion(l:gsub("^Debug", "Ezdap", 1), "cmdline") end })
+  { nargs = "*", complete = function(_, l) return vim.fn.getcompletion((l:gsub("^[%s:]*%a+", "Ezdap", 1)), "cmdline") end })
 ```
 
 <details>
