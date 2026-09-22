@@ -104,8 +104,8 @@ local function _warn_if_unpersisted()
         vim.log.levels.WARN)
 end
 
--- The user-command surface. `setup()` registers `:Ezdap` (and any
--- `command_alias`) and routes it here through `M.command`/`M.complete`.
+-- The user-command surface. `setup()` registers `:Ezdap` and routes it here
+-- through `M.command`/`M.complete`.
 
 ---@type table?
 local _command_mod
@@ -793,11 +793,15 @@ end
 -- deferred or re-registered to get the name right.
 local COMMAND = "Ezdap"
 
----Register the command under `name`. `:Ezdap` and any `command_alias` share one
----callback and one completion, so an alias is the command, not a forwarder.
----@param name string
-local function _register_command(name)
-    vim.api.nvim_create_user_command(name, function(opts)
+---Register `:Ezdap`. A name someone else holds is never taken silently: it is
+---left alone with a warning.
+local function _register_command()
+    if vim.api.nvim_get_commands({})[COMMAND] then
+        vim.notify(("[ezdap] :%s is already taken, so it was left alone"):format(COMMAND),
+            vim.log.levels.WARN)
+        return
+    end
+    vim.api.nvim_create_user_command(COMMAND, function(opts)
         require("ezdap.util.usercmd").handle(opts, function(cmd, args, cmd_opts)
             return M.command(cmd, args, cmd_opts)
         end)
@@ -812,29 +816,6 @@ local function _register_command(name)
                 end)
         end,
     })
-end
-
----Register `:Ezdap` and, when set, `command_alias` beside it. A name someone
----else holds is never taken silently: `:Ezdap` is left alone, an alias is taken
----anyway (the user asked for it), and the displaced command is named either way.
----@param alias? string
-local function _register_commands(alias)
-    if vim.api.nvim_get_commands({})[COMMAND] then
-        vim.notify(("[ezdap] :%s is already taken, so it was left alone; " ..
-            "set `command_alias` for a command under another name"):format(COMMAND),
-            vim.log.levels.WARN)
-    else
-        _register_command(COMMAND)
-    end
-
-    if not alias or alias == COMMAND then return end
-    local existing = vim.api.nvim_get_commands({})[alias]
-    if existing then
-        vim.notify(("[ezdap] command_alias %q replaces an existing command (%s)")
-            :format(alias, existing.definition ~= "" and existing.definition or "no description"),
-            vim.log.levels.WARN)
-    end
-    _register_command(alias)
 end
 
 ---Install the project-state autocmds. Each is a no-op while cold.
@@ -881,8 +862,8 @@ function M.get_default_config()
     return require("ezdap.config").defaults()
 end
 
----Initialise the plugin. Nothing exists before this runs, so `root_markers`,
----`data_filename` and `command_alias` are in place before anything reads them.
+---Initialise the plugin. Nothing exists before this runs, so `root_markers`
+---and `data_filename` are in place before anything reads them.
 ---
 ---Only the config, the command and the autocmds are installed here; the plugin
 ---proper waits for demand, or for a project with saved breakpoints to restore.
@@ -903,7 +884,7 @@ function M.setup(opts)
     -- Set first: the wiring below reaches guarded entry points (a session added
     -- during `_init` opens the debug view).
     _setup_done = true
-    _register_commands(M.config.command_alias)
+    _register_command()
     _create_autocmds()
 
     -- Everything past this point is deferred to the first `:Ezdap` or API call,

@@ -30,10 +30,9 @@ and the config, bring nothing up, and so answer before any `setup()`. The autocm
 no session to disconnect.
 
 The command name is hardcoded, so every message and doc line names `:Ezdap`
-outright. `command_alias` registers one further name sharing the same handler
-and completion. A name someone else holds is never taken silently: `:Ezdap` is
-left alone with a warning (the API and the saved state do not go through the
-command), while an alias is taken anyway, since the user asked for that name.
+outright. A name someone else holds is never taken silently: `:Ezdap` is left
+alone with a warning (the API and the saved state do not go through the
+command).
 
 A second `setup()` call is refused, not merged.
 

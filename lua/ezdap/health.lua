@@ -41,7 +41,6 @@ end
 -- Options whose default is `nil`, which no table can hold. Without this an
 -- unset-by-default option would be indistinguishable from a misspelled one.
 local _OPTIONAL = {
-    command_alias = true,
     enabled_adapters = true,
     external_terminal = true,
 }

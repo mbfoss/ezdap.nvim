@@ -40,7 +40,6 @@ local M = {}
 ---@alias ezdap.DebugViewPosition "left"|"right"
 
 ---@class ezdap.Config
----@field command_alias?       string    a second name to register `:Ezdap` under, e.g. "Debug" for `:Debug run`; unset (the default) registers only `:Ezdap`
 ---@field root_markers         string[]  filenames/dirs whose presence identifies a project root
 ---@field enabled_adapters?    string[]  names of the only adapters to make available; unset (the default) leaves every registered adapter available
 ---@field data_filename string

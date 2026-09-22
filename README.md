@@ -113,7 +113,7 @@ require("ezdap").setup({})                     -- required; pass options here
 </details>
 
 `setup()` is the one thing you have to call: it applies your options, registers
-the `:Ezdap` command (plus any `command_alias`) and installs the persistence
+the `:Ezdap` command and installs the persistence
 autocmds. `setup({})` with no options is fine -- everything you leave out keeps
 its default. Nothing beyond that is built until you actually debug: the first
 `:Ezdap` invocation or API call brings the rest up, as does a project with
@@ -459,9 +459,6 @@ Pass options to `setup()`. Defaults when `setup({})` is called are:
 
 ```lua
 require("ezdap").setup({
-  -- A second name to register `:Ezdap` under, sharing its handler and
-  -- completion. Unset by default, so only `:Ezdap` exists.
-  -- command_alias    = "Debug",
   -- Project detection: the nearest ancestor holding one of these is
   -- the root.
   root_markers        = { ".git" },
@@ -527,9 +524,15 @@ require("ezdap").setup({
 ## Command reference <!-- tag: commands -->
 
 Everything is under the `:Ezdap` command, with completion for every subcommand.
-Bare `:Ezdap`, with no subcommand, opens the debug panel. Set `command_alias`
-in `setup()` to register it under a second name: an alias is the same command,
-with the same subcommands and completion.
+Bare `:Ezdap`, with no subcommand, opens the debug panel.
+
+To use it under another name, forward that name to `:Ezdap`, completion
+included. For `:Debug`:
+
+```lua
+vim.api.nvim_create_user_command("Debug", function(o) vim.cmd { cmd = "Ezdap", args = o.fargs } end,
+  { nargs = "*", complete = function(_, l) return vim.fn.getcompletion(l:gsub("^Debug", "Ezdap", 1), "cmdline") end })
+```
 
 <details>
 <summary><b><code>:Ezdap</code> subcommands</b></summary>
