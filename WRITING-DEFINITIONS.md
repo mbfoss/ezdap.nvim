@@ -1,24 +1,24 @@
 # Writing an adapter definition
 
-An adapter definition is a single Lua file under an `ezdap-adapters/` directory on the
-runtimepath (beside `lsp/` and `plugin/`, not under `lua/`; it is a definition read by
-filename, not a Lua module),
-registered under its filename: `myadapter.lua` becomes the `myadapter` adapter, the name
-`:Ezdap run` takes. It is configuration only: it says how to reach the debug adapter (the
-program that actually speaks DAP, such as `codelldb` or `gdb --interpreter=dap`) and what
+An adapter definition is a single Lua file under an `ezdap-adapters/` directory
+on the runtimepath (beside `lsp/` and `plugin/`, not under `lua/`; it is a
+definition read by filename, not a Lua module), registered under its filename:
+`myadapter.lua` becomes the `myadapter` adapter, the name `:Ezdap run` takes. It
+is configuration only: it says how to reach the debug adapter (the program that
+actually speaks DAP, such as `codelldb` or `gdb --interpreter=dap`) and what
 that adapter can be asked to do.
 
 Three things get named in these files, and DAP keeps them distinct:
 
 - **debug adapter**: the program ezdap spawns or dials, the one speaking DAP:
   `codelldb`, `lldb-dap`, `gdb --interpreter=dap`, `dlv dap`.
-- **debugger**: what that adapter drives underneath. Sometimes a separate program
-  (`codelldb` drives LLDB), sometimes the adapter itself (`gdb` and `dlv` speak DAP
-  directly).
+- **debugger**: what that adapter drives underneath. Sometimes a separate
+  program (`codelldb` drives LLDB), sometimes the adapter itself (`gdb` and
+  `dlv` speak DAP directly).
 - **debuggee**: the program being debugged.
 
-"Adapter" on its own always means the first. This file is an adapter *definition*: it
-describes an adapter, it is not one.
+"Adapter" on its own always means the first. This file is an adapter
+*definition*: it describes an adapter, it is not one.
 
 Each file returns one `ezdap.AdapterDef`:
 
@@ -42,18 +42,18 @@ return {
 }
 ```
 
-Each definition is read the first time something reaches for that adapter by name
-(`ezdap.load_adapter`), a run, `:Ezdap adapter_info <adapter>`, and never when
-ezdap starts. Listing adapters (`ezdap.available_adapters`, `:checkhealth`) reads
-their filenames only, so keep top-level work to building the table: anything
-expensive belongs in `setup`, which runs per run. It is read with `loadfile`, so it is never a Lua
-module: nothing can `require` it, and it cannot have siblings it requires; pull
-shared helpers from `ezdap.shared` instead.
+Each definition is read the first time something reaches for that adapter by
+name (`ezdap.load_adapter`), a run, `:Ezdap adapter_info <adapter>`, and never
+when ezdap starts. Listing adapters (`ezdap.available_adapters`, `:checkhealth`)
+reads their filenames only, so keep top-level work to building the table:
+anything expensive belongs in `setup`, which runs per run. It is read with
+`loadfile`, so it is never a Lua module: nothing can `require` it, and it cannot
+have siblings it requires; pull shared helpers from `ezdap.shared` instead.
 
 ## `ezdap.AdapterDef`
 
-The table an adapter definition returns. Every field is optional; what is set decides how
-the adapter is reached and what it can run.
+The table an adapter definition returns. Every field is optional; what is set
+decides how the adapter is reached and what it can run.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -89,10 +89,11 @@ An `ezdap.Input` describes one value:
 
 ## Modes
 
-A definition without `modes` cannot be run at all: nothing completes, and nothing can be
-generated, because a raw DAP body describes nothing about itself (see
-[Why inputs](README.md#why-inputs-and-not-raw-dap)). Each mode declares
-the `inputs` it accepts and a `build` that turns supplied values into the native body:
+A definition without `modes` cannot be run at all: nothing completes, and
+nothing can be generated, because a raw DAP body describes nothing about itself
+(see [Why inputs](README.md#why-inputs-and-not-raw-dap)). Each mode declares the
+`inputs` it accepts and a `build` that turns supplied values into the native
+body:
 
 ```lua
 return {
@@ -132,69 +133,75 @@ The mode is now everywhere it should be, with no further wiring:
 
 How the pieces fit:
 
-- **`inputs`**: one entry per accepted value, keyed by the name typed on the command line
-  or written in a run file's `parameters`. `type` is what `build` receives (`string`,
-  `boolean`, `integer`, `number`, and the two collections `list` (`a,b`) and `map`
-  (`A=1,B=2`, string keys)), and it is the whole of what an input declares about its value.
-  A `list`/`map` declares its *entries* the same way under `item_type`: `{ type = "list",
-  item_type = "integer" }` is a list of integers, and a collection that declares none
-  holds strings. The full vocabulary is one row per type in
-  [inputs.lua](lua/ezdap/inputs.lua); every consumer reads those rows.
-- **`completion`**: what the value offers while it is being typed, in whichever of three
-  forms fits: a named source (`"file"`, `"dir"`, or `"command"`, which completes each
-  token of a command line as a path), the values the input is normally written with when
-  the adapter names them itself (`{ "console", "terminal" }`), or a
-  `fun(partial): string[]` when they can only be computed: the targets in a workspace,
-  the containers running now. On a `list`/`map` it describes one entry. A written-out set
-  is also what a typed file's schema lists as `examples` and what
-  `:Ezdap new_run_file` writes into the generated file's comments; a source or a
-  function has nothing to serialize. Nothing rejects a value outside what completes. A boolean input
-  completes as `true`/`false` on its own.
-- **Paths and ports**: a path input is a `string` and a port a plain `integer`; what
-  either additionally is, `build` says: `shared.normalize_path(inputs.cwd)` resolves `~`
-  and `$VAR` (nil in, nil out, and a `list`/`map` entry by entry), and
-  `local port, err = shared.resolve_port(inputs.port)` holds a port to its range, giving
-  back the `nil, err` pair an abort already returns.
-- **`required`**: an unset required input is a resolve error naming the input. Leave it
-  off and an unset input simply arrives as `nil`; since Lua drops nil-valued keys,
-  `cwd = inputs.cwd` omits `cwd` entirely. Write the field unconditionally and optional
-  fields take care of themselves.
-- **`build(inputs)`**: returns the native DAP body (write the adapter's own key names,
-  plus any identity fields it pins, as literals). `inputs` arrives already read into each
-  declared `type`, whichever form the caller authored it in. A **second** return value is
-  for adapters whose *connection* is what an input configures: return a `host`/`port`
-  table, or nothing at all, and the definition's own values stay in force.
-- **Aborting**: return `nil` and a message. The slot that carries the connection on a
-  successful call carries the reason on an unsuccessful one, so an abort reads as the
-  `nil, err` pair any Lua function returns.
-- **Asking the user**: `build` runs on a coroutine, so it may yield. That is how an
-  attach mode with no `pid` opens a process picker rather than sending a meaningless
-  body: `local pid, err = shared.resolve_pid(inputs.pid); if not pid then return nil, err end`.
-  It must always resume, returning either a body or an abort, so the caller waiting on it
-  hears back.
+- **`inputs`**: one entry per accepted value, keyed by the name typed on the
+  command line or written in a run file's `parameters`. `type` is what `build`
+  receives (`string`, `boolean`, `integer`, `number`, and the two collections
+  `list` (`a,b`) and `map` (`A=1,B=2`, string keys)), and it is the whole of
+  what an input declares about its value. A `list`/`map` declares its *entries*
+  the same way under `item_type`: `{ type = "list", item_type = "integer" }` is
+  a list of integers, and a collection that declares none holds strings. The
+  full vocabulary is one row per type in [inputs.lua](lua/ezdap/inputs.lua);
+  every consumer reads those rows.
+- **`completion`**: what the value offers while it is being typed, in whichever
+  of three forms fits: a named source (`"file"`, `"dir"`, or `"command"`, which
+  completes each token of a command line as a path), the values the input is
+  normally written with when the adapter names them itself (`{ "console",
+  "terminal" }`), or a `fun(partial): string[]` when they can only be computed:
+  the targets in a workspace, the containers running now. On a `list`/`map` it
+  describes one entry. A written-out set is also what a typed file's schema
+  lists as `examples` and what `:Ezdap new_run_file` writes into the generated
+  file's comments; a source or a function has nothing to serialize. Nothing
+  rejects a value outside what completes. A boolean input completes as
+  `true`/`false` on its own.
+- **Paths and ports**: a path input is a `string` and a port a plain `integer`;
+  what either additionally is, `build` says: `shared.normalize_path(inputs.cwd)`
+  resolves `~` and `$VAR` (nil in, nil out, and a `list`/`map` entry by entry),
+  and `local port, err = shared.resolve_port(inputs.port)` holds a port to its
+  range, giving back the `nil, err` pair an abort already returns.
+- **`required`**: an unset required input is a resolve error naming the input.
+  Leave it off and an unset input arrives as `nil`; since Lua drops
+  nil-valued keys, `cwd = inputs.cwd` omits `cwd` entirely. Write the field
+  unconditionally and optional fields take care of themselves.
+- **`build(inputs)`**: returns the native DAP body (write the adapter's own key
+  names, plus any identity fields it pins, as literals). `inputs` arrives
+  already read into each declared `type`, whichever form the caller authored it
+  in. A **second** return value is for adapters whose *connection* is what an
+  input configures: return a `host`/`port` table, or nothing at all, and the
+  definition's own values stay in force.
+- **Aborting**: return `nil` and a message. The slot that carries the connection
+  on a successful call carries the reason on an unsuccessful one, so an abort
+  reads as the `nil, err` pair any Lua function returns.
+- **Asking the user**: `build` runs on a coroutine, so it may yield. That is how
+  an attach mode with no `pid` opens a process picker rather than sending a
+  meaningless body: `local pid, err = shared.resolve_pid(inputs.pid); if not pid
+  then return nil, err end`. It must always resume, returning either a body or
+  an abort, so the caller waiting on it hears back.
 
-Because `:Ezdap run`, `:Ezdap new_run_file` and mode-based run files all resolve through
-the same `inputs` → `build` path, a mode is described in exactly one place and the three
-cannot drift apart. The shipped `remote` adapter in [remote.lua](ezdap-adapters/remote.lua)
-is a compact reference for a mode that returns a connection (a task-level `host`/`port`)
-rather than a body; for a spawn-then-connect definition that starts a server and points
-the connection at it, see the `setup`/`teardown` example below.
+Because `:Ezdap run`, `:Ezdap new_run_file` and mode-based run files all resolve
+through the same `inputs` → `build` path, a mode is described in exactly one
+place and the three cannot drift apart. The shipped `remote` adapter in
+[remote.lua](ezdap-adapters/remote.lua) is a compact reference for a mode that
+returns a connection (a task-level `host`/`port`) rather than a body; for a
+spawn-then-connect definition that starts a server and points the connection at
+it, see the `setup`/`teardown` example below.
 
 ## Setup and teardown
 
-`setup` runs before ezdap connects. Use it to start the adapter as a server and report its
-port, or to locate its binary and fail with a readable message. Return errors through `callback("...")`. Pass state as the second argument,
-`callback(nil, { handle = h })`, and it arrives as `teardown`'s second argument, which is
-how `teardown` stops what `setup` started. It must call `callback(err, state)` exactly
-once, so the run either proceeds or aborts.
+`setup` runs before ezdap connects. Use it to start the adapter as a server and
+report its port, or to locate its binary and fail with a readable message.
+Return errors through `callback("...")`. Pass state as the second argument,
+`callback(nil, { handle = h })`, and it arrives as `teardown`'s second argument,
+which is how `teardown` stops what `setup` started. It must call `callback(err,
+state)` exactly once, so the run either proceeds or aborts.
 
-`setup` may edit `config` in place, most usefully `config.host`/`config.port`, which is
-how an adapter that is really a TCP server gets started and then connected to. Its `ctx`
-carries `report(msg)` for progress lines, `add_bufnr(bufnr, opts?)` to attach a buffer it
-created to the run so it is listed under the session, and `mode`, the mode name
-this run resolved from, so a `setup` can gate one mode rather than the whole definition
-(refusing a mode whose feature the installed binary is too old for, say). Treat an
-unrecognized name as "none of mine" and let the run proceed.
+`setup` may edit `config` in place, most usefully `config.host`/`config.port`,
+which is how an adapter that is really a TCP server gets started and then
+connected to. Its `ctx` carries `report(msg)` for progress lines,
+`add_bufnr(bufnr, opts?)` to attach a buffer it created to the run so it is
+listed under the session, and `mode`, the mode name this run resolved from, so a
+`setup` can gate one mode rather than the whole definition (refusing a mode
+whose feature the installed binary is too old for, say). Treat an unrecognized
+name as "none of mine" and let the run proceed.
 
 ```lua
 local shared = require("ezdap.shared")
@@ -232,35 +239,39 @@ return {
 }
 ```
 
-When a definition has a `setup`, ezdap leaves `config.host`/`port` entirely to it and
-ignores the task's: the definition knows where it put the server. Any adapter that
-announces its port on startup fits this shape; only the pattern matched against its
-output changes.
+When a definition has a `setup`, ezdap leaves `config.host`/`port` entirely to
+it and ignores the task's: the definition knows where it put the server. Any
+adapter that announces its port on startup fits this shape; only the pattern
+matched against its output changes.
 
 ## Helpers
 
-Locating the adapter binary is most of what a definition does before it can run, so
-`ezdap.shared` helps: `split_command`, `normalize_path`, `resolve_port`, `resolve_pid`,
-`spawn`, and `resolve_path(candidates, accept, opts?)`, which expands `$VAR` and `~` and
-returns the first candidate `accept` approves, plus everything tried:
+Locating the adapter binary is most of what a definition does before it can run,
+so `ezdap.shared` helps: `split_command`, `normalize_path`, `resolve_port`,
+`resolve_pid`, `spawn`, and `resolve_path(candidates, accept, opts?)`, which
+expands `$VAR` and `~` and returns the first candidate `accept` approves, plus
+everything tried:
 
 ```lua
 local shared = require("ezdap.shared")
 local exe, tried = shared.resolve_path({ "dlv", "$GOBIN/dlv" }, shared.is_executable)
 ```
 
-Use `shared.is_directory` for directories, your own predicate when working means more than
-present (a minimum version, say), and `opts.transform` to test a file inside a found
-directory (a virtualenv mapped to its `bin/python`, for instance).
+Use `shared.is_directory` for directories, your own predicate when working means
+more than present (a minimum version, say), and `opts.transform` to test a file
+inside a found directory (a virtualenv mapped to its `bin/python`, for
+instance).
 
 ## Templates
 
-The definitions in [ezdap-adapters.nvim](https://github.com/mbfoss/ezdap-adapters.nvim) are
-worked examples of the common shapes: an adapter spoken to over stdio, one located on
-`PATH` or in a package directory, and one started as a server and then connected to. Pick
-the one closest to your adapter and adapt it. The full contract is in the
-`ezdap.AdapterDef` and `ezdap.Mode` annotations in `lua/ezdap/adapter_def.lua`.
+The definitions in
+[ezdap-adapters.nvim](https://github.com/mbfoss/ezdap-adapters.nvim) are worked
+examples of the common shapes: an adapter spoken to over stdio, one located on
+`PATH` or in a package directory, and one started as a server and then connected
+to. Pick the one closest to your adapter and adapt it. The full contract is in
+the `ezdap.AdapterDef` and `ezdap.Mode` annotations in
+`lua/ezdap/adapter_def.lua`.
 
-Contributions of new definitions are welcome. Please follow the structure and comment style
-of the existing files, and cite the adapter's own documentation that the field set is
-based on at the top of the file.
+Contributions of new definitions are welcome. Follow the structure and
+comment style of the existing files, and cite the adapter's own documentation
+that the field set is based on at the top of the file.

@@ -1,11 +1,11 @@
-# ezdap.nvim in action
+# ezdap.nvim demos
 
 Each clip is a recorded Neovim session debugging the same small Python program
 through [debugpy](https://github.com/microsoft/debugpy). Commands are typed in
 full (`:Ezdap …`) to show what each step does; map them to keys for daily use,
 see [Keymaps example](README.md#keymaps-example).
 
-The editor is Neovim with ezdap,
+The editor is Neovim with ezdap, plus
 [dock.nvim](https://github.com/mbfoss/dock.nvim) for the bottom panel.
 
 ## Breakpoints, stepping and the debug panel
