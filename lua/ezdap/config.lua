@@ -92,8 +92,8 @@ local defaults = {
 }
 
 ---The live options, at the defaults until `setup()` applies the user's. Always
----this same table: `apply()` refills it in place, so a captured reference —
----this table or any table under it — never goes stale.
+---this same table: `apply()` refills it in place, so a captured reference -
+---this table or any table under it - never goes stale.
 ---@type ezdap.Config
 M.current = vim.deepcopy(defaults)
 
