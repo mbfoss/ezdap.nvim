@@ -54,6 +54,7 @@ REPL, watch expressions, parallel sessions, persistence.
 - [Adding a custom adapter](#adding-a-custom-adapter)
 - [Writing an adapter definition](WRITING-DEFINITIONS.md)
 - [License](#license)
+- [Contributing](#contributing)
 
 ---
 
@@ -712,9 +713,7 @@ Modes declare `inputs` rather than taking a raw DAP body, which buys:
 
 <!-- panvimdoc-ignore-start -->
 
-## Development <!-- tag: development -->
-
-Internals, tests and conventions: [DEVELOPMENT.md](DEVELOPMENT.md).
+## Contributing <!-- tag: contributing -->
 
 Contributions are welcome.
 
