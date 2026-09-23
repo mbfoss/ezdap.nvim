@@ -65,7 +65,7 @@ REPL, watch expressions, parallel sessions, persistence.
 - A debug adapter for the target language (gdb, debugpy, ...). Many are
   available through [mason.nvim](https://github.com/mason-org/mason.nvim),
   which is not required.
-- [dock.nvim](https://github.com/mbfoss/dock.nvim) — *optional*; when present,
+- [dock.nvim](https://github.com/mbfoss/dock.nvim), *optional*: when present,
   ezdap routes the debug buffers (terminal, output, REPL) into dock's shared
   panel, one tab per run (see [Output window](#output-window)). No
   configuration needed.
@@ -111,9 +111,9 @@ require("ezdap").setup({})                     -- required; pass options here
 
 `setup()` is the one call you have to make: it applies your options, registers
 the `:Ezdap` command and installs the persistence autocmds. `setup({})` with no
-options is fine — everything left out keeps its default. Nothing beyond that is
-built until you debug: the first `:Ezdap` invocation or API call brings up the
-rest, as does a project with saved breakpoints to restore.
+options is fine, and everything left out keeps its default. Nothing beyond that
+is built until you debug: the first `:Ezdap` invocation or API call brings up
+the rest, as does a project with saved breakpoints to restore.
 
 ## Quick start
 
@@ -208,7 +208,7 @@ input can take: paths for the path-like ones, `true`/`false` for a boolean.
 
 ### Run files
 
-A run file is a Lua file returning a table of session parameters — the Lua
+A run file is a Lua file returning a table of session parameters, the Lua
 equivalent of the `:Ezdap run ...` arguments:
 
 ```lua

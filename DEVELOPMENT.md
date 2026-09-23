@@ -19,13 +19,13 @@ costs nothing until a config asks for it. Because `setup()` is the only door,
 which happens inline rather than deferred; it asks
 [project.lua](lua/ezdap/project.lua) and decodes nothing unless a file exists.
 
-Everything past that is lazy. `_ensure_loaded()` brings up the plugin proper --
-UI wiring, DAP subscriptions, restored state — once, on the first `:Ezdap` or
+Everything past that is lazy. `_ensure_loaded()` brings up the plugin proper
+(UI wiring, DAP subscriptions, restored state) once, on the first `:Ezdap` or
 API call, or when a state file is found at `setup()` or after a cwd change.
 Every public entry point calls `_require_setup()`, which both raises the "call
 setup() first" error and *is* that demand, so each body can assume a loaded
-plugin. The exceptions are the projections — `available_adapters`,
-`load_adapter`, and the `inputs`/`schema` modules — which read the runtimepath
+plugin. The exceptions are the projections (`available_adapters`,
+`load_adapter`, and the `inputs`/`schema` modules), which read the runtimepath
 and the config, bring nothing up, and so answer before any `setup()`. The
 autocmds are guarded the same way: cold means nothing to persist and no session
 to disconnect.
