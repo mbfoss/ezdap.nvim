@@ -94,7 +94,7 @@ vim.pack.add({
   "https://github.com/mbfoss/ezdap-adapters.nvim",  -- ready-made adapter definitions
 })
 
-require("ezdap").setup({})                     -- required; pass options here
+require("ezdap").setup({}) -- required; pass options here
 ```
 </details>
 
@@ -105,16 +105,14 @@ require("ezdap").setup({})                     -- required; pass options here
 {
   "mbfoss/ezdap.nvim",
   dependencies = { "mbfoss/ezdap-adapters.nvim" },  -- ready-made adapter definitions
-  opts = {},                                   -- required; passed to require("ezdap").setup()
+  opts = {}, -- required; passed to require("ezdap").setup()
 }
 ```
 </details>
 
 `setup()` is the one call you have to make: it applies your options, registers
 the `:Ezdap` command and installs the persistence autocmds. `setup({})` with no
-options is fine, and everything left out keeps its default. Nothing beyond that
-is built until you debug: the first `:Ezdap` invocation or API call brings up
-the rest, as does a project with saved breakpoints to restore.
+options is fine, and everything left out keeps its default. 
 
 ## Quick start
 
@@ -265,11 +263,6 @@ local ezdap = require("ezdap")
 ezdap.run_mode("debugpy", "script", { command = "./main.py" })
 ezdap.run_file("debug.lua")
 ezdap.rerun()
-
--- Adapters
-ezdap.available_adapters() -- Available adapter names, (inlcuding unloaded).
-                           -- Honours `enabled_adapters`.
-local adapters = require("ezdap.adapters") -- loaded adapters
 ```
 
 ## Breakpoints
