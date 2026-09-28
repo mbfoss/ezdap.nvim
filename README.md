@@ -618,20 +618,20 @@ ezdap ships no global keymaps; any layout works. An example based on the
 function keys:
 
 ```lua
-vim.keymap.set("n", "<F5>", "<Cmd>Debug continue<CR>", { desc = "Debug: continue" })
-vim.keymap.set("n", "<F10>", "<Cmd>Debug step_over<CR>", { desc = "Debug: over" })
-vim.keymap.set("n", "<F11>", "<Cmd>Debug step_in<CR>", { desc = "Debug: step in" })
-vim.keymap.set("n", "<F12>", "<Cmd>Debug step_out<CR>", { desc = "Debug: step out" })
-vim.keymap.set("n", "<F9>", "<Cmd>Debug breakpoint<CR>", { desc = "Debug: bp" })
+vim.keymap.set("n", "<F5>", "<Cmd>Ezdap continue<CR>", { desc = "Debug: continue" })
+vim.keymap.set("n", "<F10>", "<Cmd>Ezdap step_over<CR>", { desc = "Debug: over" })
+vim.keymap.set("n", "<F11>", "<Cmd>Ezdap step_in<CR>", { desc = "Debug: step in" })
+vim.keymap.set("n", "<F12>", "<Cmd>Ezdap step_out<CR>", { desc = "Debug: step out" })
+vim.keymap.set("n", "<F9>", "<Cmd>Ezdap breakpoint<CR>", { desc = "Debug: bp" })
 
-vim.keymap.set("n", "<leader>dc", "<Cmd>Debug breakpoint condition<CR>", { desc = "Debug: conditional breakpoint" })
-vim.keymap.set("n", "<leader>dl", "<Cmd>Debug breakpoint logpoint<CR>", { desc = "Debug: logpoint" })
-vim.keymap.set("n", "<leader>dr", "<Cmd>Debug rerun<CR>", { desc = "Debug: re-run" })
-vim.keymap.set("n", "<leader>du", "<Cmd>Debug view<CR>",  { desc = "Debug: focus view" })
-vim.keymap.set("n", "<leader>dq", "<Cmd>Debug stop<CR>",  { desc = "Debug: stop" })
+vim.keymap.set("n", "<leader>dc", "<Cmd>Ezdap breakpoint condition<CR>", { desc = "Debug: conditional breakpoint" })
+vim.keymap.set("n", "<leader>dl", "<Cmd>Ezdap breakpoint logpoint<CR>", { desc = "Debug: logpoint" })
+vim.keymap.set("n", "<leader>dr", "<Cmd>Ezdap rerun<CR>", { desc = "Debug: re-run" })
+vim.keymap.set("n", "<leader>du", "<Cmd>Ezdap view<CR>",  { desc = "Debug: focus view" })
+vim.keymap.set("n", "<leader>dq", "<Cmd>Ezdap stop<CR>",  { desc = "Debug: stop" })
 
-vim.keymap.set("n", "<leader>di", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
-vim.keymap.set("x", "<leader>di", "<Cmd>Debug inspect<CR>", { desc = "Debug: inspect" })
+vim.keymap.set("n", "<leader>di", "<Cmd>Ezdap inspect<CR>", { desc = "Debug: inspect" })
+vim.keymap.set("x", "<leader>di", "<Cmd>Ezdap inspect<CR>", { desc = "Debug: inspect" })
 ```
 
 ## Adding a custom adapter <!-- tag: custom-adapters -->
