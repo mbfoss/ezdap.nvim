@@ -15,9 +15,9 @@ local _config      = require("ezdap.config").current
 
 local M            = {}
 
----Where a run is shown: a dock group per run (`ezdap.ui.dock_panel`), or the
----single bottom split (`ezdap.ui.output_win`). Only `add_buf` is required; a
----panel with one window for every run cannot show a run's identity or outcome.
+---Where a run is shown: the single bottom split (`ezdap.ui.output_win`). Only
+---`add_buf` is required; a panel with one window for every run cannot show a
+---run's identity or outcome, which the DebugView carries instead.
 ---@class ezdap.ui.RunPanel
 ---@field open_run?  fun(run: ezdap.runner.Run)  a run beginning, before it has any buffer
 ---@field add_buf    fun(run: ezdap.runner.Run, bufnr: integer, opts: ezdap.AddBufOpts)
@@ -85,7 +85,7 @@ local function _presenter(panel, run)
     end
 
     -- The panel learns of the run before it has any buffer, so one that renders a
-    -- run as a whole (a dock tab) has it by the time the first arrives.
+    -- run as a whole has it by the time the first arrives.
     if panel.open_run then panel.open_run(run) end
 
     -- The log is this run's own buffer, so its lines need no task-name prefix. It

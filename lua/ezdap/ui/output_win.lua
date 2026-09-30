@@ -1,5 +1,4 @@
----@brief The single bottom split that shows a run's buffer: the run panel
----used when dock.nvim is not installed.
+---@brief The single bottom split that shows a run's buffer: the run panel.
 ---
 ---A run spawns several buffers (Terminal, Output, REPL, adapter log, DAP
 ---messages); this `ezdap.ui.RunPanel` registers each with a priority and the
@@ -8,8 +7,7 @@
 ---split.
 ---
 ---There being one window shared by every run, a run's label and state have
----nowhere to show, which is why `ezdap.ui.dock_panel` takes over when dock.nvim
----can give each run a tab of its own.
+---nowhere to show; they live in the DebugView instead.
 
 local fixedwin     = require("ezdap.util.fixedwin")
 local ui_util      = require("ezdap.util.ui")
@@ -18,7 +16,7 @@ local config       = require("ezdap.config").current
 local M            = {}
 
 ---Whether this window is the run panel in play, established by `init`. Everything
----below is inert until then, so `:Ezdap output` reaches the dock instead.
+---below is inert until then, so `:Ezdap output` before `setup` does nothing.
 local _enabled     = false
 
 ---One buffer a run registered for display, as passed to `ezdap.AddBufOpts`.
@@ -265,8 +263,8 @@ end
 ---@param opts ezdap.AddBufOpts
 function M.add_buf(_run, bufnr, opts) M.add(bufnr, opts) end
 
----Mark this panel the one in play, so the window operations above act rather
----than defer to the dock. Called from `setup`, which also hands it the runs.
+---Mark this panel the one in play, so the window operations above act. Called
+---from `setup`, which also hands it the runs.
 function M.init() _enabled = true end
 
 return M

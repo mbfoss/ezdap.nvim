@@ -5,8 +5,7 @@ through [debugpy](https://github.com/microsoft/debugpy). Commands are typed in
 full (`:Ezdap …`) to show what each step does; map them to keys for daily use,
 see [Keymaps example](README.md#keymaps-example).
 
-The editor is Neovim with ezdap, plus
-[dock.nvim](https://github.com/mbfoss/dock.nvim) for the bottom panel.
+The editor is Neovim with ezdap.
 
 ## Breakpoints, stepping and the debug panel
 
@@ -55,7 +54,7 @@ then step into a call and back out. The return value appears in the locals.
 
 ## Parallel sessions
 
-Two debuggees paused at the same breakpoint at once, each with a panel row and a
-dock tab. `:Ezdap session` selects which one the stepping commands apply to.
+Two debuggees paused at the same breakpoint at once, each with a panel row.
+`:Ezdap session` selects which one the stepping commands apply to.
 
 ![Parallel sessions](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/07-parallel-sessions.gif)

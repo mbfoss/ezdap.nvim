@@ -66,10 +66,6 @@ REPL, watch expressions, parallel sessions, persistence.
 - A debug adapter for the target language (gdb, debugpy, ...). Many are
   available through [mason.nvim](https://github.com/mason-org/mason.nvim),
   which is not required.
-- [dock.nvim](https://github.com/mbfoss/dock.nvim), *optional*: when present,
-  ezdap routes the debug buffers (terminal, output, REPL) into dock's shared
-  panel, one tab per run (see [Output window](#output-window)). No
-  configuration needed.
 
 ## Installation
 
@@ -351,15 +347,8 @@ one is deleted, and closes with the run's last buffer. `:Ezdap output` toggles
 it; `panel_auto_open` and `panel_height_ratio` adjust it.
 
 Each run keeps its own log, `ezdap://<run>-log`, wiped with the run, rather
-than appending to a shared one, so parallel runs never interleave.
-
-With [dock.nvim](https://github.com/mbfoss/dock.nvim) installed, ezdap uses it
-instead, with no configuration needed. Each run becomes a tab in dock's shared
-panel, one page per buffer, labelled with the run's state; parallel runs each
-get a tab rather than sharing one window, and `:Dock clean` removes the finished
-ones.
-dock's own options (`auto_open`, `size`, position) govern the window there, so
-`panel_auto_open`/`panel_height_ratio` do not apply.
+than appending to a shared one, so parallel runs never interleave. Any of a
+run's buffers can be reached by name; see [Run buffers](#run-buffers).
 
 ### Inline variable values <!-- tag: inline-values -->
 

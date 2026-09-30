@@ -535,15 +535,9 @@ local function _init()
     require("ezdap.ui.debugline_ui").init()
     require("ezdap.ui.inlinevars").enable()
     require("ezdap.ui.popup_menu").init()
-    -- The one place picking a run panel: dock.nvim gives each run a tab of its
-    -- own, so it takes the runs when installed and ezdap's bottom split stays out
-    -- of the way.
-    local panel
-    if pcall(require, "dock") then
-        panel = require("ezdap.ui.dock_panel")
-    else
-        panel = require("ezdap.ui.output_win")
-    end
+    -- The one place picking a run panel: ezdap's bottom split, which shows a
+    -- run's highest-priority buffer.
+    local panel = require("ezdap.ui.output_win")
     panel.init()
 
     -- Every run ezdap owns is shown through `run_display`, onto that panel.
