@@ -961,10 +961,14 @@ function M.view.toggle()
     require("ezdap").toggle_debug_view()
 end
 
+-- Panel
+
+M.panel = {}
+
 ---Toggle the bottom window a run's buffers are shown in. A no-op before
 ---`setup`, when the window is not in play yet.
-function M.view.output_toggle()
-    require("ezdap.ui.output_win").toggle()
+function M.panel.toggle()
+    require("ezdap.ui.Panel").toggle()
 end
 
 return M

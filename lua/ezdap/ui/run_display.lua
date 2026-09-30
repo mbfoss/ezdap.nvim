@@ -15,10 +15,10 @@ local _config      = require("ezdap.config").current
 
 local M            = {}
 
----Where a run is shown: the single bottom split (`ezdap.ui.output_win`). Only
+---Where a run is shown: the single bottom split (`ezdap.ui.Panel`). Only
 ---`add_buf` is required; a panel with one window for every run cannot show a
 ---run's identity or outcome, which the DebugView carries instead.
----@class ezdap.ui.RunPanel
+---@class ezdap.ui.Panel
 ---@field open_run?  fun(run: ezdap.runner.Run)  a run beginning, before it has any buffer
 ---@field add_buf    fun(run: ezdap.runner.Run, bufnr: integer, opts: ezdap.AddBufOpts)
 ---@field set_done?  fun(run: ezdap.runner.Run, ok: boolean)  how the run ended; called once
@@ -37,8 +37,8 @@ local function _make_log(run)
     })
 end
 
----The presenter for one run ezdap shows itself, on the run `panel`.
----@param panel ezdap.ui.RunPanel
+---The presenter for one run ezdap shows itself, on the `panel`.
+---@param panel ezdap.ui.Panel
 ---@param run ezdap.runner.Run
 ---@return ezdap.runner.Presenter
 local function _presenter(panel, run)
@@ -98,7 +98,7 @@ end
 
 ---How runs shown on `panel` are presented: `setup` hands the result to
 ---`ezdap.runner`, which calls it once per run it owns.
----@param panel ezdap.ui.RunPanel
+---@param panel ezdap.ui.Panel
 ---@return ezdap.runner.PresenterFactory
 function M.for_panel(panel)
     return function(run) return _presenter(panel, run) end

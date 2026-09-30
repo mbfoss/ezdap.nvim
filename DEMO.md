@@ -7,9 +7,9 @@ see [Keymaps example](README.md#keymaps-example).
 
 The editor is Neovim with ezdap.
 
-## Breakpoints, stepping and the debug panel
+## Breakpoints, stepping and the debug view
 
-Set a breakpoint and launch. The panel opens on the stop, showing sessions, call
+Set a breakpoint and launch. The debug view opens on the stop, showing sessions, call
 stack, locals, watch expressions and breakpoints in one tree; the frame's values
 are rendered inline in the source.
 
@@ -31,7 +31,7 @@ program's uncaught `ValueError` and read it with `:Ezdap exception_info`.
 
 ## Inspecting and changing values
 
-`:Ezdap inspect` expands the identifier under the cursor, `i` in the panel adds
+`:Ezdap inspect` expands the identifier under the cursor, `i` in the debug view adds
 a watch expression, and `c` on a variable writes a new value back into the
 running program.
 
@@ -54,7 +54,7 @@ then step into a call and back out. The return value appears in the locals.
 
 ## Parallel sessions
 
-Two debuggees paused at the same breakpoint at once, each with a panel row.
+Two debuggees paused at the same breakpoint at once, each with a row in the debug view.
 `:Ezdap session` selects which one the stepping commands apply to.
 
 ![Parallel sessions](https://raw.githubusercontent.com/mbfoss/ezdap.nvim/assets/demos/07-parallel-sessions.gif)

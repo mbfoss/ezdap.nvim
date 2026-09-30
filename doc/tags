@@ -6,6 +6,7 @@ ezdap-breakpoints	ezdap.txt	/*ezdap-breakpoints*
 ezdap-commands	ezdap.txt	/*ezdap-commands*
 ezdap-config	ezdap.txt	/*ezdap-config*
 ezdap-custom-adapters	ezdap.txt	/*ezdap-custom-adapters*
+ezdap-debug-view	ezdap.txt	/*ezdap-debug-view*
 ezdap-health	ezdap.txt	/*ezdap-health*
 ezdap-inline-values	ezdap.txt	/*ezdap-inline-values*
 ezdap-inputs	ezdap.txt	/*ezdap-inputs*
@@ -14,7 +15,6 @@ ezdap-installation	ezdap.txt	/*ezdap-installation*
 ezdap-keymaps	ezdap.txt	/*ezdap-keymaps*
 ezdap-license	ezdap.txt	/*ezdap-license*
 ezdap-lua-api	ezdap.txt	/*ezdap-lua-api*
-ezdap-output	ezdap.txt	/*ezdap-output*
 ezdap-panel	ezdap.txt	/*ezdap-panel*
 ezdap-persistence	ezdap.txt	/*ezdap-persistence*
 ezdap-popup-menu	ezdap.txt	/*ezdap-popup-menu*

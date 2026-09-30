@@ -15,8 +15,8 @@ Table of Contents                                    *ezdap-table-of-contents*
   - From Lua                                                   |ezdap-lua-api|
 6. Breakpoints                                             |ezdap-breakpoints|
 7. The debug UI                                                     |ezdap-ui|
-  - Debug panel                                                  |ezdap-panel|
-  - Output window                                               |ezdap-output|
+  - Debug view                                              |ezdap-debug-view|
+  - The panel                                                    |ezdap-panel|
   - Inline variable values                               |ezdap-inline-values|
   - Run buffers                                            |ezdap-run-buffers|
   - Inspect, disassembly & REPL                           |ezdap-inspect-repl|
@@ -67,7 +67,7 @@ Native packages / vim.pack ~
       "https://github.com/mbfoss/ezdap-adapters.nvim",  -- ready-made adapter definitions
     })
     
-    require("ezdap").setup({})                     -- required; pass options here
+    require("ezdap").setup({}) -- required; pass options here
 <
 
 lazy.nvim ~
@@ -76,15 +76,13 @@ lazy.nvim ~
     {
       "mbfoss/ezdap.nvim",
       dependencies = { "mbfoss/ezdap-adapters.nvim" },  -- ready-made adapter definitions
-      opts = {},                                   -- required; passed to require("ezdap").setup()
+      opts = {}, -- required; passed to require("ezdap").setup()
     }
 <
 
 `setup()` is the one call you have to make: it applies your options, registers
 the `:Ezdap` command and installs the persistence autocmds. `setup({})` with no
-options is fine, and everything left out keeps its default. Nothing beyond that
-is built until you debug: the first `:Ezdap` invocation or API call brings up
-the rest, as does a project with saved breakpoints to restore.
+options is fine, and everything left out keeps its default.
 
 
 ==============================================================================
@@ -112,7 +110,7 @@ Set a breakpoint on the current line and step through the program:
     :Ezdap step_over           " step over the current line
 <
 
-The debug panel opens automatically when a session starts, showing the call
+The debug view opens automatically when a session starts, showing the call
 stack, variables and breakpoints. See |ezdap-ui| and
 |ezdap-keymaps| for a convenient setup.
 
@@ -248,11 +246,6 @@ Everything above is available programmatically:
     ezdap.run_mode("debugpy", "script", { command = "./main.py" })
     ezdap.run_file("debug.lua")
     ezdap.rerun()
-    
-    -- Adapters
-    ezdap.available_adapters() -- Available adapter names, (inlcuding unloaded).
-                               -- Honours `enabled_adapters`.
-    local adapters = require("ezdap.adapters") -- loaded adapters
 <
 
 
@@ -314,15 +307,15 @@ disabled, exception). The full list of subcommands is in the
 7. The debug UI                                                     *ezdap-ui*
 
 
-DEBUG PANEL                                                      *ezdap-panel*
+DEBUG VIEW                                                  *ezdap-debug-view*
 
-The main panel is a tree of **sessions → threads → stack frames → scopes
+The debug view is a tree of **sessions → threads → stack frames → scopes
 → variables**, plus **watch expressions** and **breakpoints**. It opens
 automatically when a session starts; open or focus it any time with `:Ezdap`
 (or `:Ezdap view`). `:Ezdap view hide` closes it, and `:Ezdap view toggle` does
 one or the other.
 
-Inside the panel:
+Inside the view:
 
   -------------------------------------------------------------------------
   Key    Action
@@ -352,14 +345,14 @@ Inside the panel:
   zC     
   -------------------------------------------------------------------------
 
-OUTPUT WINDOW                                                   *ezdap-output*
+THE PANEL                                                        *ezdap-panel*
 
 A run spawns several buffers: Terminal, Output, REPL, its progress Log, DAP
-messages. They share one bottom split, which holds whichever of them ranks
-highest: Terminal over Output, Output over REPL, REPL over Log. It opens on the
-run’s first buffer, follows along as higher-priority buffers appear or the
-shown one is deleted, and closes with the run’s last buffer. `:Ezdap output`
-toggles it; `panel_auto_open` and `panel_height_ratio` adjust it.
+messages. They share one bottom split, the panel, which holds whichever of them
+ranks highest: Terminal over Output, Output over REPL, REPL over Log. It opens
+on the run’s first buffer, follows along as higher-priority buffers appear or
+the shown one is deleted, and closes with the run’s last buffer. `:Ezdap
+panel` toggles it; `panel_auto_open` and `panel_height_ratio` adjust it.
 
 Each run keeps its own log, `ezdap://<run>-log`, wiped with the run, rather
 than appending to a shared one, so parallel runs never interleave. Any of a
@@ -475,14 +468,14 @@ Pass options to `setup()`. Defaults when `setup({})` is called are:
       antiflicker_delay   = 200,
       -- Max lines kept in Output / DAP-message buffers (0 = unlimited).
       output_max_lines    = 10000,
-      -- Open the bottom output window as soon as a run registers a buffer.
+      -- Open the panel as soon as a run registers a buffer.
       panel_auto_open = true,
-      -- Height of the bottom output window, as a fraction of the editor.
+      -- Height of the panel, as a fraction of the editor.
       panel_height_ratio = 0.25,
-      -- Width of the debug panel on first open, as a fraction of the
+      -- Width of the debug view on first open, as a fraction of the
       -- editor's columns.
       debug_view_width_ratio = 0.2,
-      -- Side the debug panel splits off on: "left" | "right".
+      -- Side the debug view splits off on: "left" | "right".
       debug_view_position = "left",
     
       -- Inline value placement: "inline" | "eol" | "eol_right_align"
@@ -503,7 +496,7 @@ Pass options to `setup()`. Defaults when `setup({})` is called are:
       -- live (see Right-click menu).
       popup_menu          = true,
     
-      -- Glyphs for each debug state, in the gutter and in the panels alike.
+      -- Glyphs for each debug state, in the gutter and the debug view alike.
       symbols = {
         debug_frame              = "▶",   -- current execution position
         active_breakpoint        = "●",   -- enabled + verified
@@ -526,7 +519,7 @@ Pass options to `setup()`. Defaults when `setup({})` is called are:
 10. Command reference                                         *ezdap-commands*
 
 Everything is under the `:Ezdap` command, with completion for every subcommand.
-Bare `:Ezdap`, with no subcommand, opens the debug panel.
+Bare `:Ezdap`, with no subcommand, opens the debug view.
 
 To use another name such as `:Debug`, define a command that forwards its
 arguments and completion to `:Ezdap`.
@@ -551,11 +544,11 @@ arguments and completion to `:Ezdap`.
 
   rerun                           Re-launch the most recent run
 
-  (none) / view                   Open/focus the debug panel
+  (none) / view                   Open/focus the debug view
 
-  view toggle / view hide         Close the panel if open / close it
+  view toggle / view hide         Close the debug view if open / close it
 
-  output                          Toggle the bottom output window
+  panel                           Toggle the panel
 
   continue / continue_all         Continue the active / every session
 

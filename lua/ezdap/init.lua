@@ -249,7 +249,7 @@ end
 local _view_subs = { "toggle", "hide" }
 
 ---Run the `view` subcommand: bare `:Ezdap view` opens (or focuses) the debug
----panel, so it never closes a panel the user asked for; `toggle` and `hide` are
+---view, so it never closes a view the user asked for; `toggle` and `hide` are
 ---the explicit ways to close it.
 ---@param args string[]
 local function _view_cmd(args)
@@ -269,7 +269,7 @@ end
 local _debug_subs = {
     "run", "run_file", "new_run_file", "rerun", "adapter_info",
     "breakpoint",
-    "view", "output", "continue", "continue_all",
+    "view", "panel", "continue", "continue_all",
     "step_over", "next", "step_in", "step_out", "step_back",
     "step_into_targets", "reverse_continue",
     "jump_to_cursor", "restart_frame", "exception_info",
@@ -308,8 +308,8 @@ end
 local function _debug_run(_, args, opts)
     local cmd = _cmd()
     local sub = args[1]
-    -- Bare `:Ezdap` opens the debug panel: the one thing that is useful at any
-    -- point, session or not, and the way in for everything the panel offers.
+    -- Bare `:Ezdap` opens the debug view: the one thing that is useful at any
+    -- point, session or not, and the way in for everything the view offers.
     if sub == nil or sub == "" then
         cmd.view.open()
     elseif sub == "run_file" then
@@ -325,8 +325,8 @@ local function _debug_run(_, args, opts)
         M.rerun()
     elseif sub == "view" then
         _view_cmd({ unpack(args, 2) })
-    elseif sub == "output" then
-        cmd.view.output_toggle()
+    elseif sub == "panel" then
+        cmd.panel.toggle()
     elseif sub == "continue" then
         cmd.debug.continue()
     elseif sub == "continue_all" then
@@ -535,9 +535,9 @@ local function _init()
     require("ezdap.ui.debugline_ui").init()
     require("ezdap.ui.inlinevars").enable()
     require("ezdap.ui.popup_menu").init()
-    -- The one place picking a run panel: ezdap's bottom split, which shows a
+    -- The one place picking the panel: ezdap's bottom split, which shows a
     -- run's highest-priority buffer.
-    local panel = require("ezdap.ui.output_win")
+    local panel = require("ezdap.ui.Panel")
     panel.init()
 
     -- Every run ezdap owns is shown through `run_display`, onto that panel.
@@ -718,7 +718,7 @@ end
 ---either authoring form. The entry point behind `:Ezdap run`.
 ---
 ---Pass a `presenter` to show the run in a UI of your own: the run's buffers,
----progress and outcome go to those callbacks, ezdap's own panels never see it, and
+---progress and outcome go to those callbacks, ezdap's own panel never sees it, and
 ---the run is yours to `remove_run` when you are done with it.
 ---@param adapter string  adapter name, e.g. "debugpy"
 ---@param mode string  mode name, e.g. "binary"

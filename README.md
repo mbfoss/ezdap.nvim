@@ -12,7 +12,7 @@ speaks DAP.
 
 - **Breakpoints**: line, conditional, hit-count, logpoint, column, function,
   exception (filters and named types), and data breakpoints / watchpoints.
-- **Debug panel**: one side window with sessions, threads, call stacks, scopes,
+- **Debug view**: one side window with sessions, threads, call stacks, scopes,
   variables, watch expressions and breakpoints in a single tree.
 - **Inline variable values**: values shown in the source while stopped, in
   several placements (requires a treesitter parser).
@@ -134,7 +134,7 @@ Set a breakpoint on the current line and step through the program:
 :Ezdap step_over           " step over the current line
 ```
 
-The debug panel opens automatically when a session starts, showing the call
+The debug view opens automatically when a session starts, showing the call
 stack, variables and breakpoints. See [The debug UI](#the-debug-ui) and
 [Keymaps example](#keymaps-example) for a convenient setup.
 
@@ -315,15 +315,15 @@ logpoint, disabled, exception). The full list of subcommands is in the
 
 ## The debug UI <!-- tag: ui -->
 
-### Debug panel <!-- tag: panel -->
+### Debug view <!-- tag: debug-view -->
 
-The main panel is a tree of **sessions → threads → stack frames → scopes →
+The debug view is a tree of **sessions → threads → stack frames → scopes →
 variables**, plus **watch expressions** and **breakpoints**. It opens
 automatically when a session starts; open or focus it any time with
 `:Ezdap` (or `:Ezdap view`). `:Ezdap view hide` closes it, and
 `:Ezdap view toggle` does one or the other.
 
-Inside the panel:
+Inside the view:
 
 | Key   | Action                                                                       |
 | ----- | ---------------------------------------------------------------------------- |
@@ -337,14 +337,14 @@ Inside the panel:
 | `g?`  | Show this keymap cheatsheet                                                  |
 | `zo` `zc` `za` `zO` `zC` | Fold controls (expand / collapse / toggle / all)          |
 
-### Output window <!-- tag: output -->
+### The panel <!-- tag: panel -->
 
 A run spawns several buffers: Terminal, Output, REPL, its progress Log, DAP
-messages. They share one bottom split, which holds whichever of them ranks
-highest: Terminal over Output, Output over REPL, REPL over Log. It opens on the
-run's first buffer, follows along as higher-priority buffers appear or the shown
-one is deleted, and closes with the run's last buffer. `:Ezdap output` toggles
-it; `panel_auto_open` and `panel_height_ratio` adjust it.
+messages. They share one bottom split, the panel, which holds whichever of them
+ranks highest: Terminal over Output, Output over REPL, REPL over Log. It opens
+on the run's first buffer, follows along as higher-priority buffers appear or
+the shown one is deleted, and closes with the run's last buffer. `:Ezdap panel`
+toggles it; `panel_auto_open` and `panel_height_ratio` adjust it.
 
 Each run keeps its own log, `ezdap://<run>-log`, wiped with the run, rather
 than appending to a shared one, so parallel runs never interleave. Any of a
@@ -452,14 +452,14 @@ require("ezdap").setup({
   antiflicker_delay   = 200,
   -- Max lines kept in Output / DAP-message buffers (0 = unlimited).
   output_max_lines    = 10000,
-  -- Open the bottom output window as soon as a run registers a buffer.
+  -- Open the panel as soon as a run registers a buffer.
   panel_auto_open = true,
-  -- Height of the bottom output window, as a fraction of the editor.
+  -- Height of the panel, as a fraction of the editor.
   panel_height_ratio = 0.25,
-  -- Width of the debug panel on first open, as a fraction of the
+  -- Width of the debug view on first open, as a fraction of the
   -- editor's columns.
   debug_view_width_ratio = 0.2,
-  -- Side the debug panel splits off on: "left" | "right".
+  -- Side the debug view splits off on: "left" | "right".
   debug_view_position = "left",
 
   -- Inline value placement: "inline" | "eol" | "eol_right_align"
@@ -480,7 +480,7 @@ require("ezdap").setup({
   -- live (see Right-click menu).
   popup_menu          = true,
 
-  -- Glyphs for each debug state, in the gutter and in the panels alike.
+  -- Glyphs for each debug state, in the gutter and the debug view alike.
   symbols = {
     debug_frame              = "▶",   -- current execution position
     active_breakpoint        = "●",   -- enabled + verified
@@ -501,7 +501,7 @@ require("ezdap").setup({
 ## Command reference <!-- tag: commands -->
 
 Everything is under the `:Ezdap` command, with completion for every subcommand.
-Bare `:Ezdap`, with no subcommand, opens the debug panel.
+Bare `:Ezdap`, with no subcommand, opens the debug view.
 
 To use another name such as `:Debug`, define a command that forwards its
 arguments and completion to `:Ezdap`.
@@ -521,9 +521,9 @@ vim.api.nvim_create_user_command("Debug", function(o) vim.cmd("Ezdap " .. o.args
 | `new_run_file …`      | Generate a run file from a mode's inputs        |
 | `adapter_info [adapter] [mode]` | Report an adapter's modes, inputs and tooling |
 | `rerun`               | Re-launch the most recent run                     |
-| *(none)* / `view`     | Open/focus the debug panel                        |
-| `view toggle` / `view hide` | Close the panel if open / close it            |
-| `output`              | Toggle the bottom output window                   |
+| *(none)* / `view`     | Open/focus the debug view                         |
+| `view toggle` / `view hide` | Close the debug view if open / close it       |
+| `panel`               | Toggle the panel                                  |
 | `continue` / `continue_all` | Continue the active / every session         |
 | `step_over` (`next`) / `step_in` / `step_out` | Stepping             |
 | `step_into_targets`   | Pick a call target to step into                   |

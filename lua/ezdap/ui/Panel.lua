@@ -1,7 +1,7 @@
----@brief The single bottom split that shows a run's buffer: the run panel.
+---@brief The single bottom split that shows a run's buffer: the panel.
 ---
 ---A run spawns several buffers (Terminal, Output, REPL, adapter log, DAP
----messages); this `ezdap.ui.RunPanel` registers each with a priority and the
+---messages); this `ezdap.ui.Panel` registers each with a priority and the
 ---window holds the highest-priority live one. One window is reused for all of
 ---them: registering a buffer swaps the occupant rather than opening a second
 ---split.
@@ -15,17 +15,17 @@ local config       = require("ezdap.config").current
 
 local M            = {}
 
----Whether this window is the run panel in play, established by `init`. Everything
----below is inert until then, so `:Ezdap output` before `setup` does nothing.
+---Whether this window is the panel in play, established by `init`. Everything
+---below is inert until then, so `:Ezdap panel` before `setup` does nothing.
 local _enabled     = false
 
 ---One buffer a run registered for display, as passed to `ezdap.AddBufOpts`.
----@class ezdap.ui.output_win.Entry
+---@class ezdap.ui.Panel.Entry
 ---@field bufnr    integer
 ---@field priority integer
 ---@field seq      integer  registration order; breaks priority ties toward the newest
 
----@type ezdap.ui.output_win.Entry[]
+---@type ezdap.ui.Panel.Entry[]
 local _entries     = {}
 local _seq         = 0
 
@@ -45,7 +45,7 @@ local _closed_with = nil
 ---@type number?
 local _ratio       = nil
 
-local _augroup     = vim.api.nvim_create_augroup("ezdap.output_win", { clear = true })
+local _augroup     = vim.api.nvim_create_augroup("ezdap.Panel", { clear = true })
 
 local _win_setlocal = ui_util.win_setlocal
 
@@ -65,7 +65,7 @@ end
 ---them when several share a priority.
 ---@return integer?  bufnr
 local function _target()
-    local best ---@type ezdap.ui.output_win.Entry?
+    local best ---@type ezdap.ui.Panel.Entry?
     for _, e in ipairs(_entries) do
         if not best or e.priority > best.priority
             or (e.priority == best.priority and e.seq > best.seq) then
@@ -255,9 +255,9 @@ function M.winid()
     return _open_win()
 end
 
----The RunPanel interface: one window for all runs, so which run a buffer came
----from does not matter here: it ranks against every other run's buffers, and a
----run's identity and outcome have nowhere to show.
+---One window for all runs, so which run a buffer came from does not matter
+---here: it ranks against every other run's buffers, and a run's identity and
+---outcome have nowhere to show.
 ---@param _run ezdap.runner.Run
 ---@param bufnr integer
 ---@param opts ezdap.AddBufOpts

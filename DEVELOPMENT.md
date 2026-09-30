@@ -95,12 +95,12 @@ its only path to the DAP layer.
   handed a `runner.Presenter` that takes its buffers, progress and outcome;
   nothing here knows about windows.
 - [run_display.lua](lua/ezdap/ui/run_display.lua): the presenter ezdap's own
-  runs get. `for_panel` closes it over one `ui.RunPanel`
-  ([output_win.lua](lua/ezdap/ui/output_win.lua)) and `setup` installs
+  runs get. `for_panel` closes it over one `ui.Panel`
+  ([Panel.lua](lua/ezdap/ui/Panel.lua)) and `setup` installs
   the result on the runner. It makes the run's log buffer, holds the buffers the
   run spawned so `clean` can wipe them, and forwards all of it to that panel. A
   caller passing a `runner.Presenter` of its own (as tomltasks' `debug` task
-  type does) replaces this module for that run: ezdap's panels never see it,
+  type does) replaces this module for that run: ezdap's own panel never sees it,
   `clean` does not touch it, and it leaves ezdap through `remove_run`.
 - [inputs.lua](lua/ezdap/inputs.lua): the input registry. `M.types` holds one
   row per scalar type, stating every way it is read (parsed from a command line,
@@ -125,10 +125,10 @@ helper. The project root is the nearest ancestor of the cwd holding a
 store knows nothing about *what* is stored: the lifecycle (autocmds, path
 conversion at the persistence seam) lives in [init.lua](lua/ezdap/init.lua).
 
-**UI**: [lua/ezdap/ui/](lua/ezdap/ui/) `DebugView.lua` (the main tree panel,
+**UI**: [lua/ezdap/ui/](lua/ezdap/ui/) `DebugView.lua` (the main tree view,
 built on `TreeBuffer`), plus `DisassemblyView`, `InspectView`, `ReplBuffer`,
-`OutputBuffer`, the run display (`run_display`) and its run panel
-(`output_win`), shared presentation (`format`, `value_hover`,
+`OutputBuffer`, the run display (`run_display`) and its panel
+(`Panel`), shared presentation (`format`, `value_hover`,
 `node_details`) and the sign/inline-value modules (`breakpoints_ui`,
 `debugline_ui`, `inlinevars`, `expressions`).
 
