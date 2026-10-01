@@ -285,9 +285,17 @@ local function _sealed(kind, out)
     return out
 end
 
----Split a collection's string form on its separating commas. `\,` is a literal
----comma in an entry; every other backslash is part of the value, since these
----entries are paths and command lines.
+---Every escape a collection's string form recognizes, and what each stands for:
+---the separators a value might need to contain literally, a newline, and the
+---backslash itself.
+---@type table<string, string>
+local _escapes = { [","] = ",", n = "\n", ["="] = "=", ["\\"] = "\\" }
+
+---Split a collection's string form on its entry separators: a comma or a raw
+---newline, so a list may be spread over several lines. A backslash escapes the
+---character after it when that one is of `_escapes`; before anything else it is no
+---escape and stands on its own. Escapes are left in place — `_unescape` resolves
+---them once an entry's extent is known.
 ---@param raw string
 ---@return string[]
 local function _split_entries(raw)
@@ -298,11 +306,11 @@ local function _split_entries(raw)
         entry = {}
     end
     while i <= #raw do
-        local c = raw:sub(i, i)
-        if c == "\\" and raw:sub(i + 1, i + 1) == "," then
-            entry[#entry + 1] = ","
+        local c, next_c = raw:sub(i, i), raw:sub(i + 1, i + 1)
+        if c == "\\" and _escapes[next_c] then
+            entry[#entry + 1] = c .. next_c
             i = i + 2
-        elseif c == "," then
+        elseif c == "," or c == "\n" or c == "\r" then
             flush()
             i = i + 1
         else
@@ -314,25 +322,73 @@ local function _split_entries(raw)
     return entries
 end
 
----Read a collection's string form: comma-separated entries, each element kept
----whole so it may contain spaces (a full LLDB command line), and each `key=value`
----for a `map`: environment variables, source-path remappings.
+---Resolve the escapes an entry, or a map's key, still carries: a backslash before
+---one of `_escapes` is that character, before anything else it is literal, kept
+---with what follows it.
+---@param text string
+---@return string
+local function _unescape(text)
+    return (text:gsub("\\(.)", function(c) return _escapes[c] or ("\\" .. c) end))
+end
+
+---Where a map entry's key ends: the first `=` that is not itself escaped, so a key
+---may contain a literal `=` as `\=`. Nil when the entry has no divider at all.
+---@param entry string
+---@return integer? at
+local function _divider(entry)
+    local i = 1
+    while i <= #entry do
+        local c = entry:sub(i, i)
+        if c == "\\" then
+            i = i + 2
+        elseif c == "=" then
+            return i
+        else
+            i = i + 1
+        end
+    end
+end
+
+---Where an entry ends: the last comma or raw newline in `text` that is not itself
+---escaped. Nil when the whole of `text` is one entry.
+---@param text string
+---@return integer? at
+local function _last_separator(text)
+    local at, i = nil, 1
+    while i <= #text do
+        local c = text:sub(i, i)
+        if c == "\\" then
+            i = i + 2
+        elseif c == "," or c == "\n" or c == "\r" then
+            at = i
+            i = i + 1
+        else
+            i = i + 1
+        end
+    end
+    return at
+end
+
+---Read a collection's string form: entries separated by commas or newlines, each
+---element kept whole so it may contain spaces (a full LLDB command line), and each
+---`key=value` for a `map`: environment variables, source-path remappings.
 ---@param r ezdap.inputs.Resolved  its `def` reads one entry
 ---@param raw string
 ---@return table? value, string? err
 local function _parse_collection(r, raw)
+    local entries = _split_entries(raw)
     local out = {}
-    for _, entry in ipairs(_split_entries(raw)) do
+    for _, entry in ipairs(entries) do
         local key, text = nil, entry
         if r.kind == "map" then
-            local eq = entry:find("=", 1, true)
+            local eq = _divider(entry)
             if not eq then
                 return nil, ("expected KEY=VALUE pairs, got %q"):format(entry)
             end
-            key, text = entry:sub(1, eq - 1), entry:sub(eq + 1)
+            key, text = _unescape(entry:sub(1, eq - 1)), entry:sub(eq + 1)
         end
-        local value, err = _parse_scalar(r, text)
-        if err then return nil, err end
+        local value, perr = _parse_scalar(r, _unescape(text))
+        if perr then return nil, perr end
         if key then out[key] = value else out[#out + 1] = value end
     end
     return _sealed(r.kind, out)
@@ -414,18 +470,21 @@ function M.seed(input)
 end
 
 ---The part of a collection's string form a value completes: everything before it
----is kept, everything after is what was typed. A comma starts a fresh entry, and in
----a `map` the value follows that entry's `=`; until it is typed, there is no value.
+---is kept, everything after is what was typed. An unescaped comma or raw newline
+---starts a fresh entry, and in a `map` the value follows that entry's unescaped
+---`=`; until it is typed, there is no value.
 ---@param kind "list"|"map"|nil
 ---@param partial string
 ---@return string? head, string? tail  nil when what is being typed is a map's key
 local function _entry_at(kind, partial)
     if not kind then return "", partial end
-    local head = partial:match("^.*,") or ""
+    local at = _last_separator(partial)
+    local head = at and partial:sub(1, at) or ""
     if kind == "map" then
-        local key = partial:sub(#head + 1):match("^[^=]*=")
-        if not key then return nil, nil end
-        head = head .. key
+        local tail = partial:sub(#head + 1)
+        local eq = _divider(tail)
+        if not eq then return nil, nil end
+        head = head .. tail:sub(1, eq)
     end
     return head, partial:sub(#head + 1)
 end

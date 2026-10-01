@@ -183,13 +183,16 @@ run file.
 :Ezdap run <adapter> <mode> [input=value ...]
 ```
 
-Arguments split on whitespace (`:h <f-args>`): quotes are *not* special, and a
-value containing a space is written with a backslash, as in `:Ezdap run debugpy
-script command=./main.py\ --verbose cwd=/tmp/my\ project`.
+Arguments split on whitespace: quotes are *not* special, and a value containing a
+space is written `\ `, as in `:Ezdap run debugpy script command=./main.py\
+--verbose cwd=/tmp/my\ project`. Splitting reads only that whitespace escape; every
+other backslash is left for the input's own reading, below.
 
 On the command line a `list` or `map` input is one token: entries separated by
-commas, each entry `KEY=VALUE` for a map. Escape a comma inside an entry as
-`\,`, and a space as `\ `:
+commas or newlines, each entry `KEY=VALUE` for a map. Escape a comma inside an
+entry as `\,`, a newline as `\n`, an `=` as `\=`, and a backslash as `\\`. Any
+other backslash is taken literally, kept with the character that follows it. A
+plain (`string`) input reads its value as typed, so a single `\` is one backslash:
 
 ```vim
 :Ezdap run gdb binary command=./app env=RUST_LOG=debug,NO_COLOR=1

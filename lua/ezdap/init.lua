@@ -1,5 +1,7 @@
 local M = {}
 
+local COMMAND = "Ezdap"
+
 ---@type ezdap.DebugView?
 local _debug_view
 ---@type ezdap.DisassemblyView?
@@ -293,14 +295,28 @@ local _debug_subs = {
     "project", "clean",
 }
 
----Read `:Ezdap run <adapter> <mode> [input=value]…`: the adapter and mode are
----strictly the first two positionals, every later token an `input=value` assignment
----naming one of the mode's declared inputs. The names are checked where the inputs
----are read (`schema.resolve_task`), so a typo is refused the same way here, from a
----run file and through the API.
----@param args string[]  the command-line tokens from the adapter on
+---The tokens of the run line from the adapter on: everything after the `run`
+---subcommand itself. Split by `usercmd`'s rules, not Neovim's, so a value's own
+---backslashes reach the input parser intact.
+---@param raw string  the run line as typed, `run` and all
+---@return string[]
+local function _run_tokens(raw)
+    local toks = require("ezdap.util.usercmd").split_args(raw)
+    for i, tok in ipairs(toks) do
+        if tok == "run" then return { unpack(toks, i + 1) } end
+    end
+    return toks
+end
+
+---Read `:Ezdap run <adapter> <mode> [input=value]…` from the run line as typed: the
+---adapter and mode are strictly the first two positionals, every later token an
+---`input=value` assignment naming one of the mode's declared inputs. The names are
+---checked where the inputs are read (`schema.resolve_task`), so a typo is refused
+---the same way here, from a run file and through the API.
+---@param raw string  the run line as typed, `run` and all
 ---@return string? adapter, string? mode, table<string, string>? inputs
-local function _parse_run_args(args)
+local function _parse_run_args(raw)
+    local args = _run_tokens(raw)
     local adapter, mode = args[1], args[2]
     if (adapter and adapter:find("=", 1, true)) or (mode and mode:find("=", 1, true)) then
         vim.notify("[ezdap] run: usage: :Ezdap run <adapter> <mode> [input=value]…",
@@ -320,7 +336,6 @@ local function _parse_run_args(args)
     return adapter, mode, inputs
 end
 
----@type ezdap.util.usercmd.run_fn
 local function _debug_run(_, args, opts)
     local cmd = _cmd()
     local sub = args[1]
@@ -331,7 +346,7 @@ local function _debug_run(_, args, opts)
     elseif sub == "run_file" then
         M.run_file(args[2])
     elseif sub == "run" then
-        local adapter, mode, inputs = _parse_run_args({ unpack(args, 2) })
+        local adapter, mode, inputs = _parse_run_args(opts.args or "")
         if inputs then M.run_mode(adapter or "", mode or "", inputs) end
     elseif sub == "new_run_file" then
         M.new_run_file({ unpack(args, 2) })
@@ -404,13 +419,13 @@ end
 ---then the mode name (2nd), then input names not yet supplied (as `name=`),
 ---or a value once `=` has been typed (file paths for a path-like input).
 ---@param schema table
----@param used string[]     already-typed tokens preceding the one being completed
+---@param raw string        the run line as typed, up to the token being completed
 ---@param arg_lead string   the token being completed
 ---@return string[]
-local function _run_complete(schema, used, arg_lead)
+local function _run_complete(schema, raw, arg_lead)
     local adapter, mode_name
     local supplied = {}
-    for _, tok in ipairs(used) do
+    for _, tok in ipairs(_run_tokens(raw)) do
         local e = tok:find("=", 1, true)
         if e then
             supplied[tok:sub(1, e - 1)] = true
@@ -447,9 +462,11 @@ local function _run_complete(schema, used, arg_lead)
     return out
 end
 
----Completion for `:Ezdap …`.
+---Completion for `:Ezdap …`. `raw` is the line as typed up to the token being
+---completed, for the subcommands that split their arguments themselves.
+---@param raw string
 ---@type ezdap.util.usercmd.subcommand
-local function _debug_complete_subs(_, rest, arg_lead)
+local function _debug_complete_subs(_, rest, arg_lead, raw)
     if #rest == 0 then return _debug_subs end
     if rest[1] == "breakpoint" then
         return _bp_complete({ unpack(rest, 2) })
@@ -461,9 +478,10 @@ local function _debug_complete_subs(_, rest, arg_lead)
         return vim.fn.getcompletion(arg_lead, "file")
     end
     if rest[1] == "run" then
-        -- <adapter> <mode> <input>=<value>…
+        -- <adapter> <mode> <input>=<value>…, split from the raw line so a value
+        -- keeps the backslashes its own parser reads.
         local schema = require("ezdap.schema")
-        return _run_complete(schema, { unpack(rest, 2) }, arg_lead)
+        return _run_complete(schema, raw, arg_lead)
     end
     if rest[1] == "adapter_info" then
         -- Positional: [adapter] [mode]; no argument lists every adapter name.
@@ -490,16 +508,15 @@ end
 
 ---Run a `:Ezdap …` invocation. Only reachable once `setup()` has registered the
 ---command.
----@type ezdap.util.usercmd.run_fn
-function M.command(cmd, args, opts)
+local function _command(cmd, args, opts)
     _require_setup("command")
     _debug_run(cmd, args, opts)
 end
 
 ---Completion for `:Ezdap …`.
 ---@type ezdap.util.usercmd.subcommand
-function M.complete(cmd, rest, arg_lead)
-    return _debug_complete_subs(cmd, rest, arg_lead)
+function M.complete(cmd, rest, arg_lead, raw)
+    return _debug_complete_subs(cmd, rest, arg_lead, raw)
 end
 
 -- Autocmd handlers. `setup()` creates the autocmds, so these fire from then
@@ -798,11 +815,6 @@ function M.project_info()
     vim.api.nvim_echo(chunks, false, {})
 end
 
--- The canonical command. Hardcoded on purpose: every message, every doc line
--- and every `:help` reference can name it outright, and nothing has to be
--- deferred or re-registered to get the name right.
-local COMMAND = "Ezdap"
-
 ---Register `:Ezdap`. A name someone else holds is never taken silently: it is
 ---left alone with a warning.
 local function _register_command()
@@ -812,17 +824,21 @@ local function _register_command()
         return
     end
     vim.api.nvim_create_user_command(COMMAND, function(opts)
-        require("ezdap.util.usercmd").handle(opts, function(cmd, args, cmd_opts)
-            return M.command(cmd, args, cmd_opts)
-        end)
+        -- Report an error as a notification rather than a stack trace. nargs="*"
+        -- always yields fargs; the fallback only satisfies its optional type.
+        local ok, err = pcall(_command, opts.name, opts.fargs or {}, opts)
+        if not ok then
+            vim.notify("[ezdap] " .. opts.name .. " command error\n" .. tostring(err),
+                vim.log.levels.ERROR)
+        end
     end, {
         nargs = "*",
         range = true,
         desc = "ezdap commands",
-        complete = function(arg_lead, cmd_line, _)
-            return require("ezdap.util.usercmd").complete(arg_lead, cmd_line,
-                function(cmd, rest, lead)
-                    return M.complete(cmd, rest, lead)
+        complete = function(arg_lead, cmd_line, cursorpos)
+            return require("ezdap.util.usercmd").complete(arg_lead, cmd_line, cursorpos,
+                function(cmd, rest, lead, raw)
+                    return M.complete(cmd, rest, lead, raw)
                 end)
         end,
     })
