@@ -135,7 +135,7 @@ local function _warn_unknown(sub, subs, prefix)
 end
 
 local _bp_subs = {
-    "toggle", "set", "remove",
+    "toggle", "set", "column", "remove",
     "clear_file", "clear_all", "clear_fn",
     "enable", "disable", "toggle_enabled", "enable_all", "disable_all",
     "condition", "logpoint",
@@ -149,9 +149,11 @@ local _BP_SET_KEYS = {
     col = "column", cond = "condition", hit = "hit_condition", log = "log_message",
 }
 
----Read `:Ezdap breakpoint set [col=here|pick|N] [cond=…] [hit=…] [log=…]`. Values are
+---Read `:Ezdap breakpoint set [col=N] [cond=…] [hit=…] [log=…]`. Values are
 ---split by Vim's rules, so escape any space (`cond=x\ >\ 3`); an empty value clears
----the field. No arguments at all sets a plain line breakpoint at the cursor.
+---the field. `col=` takes a column number — the word under the cursor and the
+---adapter-offered columns are `:Ezdap breakpoint column`. No arguments at all sets
+---a plain line breakpoint at the cursor.
 ---@param args string[]
 ---@return ezdap.command.BpSetOpts?
 local function _parse_bp_set_args(args)
@@ -162,6 +164,12 @@ local function _parse_bp_set_args(args)
         if not field then
             vim.notify("[ezdap] breakpoint set: expected col=/cond=/hit=/log=, got '" .. tok .. "'",
                 vim.log.levels.WARN)
+            return
+        end
+        if field == "column" and not tonumber(value) then
+            vim.notify("[ezdap] breakpoint set: col= takes a column number; "
+                .. "use :Ezdap breakpoint column [pick] for the word under the cursor "
+                .. "or an adapter-offered column", vim.log.levels.WARN)
             return
         end
         opts[field] = value
@@ -183,6 +191,8 @@ local function _bp_run(args)
     elseif sub == "set" then
         local set_opts = _parse_bp_set_args({ unpack(args, 2) })
         if set_opts then cmd.breakpoint.set(set_opts) end
+    elseif sub == "column" then
+        cmd.breakpoint.column(args[2])
     elseif sub == "remove" then
         cmd.breakpoint.remove()
     elseif sub == "clear_file" then
@@ -230,7 +240,10 @@ end
 local function _bp_complete(rest)
     if #rest == 0 then return _bp_subs end
     if rest[1] == "set" then
-        return { "cond=", "hit=", "log=", "col=", "col=here", "col=pick" }
+        return { "cond=", "hit=", "log=", "col=" }
+    end
+    if rest[1] == "column" and #rest == 1 then
+        return { "pick" }
     end
     if rest[1] == "fn" and #rest == 1 then
         return vim.tbl_map(function(bp) return bp.name end,

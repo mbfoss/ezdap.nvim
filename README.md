@@ -274,8 +274,9 @@ sessions.
 :Ezdap breakpoint condition     " condition + hit condition (prompts)
 :Ezdap breakpoint logpoint      " logpoint (prompts for log message)
 :Ezdap breakpoint set cond=x>3  " conditional breakpoint
-:Ezdap breakpoint set col=here  " column bp at the word under the cursor
-:Ezdap breakpoint set col=pick  " column breakpoint, pick a valid column
+:Ezdap breakpoint set col=42    " column breakpoint at column 42
+:Ezdap breakpoint column        " column bp at the word under the cursor
+:Ezdap breakpoint column pick   " column breakpoint, pick a valid column
 :Ezdap breakpoint fn <name>     " function breakpoint by name
 :Ezdap breakpoint data          " watchpoint on a variable/expression
 :Ezdap breakpoint list          " fuzzy-pick and jump to any breakpoint
@@ -283,11 +284,15 @@ sessions.
 :Ezdap breakpoint exception_type <name> [mode]  " named exception type
 ```
 
-`set` is the non-interactive form: `col=` takes a column number, `here` (the
-word under the cursor) or `pick` (choose among the columns the adapter reports
-as valid), and `cond=`/`hit=`/`log=` write the condition, hit condition and log
-message. Values are split by Vim's rules, so escape spaces (`cond=x\ >\ 3`), and
-an empty value clears a field.
+`set` is the non-interactive form: `col=` takes a column number, and
+`cond=`/`hit=`/`log=` write the condition, hit condition and log message. Values
+are split by Vim's rules, so escape spaces (`cond=x\ >\ 3`), and an empty value
+clears a field.
+
+`column` places a column breakpoint at the cursor. Bare, it uses the start of
+the word under the cursor; `column pick` offers the columns the adapter reports
+as valid for the line (falling back to the word under the cursor when no session
+can answer).
 
 Every per-breakpoint subcommand (`condition`, `logpoint`, `remove`, the enable
 state) acts on the breakpoint the cursor resolves to. A column breakpoint under
@@ -549,7 +554,8 @@ vim.api.nvim_create_user_command("Debug", function(o) vim.cmd("Ezdap " .. o.args
 | Subcommand           | Description                            |
 | -------------------- | -------------------------------------- |
 | `toggle` (default)   | Toggle a line breakpoint at the cursor             |
-| `set [col=…] [cond=…] [hit=…] [log=…]` | Create or update a breakpoint; bare, a plain line breakpoint |
+| `set [col=N] [cond=…] [hit=…] [log=…]` | Create or update a breakpoint; bare, a plain line breakpoint |
+| `column [pick]`      | Column breakpoint at the cursor word, or a picked valid column |
 | `remove`             | Remove the breakpoint at the cursor                |
 | `condition`          | Set condition + hit condition                      |
 | `logpoint`           | Set/clear a log message (logpoint)                 |

@@ -212,12 +212,12 @@ local function _resolve_target(file, row, opts, cb)
     end)
 end
 
----Resolve a `col=` spec to a concrete 1-based column: a literal number, `here`
+---Resolve a `:Ezdap breakpoint column` spec to a concrete 1-based column: `here`
 ---(the word start under the cursor) or `pick` (choose among the adapter's valid
 ---breakpoint locations, falling back to `here` when it can't answer).
 ---@param file string
 ---@param row  integer
----@param spec string
+---@param spec "here"|"pick"
 ---@param cb   fun(column: integer?)
 local function _resolve_column(file, row, spec, cb)
     local bufnr      = vim.api.nvim_get_current_buf()
@@ -225,18 +225,11 @@ local function _resolve_column(file, row, spec, cb)
     local linetext   = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
     local here       = _word_start(linetext, cursor_col)
 
-    local n = tonumber(spec)
-    if n then return cb(math.max(1, math.floor(n))) end
     if spec == "here" then return cb(here) end
-    if spec ~= "pick" then
-        vim.notify("[dap] col: expected a number, 'here' or 'pick', got '" .. spec .. "'",
-            vim.log.levels.WARN)
-        return cb(nil)
-    end
 
     local sess = manager.session()
     if not (sess and sess:capable("supportsBreakpointLocationsRequest")) then
-        vim.notify("[dap] col=pick needs a running session that reports breakpoint locations; using the cursor column",
+        vim.notify("[dap] breakpoint column pick needs a running session that reports breakpoint locations; using the cursor column",
             vim.log.levels.WARN)
         return cb(here)
     end
@@ -271,10 +264,10 @@ local function _resolve_column(file, row, spec, cb)
     end)
 end
 
----Fields `:Ezdap breakpoint set` can write. `column` is the unresolved `col=`
----spec; `""` clears a string field, as in `breakpoints.patch`.
+---Fields `:Ezdap breakpoint set` can write. `column` is a `col=` column number;
+---`""` clears a string field, as in `breakpoints.patch`.
 ---@class ezdap.command.BpSetOpts
----@field column        string?
+---@field column        string?  a 1-based column number
 ---@field condition     string?
 ---@field hit_condition string?
 ---@field log_message   string?
@@ -291,6 +284,16 @@ function M.breakpoint.set(opts)
         bps.add(file, row)
         return
     end
+    local column
+    if opts.column then
+        local n = tonumber(opts.column)
+        if not n then
+            vim.notify("[dap] col: expected a column number, got '" .. opts.column .. "'",
+                vim.log.levels.WARN)
+            return
+        end
+        column = math.max(1, math.floor(n))
+    end
     ---@param key ezdap.command.BpKey
     local function apply(key)
         bps.patch(file, key.line, {
@@ -300,13 +303,28 @@ function M.breakpoint.set(opts)
             log_message   = opts.log_message,
         })
     end
-    if opts.column then
-        _resolve_column(file, row, opts.column, function(col)
-            if col then apply({ line = row, column = col }) end
-        end)
+    if column then
+        apply({ line = row, column = column })
     else
         _resolve_target(file, row, nil, function(key) apply(key or { line = row }) end)
     end
+end
+
+---Create a column breakpoint at the cursor: bare, at the start of the word under
+---it; with `pick`, choosing among the columns the adapter reports as valid for
+---the line. The column counterpart of a plain `set` line breakpoint.
+---@param spec? string  "pick", or nil for the word under the cursor
+function M.breakpoint.column(spec)
+    local file, row = _cursor_location()
+    if not file then return end
+    if spec ~= nil and spec ~= "" and spec ~= "pick" then
+        vim.notify("[dap] breakpoint column: expected nothing or 'pick', got '" .. spec .. "'",
+            vim.log.levels.WARN)
+        return
+    end
+    _resolve_column(file, row, spec == "pick" and "pick" or "here", function(col)
+        if col then manager.breakpoints.patch(file, row, { column = col }) end
+    end)
 end
 
 function M.breakpoint.remove()
