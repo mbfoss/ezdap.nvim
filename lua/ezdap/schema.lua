@@ -148,13 +148,16 @@ end
 
 ---Read every declared input from `values`, in whichever form it was authored: a
 ---string is the string form and is `parse`d, any other Lua value is the typed form
----and is `read`. Unset inputs are absent (recorded in `missing` when `required`).
+---and is `read`. Unset inputs are absent (recorded in `missing` when `required`), and
+---a name the mode declares nothing for is an error, not a value quietly dropped.
 ---@param mode ezdap.Mode
 ---@param values table<string, any>  input name → a value in either authoring form
 ---@return table<string, any> inputs, string[] missing, string[] errs
 local function _read_inputs(mode, values)
     local inputs, missing, errs = {}, {}, {}
+    local declared = {}
     for name, spec in pairs(mode.inputs or {}) do
+        declared[name] = true
         local raw = values[name]
         -- An input cleared rather than answered (`:Ezdap run … cwd=`) is one that was
         -- not supplied: `build` assigns it unconditionally, and only nil drops the field.
@@ -173,6 +176,19 @@ local function _read_inputs(mode, values)
                 inputs[name] = val
             end
         end
+    end
+    -- A name no input answers to — a mistyped `:Ezdap run … name=value`, a run file's
+    -- `parameters`, a caller's table — is read by nothing, so `build` would never see
+    -- it. Refused rather than dropped, the way a value that will not parse is.
+    local unknown = {}
+    for name in pairs(values) do
+        if not declared[name] then unknown[#unknown + 1] = name end
+    end
+    if #unknown > 0 then
+        table.sort(unknown)
+        errs[#errs + 1] = ("unknown input name%s: %s"):format(
+            #unknown == 1 and "" or "s",
+            table.concat(vim.tbl_map(function(n) return ("%q"):format(n) end, unknown)))
     end
     -- `pairs` order is arbitrary; sort so the reported set is stable.
     table.sort(missing)

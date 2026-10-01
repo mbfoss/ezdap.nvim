@@ -281,7 +281,10 @@ local _debug_subs = {
 }
 
 ---Read `:Ezdap run <adapter> <mode> [input=value]…`: the adapter and mode are
----strictly the first two positionals, every later token an `input=value` assignment.
+---strictly the first two positionals, every later token an `input=value` assignment
+---naming one of the mode's declared inputs. The names are checked where the inputs
+---are read (`schema.resolve_task`), so a typo is refused the same way here, from a
+---run file and through the API.
 ---@param args string[]  the command-line tokens from the adapter on
 ---@return string? adapter, string? mode, table<string, string>? inputs
 local function _parse_run_args(args)
