@@ -198,10 +198,12 @@ state)` exactly once, so the run either proceeds or aborts.
 which is how an adapter that is really a TCP server gets started and then
 connected to. Its `ctx` carries `report(msg)` for progress lines,
 `add_bufnr(bufnr, opts?)` to attach a buffer it created to the run so it is
-listed under the session, and `mode`, the mode name this run resolved from, so a
-`setup` can gate one mode rather than the whole definition (refusing a mode
-whose feature the installed binary is too old for, say). Treat an unrecognized
-name as "none of mine" and let the run proceed.
+listed under the session, `make_buf_name(kind)` to name a buffer the way the
+run's own are (`:b ezdap://<number>/<name>:<kind>`; a reserved kind or a name
+already taken is an error rather than a suffix), and `mode`, the mode name this
+run resolved from, so a `setup` can gate one mode rather than the whole
+definition (refusing a mode whose feature the installed binary is too old for,
+say). Treat an unrecognized name as "none of mine" and let the run proceed.
 
 ```lua
 local shared = require("ezdap.shared")
@@ -212,6 +214,7 @@ return {
         local done = false -- callback must fire exactly once
         handle, err = shared.spawn({ "my-dap", "--listen", "127.0.0.1:0" }, {
             cwd           = config.cwd,
+            bufname       = ctx.make_buf_name("server"),
             line_buffered = true,
             on_stdout     = function(_, lines)
                 for _, line in ipairs(lines) do

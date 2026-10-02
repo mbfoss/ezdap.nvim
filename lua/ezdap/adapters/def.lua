@@ -5,10 +5,19 @@ error("do not require a meta file")
 ---does not record; it is how a `setup` gates one mode rather than the whole
 ---adapter (e.g. a feature only a newer binary supports). A `setup` should still
 ---treat nil as "not one of mine" and let the run proceed.
+---
+---`make_buf_name(kind)` names a buffer the same way the run's own do, so a
+---buffer a `setup` spawns is reached by the run's number and name like the rest
+---(`:b ezdap://<number>/<name>:<kind>`). Use it for `spawn`'s `bufname`. It will
+---not hand out a name twice: a reserved kind (`repl`, `output`, `term`, `dap`,
+---`log`, which the run names its own buffers by) or a `kind` already taken is an
+---error, so a definition that does either fails loudly instead of landing on the
+---run's buffer or a `~1` alias.
 ---@class ezdap.AdapterSetupCtx
----@field add_bufnr fun(bufnr: integer, opts?: ezdap.AddBufOpts)
----@field report    fun(message: string)
----@field mode?      string
+---@field add_bufnr     fun(bufnr: integer, opts?: ezdap.AddBufOpts)
+---@field report        fun(message: string)
+---@field make_buf_name fun(kind: string): string
+---@field mode?         string
 
 ---What an input's value *is*. A collection holds entries read as scalars, which its
 ---`item_type` names.

@@ -309,13 +309,21 @@ function M.blend_colors(c1, c2, alpha)
     return bit.bor(bit.lshift(r, 16), bit.lshift(g, 8), b)
 end
 
+---Whether a loaded buffer already carries this name, matched the way
+---`unique_buf_name` matches (the buffer's full, normalized name).
+---@param name string
+---@return boolean
+function M.buf_name_taken(name)
+    return _bufnr_by_name(name) ~= -1
+end
+
 ---Return `basename` if no buffer has that name, otherwise `basename~1`, `basename~2`, …
 ---@param basename string
 ---@return string
 function M.unique_buf_name(basename)
     local name = basename
     local n    = 0
-    while _bufnr_by_name(name) ~= -1 do
+    while M.buf_name_taken(name) do
         n    = n + 1
         name = basename .. "~" .. n
     end

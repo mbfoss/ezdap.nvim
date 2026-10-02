@@ -11,11 +11,6 @@ local M = {}
 ---@type fun(cmd: string|string[], opts: ezdap.util.SpawnOpts, bufnr?: integer): ezdap.util.TermHandle?, string?
 M.spawn = require("ezdap.util.term").spawn
 
----A buffer name unique against currently-loaded buffers; see
----`ezdap.util.ui.unique_buf_name`.
----@type fun(basename: string): string
-M.unique_buf_name = require("ezdap.util.ui").unique_buf_name
-
 ---Split a `command` input into the `program`/`args` pair a launch body wants. The
 ---first word is expanded (`~`, `$VAR`) as the program, the rest are its arguments
 ---verbatim; a list is accepted as-is. An unset command yields an empty program.

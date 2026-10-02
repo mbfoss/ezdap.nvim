@@ -29,6 +29,31 @@ local ui_util      = require "ezdap.util.ui"
 ---@class ezdap.TaskTypeDef
 local M            = {}
 
+-- Kinds the run names its own buffers by (the repl, the output, a terminal, the
+-- raw `dap` trace, the run's log). A `setup` may not pass one to
+-- `ctx.make_buf_name`: it would land on a buffer the run makes itself.
+local _reserved_kinds = { repl = true, output = true, term = true, dap = true, log = true }
+
+---The strict namer handed to a `setup`: same names as the run's own, but a
+---reserved kind or a name already handed out errors rather than taking a `~1`
+---suffix. `claimed` catches a second ask before its buffer exists to be found.
+---@param run ezdap.runner.Run
+---@return fun(kind: string): string
+local function make_setup_buf_name(run)
+    local claimed = {}
+    return function(kind)
+        if _reserved_kinds[kind] then
+            error(("buffer name %q is reserved for the run itself"):format(kind), 2)
+        end
+        local name = ui_util.run_buf_name(run.id, run.name, kind)
+        if claimed[name] or ui_util.buf_name_taken(name) then
+            error(("buffer name %q is already in use"):format(name), 2)
+        end
+        claimed[name] = true
+        return name
+    end
+end
+
 ---@param task ezdap.Task  native DAP task (name + adapter + request + parameters, plus optional host/port)
 ---@param callbacks ezdap.TaskCallback
 ---@param run ezdap.runner.Run  the run this task starts into, for naming the buffers it makes
@@ -51,6 +76,8 @@ M.start            = function(task, callbacks, run)
     local function buf_name(kind)
         return ui_util.unique_buf_name(ui_util.run_buf_name(run.id, run.name, kind))
     end
+
+    local setup_buf_name = make_setup_buf_name(run)
 
     -- The task is native DAP: `parameters` is the adapter's raw launch/attach body,
     -- sent verbatim and never inspected or translated here. Scaffolding it from an
@@ -130,7 +157,12 @@ M.start            = function(task, callbacks, run)
     local unsub_progress ---@type fun()
 
     ---@type ezdap.AdapterSetupCtx
-    local _setup_ctx    = { add_bufnr = add_bufnr, report = report, mode = task.mode }
+    local _setup_ctx    = {
+        add_bufnr     = add_bufnr,
+        report        = report,
+        mode          = task.mode,
+        make_buf_name = setup_buf_name,
+    }
 
     local function _run_setup(cb)
         if not base.setup then return cb(nil) end
