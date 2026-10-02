@@ -118,7 +118,7 @@ function M.resolve_pid(pid, prompt)
     -- and drop the error, leaving a cancelled pick indistinguishable from a
     -- successful one.
     if pid then return pid end
-    return M.select_process(prompt or "Select process to attach to")
+    return M.select_process(prompt or "Select process")
 end
 
 ---Pick a running process interactively, via `vim.ui.select`. This yields: it must be

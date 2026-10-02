@@ -348,6 +348,10 @@ function M.parse_entry(input, raw)
     return _parse_scalar(r, raw)
 end
 
+---The JSON Schema for one input, as a tasks file authors it: for a scalar with a
+---string form, that form as well as the typed one. A collection is its array or
+---object shape, and its entries are typed (a table's entries are read, never
+---parsed).
 ---@param input ezdap.Input?
 ---@return table
 function M.json_schema(input)
@@ -360,6 +364,15 @@ function M.json_schema(input)
 
     if r.kind == "list" then return { type = "array", items = schema } end
     if r.kind == "map" then return { type = "object", additionalProperties = schema } end
+
+    -- A scalar whose `parse` reads a string is authored in both forms, and
+    -- `_read_inputs` takes either (`port = "8080"`, `enabled = "true"`). Its type
+    -- names both, and the constraints stay on the typed branch, applying there alone.
+    -- A collection is not: its entries are read, never parsed, so this is the scalar
+    -- path's widening and the branches above return before it.
+    if r.def.parse then
+        schema.type = { schema.type, "string" }
+    end
     return schema
 end
 
