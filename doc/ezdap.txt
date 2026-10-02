@@ -499,7 +499,7 @@ Pass options to `setup()`. Defaults when `setup({})` is called are:
       -- external_terminal = { "wezterm", "start", "--" },
     
       -- Add a "Debug Inspect" entry to the right-click menu while a session is
-      -- live (see Right-click menu).
+      -- live
       popup_menu          = true,
     
       -- Glyphs for each debug state, in the gutter and the debug view alike.
