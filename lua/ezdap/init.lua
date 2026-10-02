@@ -313,7 +313,7 @@ end
 ---@param mode? string  a single mode to show, e.g. "script"
 function M.adapter_info(adapter, mode)
     _require_setup("adapter_info")
-    return require("ezdap.adapter_info").show(adapter, mode)
+    return require("ezdap.adapters.info").show(adapter, mode)
 end
 
 ---Launch or attach under an adapter using one of its declared `modes`, assembling

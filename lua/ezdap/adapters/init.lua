@@ -6,7 +6,7 @@
 ---`ezdap.available_adapters()` is the list of what can be loaded. Assigning a
 ---definition here registers it by hand, no file needed.
 
--- adapter definition type in adapter_def.lua
+-- adapter definition type in adapters/def.lua
 
 ---@type table<string, ezdap.AdapterDef>
 return {}
