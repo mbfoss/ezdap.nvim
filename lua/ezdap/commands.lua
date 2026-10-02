@@ -222,58 +222,6 @@ local function _resolve_target(file, row, opts, cb)
     end)
 end
 
----Resolve a `:Ezdap breakpoint column` spec to a concrete 1-based column: `here`
----(the word start under the cursor) or `pick` (choose among the adapter's valid
----breakpoint locations, falling back to `here` when it can't answer).
----@param file string
----@param row  integer
----@param spec "here"|"pick"
----@param cb   fun(column: integer?)
-local function _resolve_column(file, row, spec, cb)
-    local bufnr      = vim.api.nvim_get_current_buf()
-    local cursor_col = vim.api.nvim_win_get_cursor(0)[2] + 1
-    local linetext   = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
-    local here       = _word_start(linetext, cursor_col)
-
-    if spec == "here" then return cb(here) end
-
-    local sess = manager.session()
-    if not (sess and sess:capable("supportsBreakpointLocationsRequest")) then
-        vim.notify("[dap] breakpoint column pick needs a running session that reports breakpoint locations; using the cursor column",
-            vim.log.levels.WARN)
-        return cb(here)
-    end
-    ---@type ezdap.dap.proto.Source
-    local source = { path = file, name = vim.fn.fnamemodify(file, ":t") }
-    sess:breakpoint_locations({ source = source, line = row }, function(locations, _)
-        local cols, seen = {}, {}
-        for _, loc in ipairs(locations or {}) do
-            local c = loc.column
-            if c and (loc.line == nil or loc.line == row) and not seen[c] then
-                seen[c] = true
-                cols[#cols + 1] = c
-            end
-        end
-        table.sort(cols)
-        if #cols == 0 then return cb(here) end
-        if #cols == 1 then return cb(cols[1]) end
-        local initial = 1
-        for i, c in ipairs(cols) do
-            if math.abs(c - cursor_col) < math.abs(cols[initial] - cursor_col) then initial = i end
-        end
-        select.open({
-            prompt        = "Breakpoint column on line " .. row,
-            items         = vim.tbl_map(function(c)
-                return { label = ("%d  %s"):format(c, vim.trim(linetext:sub(c))), data = c }
-            end, cols),
-            initial       = initial,
-            sort_by_score = false,
-        }, function(c)
-            if c then cb(c) end
-        end)
-    end)
-end
-
 ---Fields `:Ezdap breakpoint set` can write. `column` is a `col=` column number;
 ---`""` clears a string field, as in `breakpoints.patch`.
 ---@class ezdap.commands.BpSetOpts
@@ -320,21 +268,23 @@ function M.breakpoint.set(opts)
     end
 end
 
----Create a column breakpoint at the cursor: bare, at the start of the word under
----it; with `pick`, choosing among the columns the adapter reports as valid for
----the line. The column counterpart of a plain `set` line breakpoint.
----@param spec? string  "pick", or nil for the word under the cursor
-function M.breakpoint.column(spec)
+---Toggle a column breakpoint at the cursor, at the start of the word under it.
+---A breakpoint already at that column is removed; otherwise one is created. The
+---column counterpart of the plain line toggle.
+function M.breakpoint.column()
     local file, row = _cursor_location()
     if not file then return end
-    if spec ~= nil and spec ~= "" and spec ~= "pick" then
-        vim.notify("[dap] breakpoint column: expected nothing or 'pick', got '" .. spec .. "'",
-            vim.log.levels.WARN)
-        return
+    local bufnr    = vim.api.nvim_get_current_buf()
+    local linetext = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
+    local col      = _word_start(linetext, vim.api.nvim_win_get_cursor(0)[2] + 1)
+    local bps      = manager.breakpoints
+    for _, bp in ipairs(_bps_at_row(file, row)) do
+        if bp.column == col then
+            bps.remove(file, bp.line, bp.column)
+            return
+        end
     end
-    _resolve_column(file, row, spec == "pick" and "pick" or "here", function(col)
-        if col then manager.breakpoints.patch(file, row, { column = col }) end
-    end)
+    bps.patch(file, row, { column = col })
 end
 
 function M.breakpoint.remove()

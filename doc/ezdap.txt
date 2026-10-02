@@ -268,8 +268,7 @@ sessions.
     :Ezdap breakpoint logpoint      " logpoint (prompts for log message)
     :Ezdap breakpoint set cond=x>3  " conditional breakpoint
     :Ezdap breakpoint set col=42    " column breakpoint at column 42
-    :Ezdap breakpoint column        " column bp at the word under the cursor
-    :Ezdap breakpoint column pick   " column breakpoint, pick a valid column
+    :Ezdap breakpoint column        " toggle a column bp at the cursor word
     :Ezdap breakpoint fn <name>     " function breakpoint by name
     :Ezdap breakpoint data          " watchpoint on a variable/expression
     :Ezdap breakpoint list          " fuzzy-pick and jump to any breakpoint
@@ -282,10 +281,8 @@ sessions.
 Values are split by Vim’s rules, so escape spaces (`cond=x\ >\ 3`), and an
 empty value clears a field.
 
-`column` places a column breakpoint at the cursor. Bare, it uses the start of
-the word under the cursor; `column pick` offers the columns the adapter reports
-as valid for the line (falling back to the word under the cursor when no
-session can answer).
+`column` toggles a column breakpoint at the start of the word under the cursor.
+A breakpoint already at that column is removed.
 
 Every per-breakpoint subcommand (`condition`, `logpoint`, `remove`, the enable
 state) acts on the breakpoint the cursor resolves to. A column breakpoint under
@@ -602,8 +599,8 @@ forwards arguments, range and completion to `:Ezdap`.
   set [col=N] [cond=…] [hit=…] [log=…]   Create or update a breakpoint; bare, a plain
                                          line breakpoint
 
-  column [pick]                          Column breakpoint at the cursor word, or a
-                                         picked valid column
+  column                                 Toggle a column breakpoint at the cursor
+                                         word
 
   remove                                 Remove the breakpoint at the cursor
 

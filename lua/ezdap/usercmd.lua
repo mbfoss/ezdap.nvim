@@ -43,9 +43,9 @@ local _BP_SET_KEYS = {
 
 ---Read `:Ezdap breakpoint set [col=N] [cond=…] [hit=…] [log=…]`. Values are
 ---split by Vim's rules, so escape any space (`cond=x\ >\ 3`); an empty value clears
----the field. `col=` takes a column number — the word under the cursor and the
----adapter-offered columns are `:Ezdap breakpoint column`. No arguments at all sets
----a plain line breakpoint at the cursor.
+---the field. `col=` takes a column number — the word under the cursor is
+---`:Ezdap breakpoint column`. No arguments at all sets a plain line breakpoint at
+---the cursor.
 ---@param args string[]
 ---@return ezdap.commands.BpSetOpts?
 local function _parse_bp_set_args(args)
@@ -60,8 +60,8 @@ local function _parse_bp_set_args(args)
         end
         if field == "column" and not tonumber(value) then
             vim.notify("[ezdap] breakpoint set: col= takes a column number; "
-                .. "use :Ezdap breakpoint column [pick] for the word under the cursor "
-                .. "or an adapter-offered column", vim.log.levels.WARN)
+                .. "use :Ezdap breakpoint column for the word under the cursor",
+                vim.log.levels.WARN)
             return
         end
         opts[field] = value
@@ -86,7 +86,12 @@ local function _bp_run(args)
         local set_opts = _parse_bp_set_args({ unpack(args, 2) })
         if set_opts then commands.breakpoint.set(set_opts) end
     elseif sub == "column" then
-        commands.breakpoint.column(args[2])
+        if args[2] then
+            vim.notify("[ezdap] breakpoint column takes no argument, got '" .. args[2] .. "'",
+                vim.log.levels.WARN)
+        else
+            commands.breakpoint.column()
+        end
     elseif sub == "remove" then
         commands.breakpoint.remove()
     elseif sub == "clear_file" then
@@ -135,9 +140,6 @@ local function _bp_complete(rest)
     if #rest == 0 then return _bp_subs end
     if rest[1] == "set" then
         return { "cond=", "hit=", "log=", "col=" }
-    end
-    if rest[1] == "column" and #rest == 1 then
-        return { "pick" }
     end
     if rest[1] == "fn" and #rest == 1 then
         return vim.tbl_map(function(bp) return bp.name end,
