@@ -15,6 +15,31 @@ local M             = {}
 -- this module owns only the user interaction (cursor reads, prompts, pickers and
 -- notifications), resolving those into the concrete details `manager` takes.
 
+-- Module state
+
+---Cursor-follow records, keyed by breakpoint internal_id. Armed when the user adds
+---a source breakpoint while a session is live; consumed one-shot once the adapter
+---reports where it bound it, and only while the user is still parked there.
+---@class ezdap.commands.PendingFollow
+---@field win  integer  window the breakpoint was added from
+---@field file string   source file that window must still show
+---@field line integer  line it was added at; the cursor must still sit here
+---@type table<integer, ezdap.commands.PendingFollow>
+local _pending_follow = {}
+
+-- A follow is keyed to the active session's binding; once the active session
+-- changes any armed follow is stale, so drop them all rather than risk acting on
+-- the wrong session's resolved line.
+manager.on_active_changed:subscribe(function() _pending_follow = {} end)
+
+---The two view singletons, created on first access. They live here rather than
+---in `init` so the command surface never reaches back into the entry point;
+---`init` keeps guarded delegates for the public API.
+---@type ezdap.DebugView?
+local _debug_view
+---@type ezdap.DisassemblyView?
+local _disassembly_view
+
 -- Helpers
 
 ---@return string?
@@ -54,21 +79,6 @@ end
 -- Live sessions now push breakpoint changes themselves by subscribing to
 -- breakpoints.on_change (see session.lua), so the commands below only mutate the
 -- registry, so no explicit per-command sync is needed.
-
----Cursor-follow records, keyed by breakpoint internal_id. Armed when the user adds
----a source breakpoint while a session is live; consumed one-shot once the adapter
----reports where it bound it, and only while the user is still parked there.
----@class ezdap.commands.PendingFollow
----@field win  integer  window the breakpoint was added from
----@field file string   source file that window must still show
----@field line integer  line it was added at; the cursor must still sit here
----@type table<integer, ezdap.commands.PendingFollow>
-local _pending_follow = {}
-
--- A follow is keyed to the active session's binding; once the active session
--- changes any armed follow is stale, so drop them all rather than risk acting on
--- the wrong session's resolved line.
-manager.on_active_changed:subscribe(function() _pending_follow = {} end)
 
 -- Breakpoints
 
@@ -828,7 +838,7 @@ function M.debug.value(expr, from_range)
 end
 
 ---Open the disassembly pane for the active session's current frame.
-function M.debug.disassemble() require("ezdap").open_disassembly_view() end
+function M.debug.disassemble() M.view.disassembly_view():open() end
 
 function M.debug.session()
     local sessions = manager.sessions()
@@ -964,19 +974,53 @@ end
 
 M.view = {}
 
+---Return the singleton DebugView, creating it on first call.
+---@return ezdap.DebugView
+function M.view.debug_view()
+    if not _debug_view then
+        _debug_view = require("ezdap.ui.DebugView").new()
+    end
+    return _debug_view
+end
+
+---The singleton DebugView if one exists, else nil. Never creates one: for
+---callers that only act on a view already on screen.
+---@return ezdap.DebugView?
+function M.view.debug_view_if_open()
+    return _debug_view
+end
+
+---Return the singleton DisassemblyView, creating it on first call.
+---@return ezdap.DisassemblyView
+function M.view.disassembly_view()
+    if not _disassembly_view then
+        _disassembly_view = require("ezdap.ui.DisassemblyView").new()
+    end
+    return _disassembly_view
+end
+
+---The singleton DisassemblyView if one exists, else nil. Never creates one: for
+---callers that only act on a view already on screen, such as routing a
+---breakpoint toggle from a disassembly buffer.
+---@return ezdap.DisassemblyView?
+function M.view.disassembly_view_if_open()
+    return _disassembly_view
+end
+
 ---Open the DebugView split, focusing it when it is already visible.
 function M.view.open()
-    require("ezdap").open_debug_view()
+    M.view.debug_view():open()
 end
 
 ---Close the DebugView split. No-op when it is not visible.
 function M.view.hide()
-    require("ezdap").close_debug_view()
+    if not _debug_view then return end
+    _debug_view:close()
 end
 
 ---Toggle the DebugView split: close it if visible, otherwise open and focus it.
 function M.view.toggle()
-    require("ezdap").toggle_debug_view()
+    M.view.debug_view():toggle()
 end
 
 -- Panel

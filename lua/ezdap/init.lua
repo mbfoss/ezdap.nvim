@@ -2,10 +2,6 @@ local M = {}
 
 local COMMAND = "Ezdap"
 
----@type ezdap.DebugView?
-local _debug_view
----@type ezdap.DisassemblyView?
-local _disassembly_view
 -- Whether `setup()` has run. The public API relies on the config, command and
 -- autocmds it installs; calling in before then would silently do the wrong
 -- thing, so those entry points fail loudly instead.
@@ -136,7 +132,8 @@ function M.reload_state()
     _load()
     -- The reloaded state belongs to another project; undoing into it would
     -- resurrect the old one's breakpoints.
-    if _debug_view then _debug_view:clear_undo() end
+    local view = require("ezdap.commands").view.debug_view_if_open()
+    if view then view:clear_undo() end
 end
 
 ---Disconnect every live session on exit: an adapter killed without a completed
@@ -170,7 +167,7 @@ local function _init()
 
     local client = require("ezdap.dap.client")
     client.on_session_added:subscribe(function()
-        vim.schedule(function() M.debug_view():show() end)
+        vim.schedule(function() require("ezdap.commands").view.debug_view():show() end)
     end)
 end
 
@@ -184,57 +181,31 @@ function _ensure_loaded()
     _load()
 end
 
----Return the singleton DebugView, creating it on first call.
----@return ezdap.DebugView
-function M.debug_view()
-    _require_setup("debug_view")
-    if not _debug_view then
-        _debug_view = require("ezdap.ui.DebugView").new()
-    end
-    return _debug_view
-end
+-- The view singletons live in `commands` (they are a command concern); these are
+-- the guarded public entry points onto them.
 
 ---Open the DebugView in a vertical split (or focus if already visible).
 function M.open_debug_view()
     _require_setup("open_debug_view")
-    M.debug_view():open()
+    require("ezdap.commands").view.open()
 end
 
 ---Close the DebugView if it is visible. No-op when it is not.
 function M.close_debug_view()
     _require_setup("close_debug_view")
-    if not _debug_view then return end
-    _debug_view:close()
+    require("ezdap.commands").view.hide()
 end
 
 ---Close the DebugView if it is visible, otherwise open and focus it.
 function M.toggle_debug_view()
     _require_setup("toggle_debug_view")
-    M.debug_view():toggle()
-end
-
----Return the singleton DisassemblyView, creating it on first call.
----@return ezdap.DisassemblyView
-function M.disassembly_view()
-    _require_setup("disassembly_view")
-    if not _disassembly_view then
-        _disassembly_view = require("ezdap.ui.DisassemblyView").new()
-    end
-    return _disassembly_view
-end
-
----The singleton DisassemblyView if one exists, else nil. Never creates one: for
----callers that only act on a view already on screen, such as routing a
----breakpoint toggle from a disassembly buffer.
----@return ezdap.DisassemblyView?
-function M.disassembly_view_if_open()
-    return _disassembly_view
+    require("ezdap.commands").view.toggle()
 end
 
 ---Open the disassembly pane for the active session's current frame.
 function M.open_disassembly_view()
     _require_setup("open_disassembly_view")
-    M.disassembly_view():open()
+    require("ezdap.commands").view.disassembly_view():open()
 end
 
 ---@param path string a Lua file returning a single task, or a folder to pick one from
@@ -374,7 +345,8 @@ end
 function M.remove_run(run)
     _require_setup("remove_run")
     require("ezdap.runner").remove(run)
-    if _debug_view then _debug_view:clear_sessions(run.sessions) end
+    local view = require("ezdap.commands").view.debug_view_if_open()
+    if view then view:clear_sessions(run.sessions) end
 end
 
 ---Re-run the most recently run task from scratch. Warns when nothing has run yet.
@@ -390,7 +362,8 @@ end
 function M.clean()
     _require_setup("clean")
     require("ezdap.runner").clean()
-    if _debug_view then _debug_view:clear_finished_sessions() end
+    local view = require("ezdap.commands").view.debug_view_if_open()
+    if view then view:clear_finished_sessions() end
 end
 
 ---Report whether the cwd is inside a project and, if so, the resolved root and

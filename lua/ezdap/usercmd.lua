@@ -75,7 +75,7 @@ local function _bp_run(args)
     local sub = args[1]
     -- In a disassembly buffer the toggle acts on the instruction under the
     -- cursor, which only the (already-open) view can resolve.
-    local disasm = ezdap.disassembly_view_if_open()
+    local disasm = commands.view.disassembly_view_if_open()
     if sub == nil or sub == "" or sub == "toggle" then
         if vim.b.ezdap_disasm and disasm then
             disasm:toggle_bp_at_cursor()

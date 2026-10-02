@@ -47,7 +47,8 @@ surface for the UI and commands; prefer it over importing `dap/client` or
 
 **Public API**: [lua/ezdap/init.lua](lua/ezdap/init.lua) `setup`, the run entry
 points (`run_mode`, `run_file`, `new_run_file`, `rerun`, `remove_run`), and the
-debug/disassembly view accessors. Registers the user command (`config.command`)
+view entry points (`open_debug_view`, `close_debug_view`, `toggle_debug_view`,
+`open_disassembly_view`). Registers the user command (`config.command`)
 and hands each invocation to `usercmd`.
 
 **`:Ezdap` command line**: [lua/ezdap/usercmd.lua](lua/ezdap/usercmd.lua) Parses
@@ -71,7 +72,9 @@ and the breakpoint registry (`manager.breakpoints`) so consumers depend only on
 command tables `M.debug.*`, `M.breakpoint.*`, `M.view.*` reached through
 `:Ezdap …`. Owns all user interaction (pickers, prompts, notifications, cursor
 reads) and resolves it into the concrete details it hands to `manager`, its only
-path to the DAP layer. A peer surface to `ui/`, both consuming `manager`.
+path to the DAP layer. `M.view` also owns the DebugView/DisassemblyView
+singletons, so this surface never requires `init`. A peer surface to `ui/`, both
+consuming `manager`.
 
 **DAP core**: [lua/ezdap/dap/](lua/ezdap/dap/)
 - `client.lua`: session registry & lifecycle; spawning and session-level events.

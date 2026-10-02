@@ -8,13 +8,12 @@
 ---saved state without pulling in the persistence machinery: this module needs
 ---nothing but `config`.
 
-local M = {}
+local M              = {}
 
-local config            = require("ezdap.config").current
+local config         = require("ezdap.config").current
 
-local _default_filename = ".ezdap.json"
-local _root             = nil ---@type string|nil
-local _root_resolved    = false
+local _root          = nil ---@type string|nil
+local _root_resolved = false
 
 ---Walk up from the cwd until a directory holding a root marker is found.
 ---@return string|nil root
@@ -45,9 +44,10 @@ end
 ---Absolute path of the data file, or nil when the cwd is not in a project.
 ---@return string|nil path
 function M.data_path()
+    assert(config.data_filename and config.data_filename ~= "")
     local root = M.root()
     if not root then return nil end
-    return vim.fs.joinpath(root, config.data_filename or _default_filename)
+    return vim.fs.joinpath(root, config.data_filename)
 end
 
 return M
