@@ -69,7 +69,7 @@ TreeBuffer.__index = TreeBuffer
 -- The link is a `default` one, so redefining `_HL_GUIDE` wins over it.
 local _HL_GUIDE = "EzdapTreeIndentGuide"
 local _HL_GUIDE_DEFAULT = "EzdapTreeIndentGuideDefault"
-local _GUIDE_FADE_PCT = 50
+local _GUIDE_FADE_PCT = 60
 
 local function _setup_guide_hl()
     color.create_themed_hl({
