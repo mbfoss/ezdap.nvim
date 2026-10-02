@@ -57,8 +57,8 @@ and hands each invocation to `usercmd`.
 a typed invocation, routes it to the `commands` tables (or to init's public API
 for run/project operations), and completes its arguments. Required lazily from
 the command callback, so it -- and `commands` behind it -- load only on first
-use. Splitting the raw line into arguments (`split_args`) lives here too, since
-it encodes the same <f-args> escaping that completion undoes.
+use. Arguments arrive already split by Neovim's <f-args> rules -- `opts.fargs` to
+run, `nvim_parse_cmd` to complete -- so no line is re-parsed here.
 
 **Active session / programmatic API**:
 [lua/ezdap/manager.lua](lua/ezdap/manager.lua) Owns the "which session is
@@ -170,7 +170,7 @@ Each `ezdap.Input` declares one input up front:
 
 | Field      | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
-| `type`     | what the input *is*, meaning what `build` receives: one of `string`/`boolean`/`integer`/`number`, or a collection, `list` (`a,b`) or `map` (`A=1,B=2`, string keys). Defaults to `string` |
+| `type`     | what the input *is*, meaning what `build` receives: one of `string`/`boolean`/`integer`/`number`, or a collection, `list` (a table of entries) or `map` (a table of string keys to values). Defaults to `string` |
 | `item_type` | a collection's *entry* type, declared exactly as `type` is but scalars only: `{ type = "list", item_type = "integer" }` is a list of integers. Defaults to `string` |
 | `completion` | what the value completes with, in one of three forms: a named source (`"file"`, `"dir"`, `"command"`, the last completing each token of a command line as a path), the values themselves (`{ "console", "terminal" }`), or a `fun(partial): string[]` computing them. A written-out set also reaches a typed file's schema as `examples` and the scaffolded file as a comment; a source or a function has nothing to serialize. Completion only *suggests*; nothing rejects a value written past it. On a collection it describes one entry |
 | `required` | when `true`, the user must supply the value; leaving it unset is a resolve error. Any other unset input arrives at `build` as nil, which `build` may answer by omitting the field, or some other way: an attach `build` asks the user to pick a process for an unset `pid`, so no adapter marks that input `required` |
@@ -193,16 +193,16 @@ different one), and it bought two behaviours a `build` line each expresses.
 An input declares a *value space*, and there are two ways to write into it:
 
 - the **string form**: a command line, where everything is text. `:Ezdap run
-  codelldb launch command='./a.out --verbose'` is this.
+  codelldb launch --command ./a.out\ --verbose` is this.
 - the **typed form**: a structured file that already has types, e.g. an
-  easytasks `tasks.toml` writing `env = { A = "1" }` rather than `env=A=1`.
+  easytasks `tasks.toml` writing `env = { A = "1" }` rather than `--env A=1`.
 
 Both land on the input's declared `type`, so `build` never sees the difference
 and a single call may mix the two per input. They are not rival answers to what
 is legal; they are one value space reached from a CLI or from a typed file.
 
 This is why a row is more than a parser. `map` is the clearest case: you write
-`"A=1,B=2"` on a command line or an object of the same pairs in a typed file,
+`--env A=1 B=2` on a command line or an object of the same pairs in a typed file,
 and `build` receives one table either way. The
 [inputs.lua](lua/ezdap/run/inputs.lua) row states both forms, along with how the
 input gets described to a schema-driven editor, seeded into a scaffolded
@@ -270,7 +270,7 @@ just the command line. Scaffold a mode after editing it (`:Ezdap new_run_file
 <adapter> <mode> /tmp/x.lua`) to see what it reads like.
 
 Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are ezdap's
-own user-facing vocabulary (the `name=value` tokens typed at `:Ezdap run`), not
+own user-facing vocabulary (the `--name` flags typed at `:Ezdap run`), not
 the adapter's. The `params` keys they fill keep whatever casing the adapter's
 wire protocol uses, so pairings like `params.stopOnEntry = inputs.stop_on_entry`
 are normal and correct.

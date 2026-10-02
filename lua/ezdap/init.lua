@@ -385,7 +385,7 @@ end
 ---the run is yours to `remove_run` when you are done with it.
 ---@param adapter string  adapter name, e.g. "debugpy"
 ---@param mode string  mode name, e.g. "binary"
----@param inputs? table<string, string>  input name -> value, e.g. { command = "./main.py" }
+---@param inputs? table<string, any>  input name -> value, e.g. { command = "./main.py" }
 ---@param presenter? ezdap.runner.Presenter  a caller showing the run itself
 ---@return ezdap.runner.Run?
 function M.run_mode(adapter, mode, inputs, presenter)
@@ -473,8 +473,8 @@ local function _register_command(name, desc)
         nargs = "*",
         range = true,
         desc = desc,
-        complete = function(arg_lead, cmd_line, cursorpos)
-            return require("ezdap.usercmd").complete(arg_lead, cmd_line, cursorpos)
+        complete = function(arg_lead, cmd_line)
+            return require("ezdap.usercmd").complete(arg_lead, cmd_line)
         end,
     })
     return true
@@ -526,8 +526,8 @@ end
 
 ---Register a user command `name` that forwards its arguments, its range and its
 ---completion to `:Ezdap`, so `:'<,'>Debug inspect` still reads the selection and
----a value that escaped its own space (`command=./main.py\ --verbose`) reaches the
----run parser intact. A name already taken is left alone with a warning.
+---a value that escaped its own space (`--command ./main.py\ --verbose`) reaches
+---the run parser intact. A name already taken is left alone with a warning.
 ---@param name string  a user command name: an uppercase letter, then word characters
 ---@return boolean created  false when `name` was already taken
 function M.create_cmd_alias(name)

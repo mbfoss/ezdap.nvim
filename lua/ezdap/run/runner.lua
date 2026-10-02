@@ -345,14 +345,14 @@ end
 ---to ask the user something: it starts, or fails, once they answer.
 ---@param adapter string  adapter name, e.g. "codelldb"
 ---@param mode_name string  mode name, e.g. "binary"
----@param inputs? table<string, string>  input name -> value, e.g. { command = "./a.out" }
+---@param inputs? table<string, any>  input name -> value, e.g. { command = "./a.out" }
 ---@param presenter? ezdap.runner.Presenter  a caller showing the run in a UI of its own
 ---@return ezdap.runner.Run?
 function M.run_mode(adapter, mode_name, inputs, presenter)
     local schema = require("ezdap.run.schema")
 
     if not adapter or adapter == "" then
-        _warn("run: usage: :Ezdap run <adapter> <mode> [input=value]…")
+        _warn("run: usage: :Ezdap run <adapter> <mode> [--input value …]")
         return
     end
     local def, load_err = require("ezdap").load_adapter(adapter)
@@ -363,7 +363,7 @@ function M.run_mode(adapter, mode_name, inputs, presenter)
         return
     end
     if not mode_name or mode_name == "" then
-        _warn("run: usage: :Ezdap run " .. adapter .. " <mode> [input=value]…"
+        _warn("run: usage: :Ezdap run " .. adapter .. " <mode> [--input value …]"
             .. " (modes: " .. table.concat(schema.mode_names(adapter), ", ") .. ")")
         return
     end

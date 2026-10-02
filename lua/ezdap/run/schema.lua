@@ -51,8 +51,8 @@ function M.mode_inputs(adapter, mode_name)
     return (mode and mode.inputs) or {}
 end
 
----The input names a mode declares, sorted. These are the `name=value`
----tokens `:Ezdap run` accepts, and the `parameters` keys a tasks file may set.
+---The input names a mode declares, sorted. These are the `--name` flags
+---`:Ezdap run` accepts, and the `parameters` keys a tasks file may set.
 ---@param adapter string
 ---@param mode_name string
 ---@return string[]
@@ -159,7 +159,7 @@ local function _read_inputs(mode, values)
     for name, spec in pairs(mode.inputs or {}) do
         declared[name] = true
         local raw = values[name]
-        -- An input cleared rather than answered (`:Ezdap run … cwd=`) is one that was
+        -- An input cleared rather than answered (an empty string) is one that was
         -- not supplied: `build` assigns it unconditionally, and only nil drops the field.
         if raw == nil or raw == "" then
             if spec.required then missing[#missing + 1] = name end
@@ -177,7 +177,7 @@ local function _read_inputs(mode, values)
             end
         end
     end
-    -- A name no input answers to — a mistyped `:Ezdap run … name=value`, a run file's
+    -- A name no input answers to — a mistyped `:Ezdap run … --name`, a run file's
     -- `parameters`, a caller's table — is read by nothing, so `build` would never see
     -- it. Refused rather than dropped, the way a value that will not parse is.
     local unknown = {}

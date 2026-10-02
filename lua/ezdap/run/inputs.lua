@@ -441,6 +441,43 @@ function M.read(input, value)
     return _accept(r, value)
 end
 
+---Read one input from the fargs after `--name`: a scalar is one token, a `list`
+---one entry per token, a `map` one `KEY=VALUE` per token (split at the first
+---`=`). No escaping. An empty list leaves the input unset; a scalar needs one.
+---@param input ezdap.Input?
+---@param tokens string[]
+---@return any? value, string? err
+function M.parse_tokens(input, tokens)
+    local r, err = _resolve(input)
+    if err then return nil, err end
+
+    if not r.kind then
+        if #tokens == 0 then return nil, "expected a value" end
+        if #tokens > 1 then
+            return nil, ("expected one value, got %d"):format(#tokens)
+        end
+        return _parse_scalar(r, tokens[1])
+    end
+
+    if #tokens == 0 then return nil end
+
+    local out = {}
+    for _, tok in ipairs(tokens) do
+        local key = nil
+        if r.kind == "map" then
+            local eq = tok:find("=", 1, true)
+            if not eq or eq == 1 then
+                return nil, ("expected KEY=VALUE, got %q"):format(tok)
+            end
+            key, tok = tok:sub(1, eq - 1), tok:sub(eq + 1)
+        end
+        local value, perr = _parse_scalar(r, tok)
+        if perr then return nil, perr end
+        if key then out[key] = value else out[#out + 1] = value end
+    end
+    return _sealed(r.kind, out)
+end
+
 ---@param input ezdap.Input?
 ---@return table
 function M.json_schema(input)
@@ -489,9 +526,9 @@ local function _entry_at(kind, partial)
     return head, partial:sub(#head + 1)
 end
 
----Candidate values for an input's **string form**: what a command line offers for
----the value half of `name=value`, or for the entry being typed in a collection. An
----input's own `completion` answers first, then its row. Empty when nothing enumerates.
+---Candidate values for one token of an input's value, as typed on a command line:
+---the value after `--name`, or one entry of a collection (a map's value follows
+---its `=`). An input's own `completion` answers first, then its row.
 ---@param input ezdap.Input?
 ---@param partial string?  the value typed so far
 ---@return string[]

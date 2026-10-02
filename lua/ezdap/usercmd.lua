@@ -188,43 +188,51 @@ local _debug_subs = {
     "project", "clean",
 }
 
----The tokens of the run line from the adapter on: everything after the `run`
----subcommand itself. Split by `split_args`'s rules, not Neovim's, so a value's
----own backslashes reach the input parser intact.
----@param raw string  the run line as typed, `run` and all
----@return string[]
-local function _run_tokens(raw)
-    local toks = M.split_args(raw)
-    for i, tok in ipairs(toks) do
-        if tok == "run" then return { unpack(toks, i + 1) } end
-    end
-    return toks
-end
+---Read `:Ezdap run <adapter> <mode> [--input value …] …` from the fargs after
+---`run`. The adapter and mode are the first two positionals; each later token
+---that starts with `--` names a declared input, and the tokens up to the next
+---`--` are its values (one for a scalar, any number for a list, a `KEY=VALUE`
+---each for a map). Names are checked against the mode here, so a typo is
+---refused before the run starts.
+---@param tokens string[]  the fargs after `run`
+---@return string? adapter, string? mode, table<string, any>? values
+local function _parse_run_args(tokens)
+    local adapter, mode = tokens[1], tokens[2]
+    local schema = require("ezdap.run.schema")
+    local inputs_registry = require("ezdap.run.inputs")
+    local mode_def = adapter and mode and schema.mode(adapter, mode)
+    -- No such adapter/mode: leave the flags alone and let run_mode report the
+    -- adapter or mode itself, rather than an "unknown input" for every flag.
+    if not mode_def then return adapter, mode, {} end
+    local declared = mode_def.inputs or {}
 
----Read `:Ezdap run <adapter> <mode> [input=value]…` from the run line as typed: the
----adapter and mode are strictly the first two positionals, every later token an
----`input=value` assignment naming one of the mode's declared inputs. The names are
----checked where the inputs are read (`schema.resolve_task`), so a typo is refused
----the same way here, from a run file and through the API.
----@param raw string  the run line as typed, `run` and all
----@return string? adapter, string? mode, table<string, string>? inputs
-local function _parse_run_args(raw)
-    local args = _run_tokens(raw)
-    local adapter, mode = args[1], args[2]
-    if (adapter and adapter:find("=", 1, true)) or (mode and mode:find("=", 1, true)) then
-        vim.notify("[ezdap] run: usage: :Ezdap run <adapter> <mode> [input=value]…",
-            vim.log.levels.WARN)
-        return
-    end
-    local inputs = {}
-    for i = 3, #args do
-        local tok = args[i]
-        local eq = tok:find("=", 1, true)
-        if not eq then
-            vim.notify("[ezdap] run: expected input=value, got '" .. tok .. "'", vim.log.levels.WARN)
+    local inputs, seen, i = {}, {}, 3
+    while i <= #tokens do
+        local name = tokens[i]:match("^%-%-(.+)$")
+        local spec = name and declared[name]
+        if not spec then
+            local known = table.concat(schema.mode_input_names(adapter, mode), ", ")
+            vim.notify(("[ezdap] run: expected a declared input, got '%s'%s"):format(
+                tokens[i], name and ("; declared: " .. known) or ""), vim.log.levels.WARN)
             return
         end
-        inputs[tok:sub(1, eq - 1)] = tok:sub(eq + 1)
+        if seen[name] then
+            vim.notify("[ezdap] run: --" .. name .. " given more than once", vim.log.levels.WARN)
+            return
+        end
+        seen[name] = true
+        local group = {}
+        i = i + 1
+        while i <= #tokens and not tokens[i]:match("^%-%-") do
+            group[#group + 1] = tokens[i]
+            i = i + 1
+        end
+        local value, err = inputs_registry.parse_tokens(spec, group)
+        if err then
+            vim.notify("[ezdap] run: --" .. name .. ": " .. err, vim.log.levels.WARN)
+            return
+        end
+        inputs[name] = value
     end
     return adapter, mode, inputs
 end
@@ -238,7 +246,7 @@ local function _debug_run(_, args, opts)
     elseif sub == "run_file" then
         ezdap.run_file(args[2])
     elseif sub == "run" then
-        local adapter, mode, inputs = _parse_run_args(opts.args or "")
+        local adapter, mode, inputs = _parse_run_args({ unpack(args, 2) })
         if inputs then ezdap.run_mode(adapter or "", mode or "", inputs) end
     elseif sub == "new_run_file" then
         ezdap.new_run_file({ unpack(args, 2) })
@@ -307,58 +315,46 @@ local function _debug_run(_, args, opts)
     end
 end
 
----Completion for `:Ezdap run …` tokens: the adapter (1st bare positional),
----then the mode name (2nd), then input names not yet supplied (as `name=`),
----or a value once `=` has been typed (file paths for a path-like input).
+---Completion for `:Ezdap run …`: the adapter, then the mode, then each declared
+---input as `--name`, and a value once a flag is open (paths, true/false, a fixed
+---set). `--` starts a flag, so a value position is only completed off a `--`.
 ---@param schema table
----@param raw string        the run line as typed, up to the token being completed
+---@param toks string[]     the fargs after `run`, up to the token being completed
 ---@param arg_lead string   the token being completed
 ---@return string[]
-local function _run_complete(schema, raw, arg_lead)
-    local adapter, mode_name
-    local supplied = {}
-    for _, tok in ipairs(_run_tokens(raw)) do
-        local e = tok:find("=", 1, true)
-        if e then
-            supplied[tok:sub(1, e - 1)] = true
-        elseif not adapter then
-            adapter = tok
-        elseif not mode_name then
-            mode_name = tok
+local function _run_complete(schema, toks, arg_lead)
+    local adapter, mode_name = toks[1], toks[2]
+    if not adapter then return ezdap.available_adapters() end
+    if not mode_name then return schema.mode_names(adapter) end
+
+    -- The last `--name` is the open input; count the values it has taken since.
+    local declared = schema.mode_inputs(adapter, mode_name)
+    local open, taken, supplied = nil, 0, {}
+    for i = 3, #toks do
+        local name = toks[i]:match("^%-%-(.+)$")
+        if name then
+            open, taken, supplied[name] = name, 0, true
+        elseif open then
+            taken = taken + 1
         end
     end
 
-    local eq = arg_lead:find("=", 1, true)
-    if eq then
-        if not adapter or not mode_name then return {} end
-        local name   = arg_lead:sub(1, eq - 1)
-        local pfx    = arg_lead:sub(1, eq)
-        local val    = arg_lead:sub(eq + 1)
-        -- Completing an input's value: whatever the input itself can offer,
-        -- paths, true/false, a fixed set of values, nothing for the rest.
-        local input  = schema.mode_inputs(adapter, mode_name)[name]
-        local values = require("ezdap.run.inputs").completion(input, val)
-        return vim.tbl_map(function(v) return pfx .. v end, values)
+    local spec = open and declared[open]
+    local collection = spec and (spec.type == "list" or spec.type == "map")
+    if spec and not arg_lead:match("^%-%-") and (collection or taken == 0) then
+        return require("ezdap.run.inputs").completion(spec, arg_lead)
     end
 
-    -- No `=` yet: complete the adapter, then the mode, then input names.
-    if not adapter then
-        return ezdap.available_adapters()
-    elseif not mode_name then
-        return schema.mode_names(adapter)
-    end
     local out = {}
     for _, name in ipairs(schema.mode_input_names(adapter, mode_name)) do
-        if not supplied[name] then out[#out + 1] = name .. "=" end
+        if not supplied[name] then out[#out + 1] = "--" .. name end
     end
     return out
 end
 
----Completion for `:Ezdap …`. `raw` is the line as typed up to the token being
----completed, for the subcommands that split their arguments themselves.
----@param raw string
+---Completion for `:Ezdap …`, from the fargs `nvim_parse_cmd` split.
 ---@type ezdap.usercmd.subcommand
-local function _complete_subs(_, rest, arg_lead, raw)
+local function _complete_subs(_, rest, arg_lead)
     if #rest == 0 then return _debug_subs end
     if rest[1] == "breakpoint" then
         return _bp_complete({ unpack(rest, 2) })
@@ -370,10 +366,7 @@ local function _complete_subs(_, rest, arg_lead, raw)
         return vim.fn.getcompletion(arg_lead, "file")
     end
     if rest[1] == "run" then
-        -- <adapter> <mode> <input>=<value>…, split from the raw line so a value
-        -- keeps the backslashes its own parser reads.
-        local schema = require("ezdap.run.schema")
-        return _run_complete(schema, raw, arg_lead)
+        return _run_complete(require("ezdap.run.schema"), { unpack(rest, 2) }, arg_lead)
     end
     if rest[1] == "adapter_info" then
         -- Positional: [adapter] [mode]; no argument lists every adapter name.
@@ -398,39 +391,21 @@ local function _complete_subs(_, rest, arg_lead, raw)
     return {}
 end
 
--- Completion leaves the split to Neovim: the raw line goes back through
--- nvim_parse_cmd, so `rest` follows the native <f-args> rules below. Running a
--- command instead uses `split_args`, which splits the raw line itself and leaves
--- each escape to exactly one layer.
---
--- Neovim's rules (:h <f-args>): arguments are separated by unescaped whitespace.
--- A backslash escapes the character after it: \<space> (or \<tab>) is that
--- literal whitespace and does not split the argument, \\ is a single backslash,
--- and a backslash before anything else -- including a trailing backslash at end
--- of line -- is kept verbatim along with what follows it. Quotes are not special.
---
---     a\ b c   -> a b  and  c        a\\b     -> a\b
---     a\\\ b   -> a\ b               a\nb     -> a\nb
---     \ a      -> " a"               a\       -> a\
---     "a b"    -> "a  and  b"        --p=x\ y -> --p=x y
---
--- `split_args` escapes only whitespace -- a backslash before a space or tab is
--- that literal character -- and keeps every other backslash for the caller's own
--- parser to read.
+-- Execution and completion take the same split: the user command's `opts.fargs`
+-- on the way in, and `nvim_parse_cmd` (the same <f-args> rules) on the way out.
+-- A `\ ` escapes a space; quotes and every other backslash are literal.
 
----`raw` is the line as typed up to the token being completed: `rest` has been
----split and unescaped, this has not, so a subcommand that reads a value's own
----backslashes (a `:Ezdap run … input=value`) takes them from `raw`.
----@alias ezdap.usercmd.subcommand fun(cmd:string,rest:string[],arg_lead:string,raw:string):string[]
+---A completion callback for a subcommand: the command name, the fargs after it
+---(up to the token being completed), and that token.
+---@alias ezdap.usercmd.subcommand fun(cmd:string,rest:string[],arg_lead:string):string[]
 
 ---The `complete` callback for `:Ezdap`, in the shape `nvim_create_user_command`
 ---calls: re-split the raw line the way <f-args> would, then hand the pieces to
 ---`_complete_subs`.
 ---@param arg_lead string
 ---@param cmd_line string
----@param cursorpos integer  byte index in `cmd_line` of the cursor
 ---@return string[]
-function M.complete(arg_lead, cmd_line, cursorpos)
+function M.complete(arg_lead, cmd_line)
     local function filter(strs)
         local out = {}
         for _, s in ipairs(strs or {}) do
@@ -453,46 +428,14 @@ function M.complete(arg_lead, cmd_line, cursorpos)
         rest[#rest] = nil
     end
 
-    -- The line up to the token being completed, as typed: `rest` is split and
-    -- unescaped, this is not, so a subcommand reads a value's backslashes here.
-    local raw = cmd_line:sub(1, cursorpos - #arg_lead)
-
-    return filter(_complete_subs(parsed.cmd, rest, arg_lead, raw))
-end
-
----Split a raw argument string into its arguments, by the execution-side rules
----(module doc): whitespace separates, and a backslash escapes only a following
----space or tab, so a value keeps the backslashes its own parser reads.
----@param raw string
----@return string[]
-function M.split_args(raw)
-    local args, arg, i = {}, {}, 1
-    local function flush()
-        if #arg > 0 then args[#args + 1] = table.concat(arg) end
-        arg = {}
-    end
-    while i <= #raw do
-        local c, next_c = raw:sub(i, i), raw:sub(i + 1, i + 1)
-        if c == "\\" and (next_c == " " or next_c == "\t") then
-            arg[#arg + 1] = next_c
-            i = i + 2
-        elseif c:match("%s") then
-            flush()
-            i = i + 1
-        else
-            arg[#arg + 1] = c
-            i = i + 1
-        end
-    end
-    flush()
-    return args
+    return filter(_complete_subs(parsed.cmd, rest, arg_lead))
 end
 
 ---Run a `:Ezdap …` invocation, exactly as the `:Ezdap` callback hands it over.
 ---The `setup()` guard has already run by the time init calls this.
 ---@param cmd  string
 ---@param args string[]
----@param opts table   the user-command opts (`opts.args`, `opts.range`)
+---@param opts table   the user-command opts (`opts.range`)
 function M.run(cmd, args, opts)
     _debug_run(cmd, args, opts)
 end

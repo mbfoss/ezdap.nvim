@@ -89,14 +89,14 @@ options is fine, and everything left out keeps its default.
 3. Quick start                                             *ezdap-quick-start*
 
 `:Ezdap run` launches or attaches to an adapter using one of its named modes,
-filled in with `input=value` arguments:
+filling in its inputs with `--name value` flags:
 
 >vim
     " Launch a native binary under codelldb
-    :Ezdap run codelldb binary command=./program\ argument
+    :Ezdap run codelldb binary --command ./program\ argument
     
     " Debug a Python file
-    :Ezdap run debugpy script command=./main.py\ argument
+    :Ezdap run debugpy script --command ./main.py\ argument
     
     " Attach to a running process (opens process selector)
     :Ezdap run codelldb attach
@@ -143,7 +143,7 @@ connects to a DAP server already listening on `host:port`, through its single
 `connect` mode:
 
 >vim
-    :Ezdap run remote connect host=127.0.0.1 port=4711
+    :Ezdap run remote connect --host 127.0.0.1 --port 4711
 <
 
 A definition is read on first use, such as a `:Ezdap run <adapter> ...`.
@@ -162,30 +162,26 @@ run file.
 FROM THE COMMAND LINE                                      *ezdap-run-command*
 
 >vim
-    :Ezdap run <adapter> <mode> [input=value ...]
+    :Ezdap run <adapter> <mode> [--input value ...]
 <
 
-Arguments split on whitespace: quotes are _not_ special, and a value containing
-a space is written `\`, as in `:Ezdap run debugpy script command=./main.py\
---verbose cwd=/tmp/my\ project`. Splitting reads only that whitespace escape;
-every other backslash is left for the input’s own reading, below.
-
-On the command line a `list` or `map` input is one token: entries separated by
-commas or newlines, each entry `KEY=VALUE` for a map. Escape a comma inside an
-entry as `\,`, a newline as `\n`, an `=` as `\=`, and a backslash as `\\`. Any
-other backslash is taken literally, kept with the character that follows it. A
-plain (`string`) input reads its value as typed, so a single `\` is one
-backslash:
+Each input is a `--name` flag followed by its values: exactly one for a scalar,
+one per argument for a `list`, and one `KEY=VALUE` per argument for a `map`.
+Arguments split on whitespace — quotes are _not_ special, and a value
+containing a space is written `\`, as in `:Ezdap run debugpy script --command
+./main.py\ --verbose --cwd /tmp/my\ project`. Nothing else is escaped: a comma
+or backslash is literal, and it is a map’s first `=` that separates its key
+from its value. A token that starts with `--` always opens the next input, so a
+`list` entry may not begin with `--`:
 
 >vim
-    :Ezdap run gdb binary command=./app env=RUST_LOG=debug,NO_COLOR=1
-    :Ezdap run codelldb binary command=./app args=--input\ my\ file.txt,--verbose
-    :Ezdap run codelldb binary command=./app args=--fields=a\,b,--verbose
+    :Ezdap run gdb binary --command ./app --env RUST_LOG=debug NO_COLOR=1
+    :Ezdap run remote connect --host 127.0.0.1 --port 4711
 <
 
 **Tab-completion** offers adapters, then mode names, then the inputs available
-for the chosen mode and, after an `=`, the values that input can take: paths
-for the path-like ones, `true`/`false` for a boolean.
+for the chosen mode as `--name`, and a value once a flag is open: paths for the
+path-like ones, `true`/`false` for a boolean.
 
 
 RUN FILES                                                    *ezdap-run-files*
@@ -539,7 +535,7 @@ forwards arguments, range and completion to `:Ezdap`.
   ---------------------------------------------------------------------------------
   Subcommand                      Description
   ------------------------------- -------------------------------------------------
-  run …                           Launch/attach from input=value tokens
+  run …                           Launch/attach from --input value flags
 
   run_file [path]                 Run a Lua run file, or pick from a directory
 
@@ -736,17 +732,18 @@ WHY INPUTS AND NOT RAW DAP                                      *ezdap-inputs*
 
 Modes declare `inputs` rather than taking a raw DAP body, which buys:
 
-- **Completion.** `:Ezdap run lldb binary <Tab>` lists that mode’s inputs, and
-    `command=<Tab>` completes paths because the input is declared path-like.
+- **Completion.** `:Ezdap run lldb binary <Tab>` lists that mode’s inputs as
+    `--name`, and `--command <Tab>` completes paths because the input is declared
+    path-like.
 - **Validation before launch.** Missing required inputs, a port outside
-    0–65535, or a malformed `A=1,B=2` are reported during resolution, with the
+    0–65535, or a malformed `KEY=VALUE` are reported during resolution, with the
     input named, instead of as adapter stderr.
 - **Generated run files.** `:Ezdap new_run_file` writes a run file from
     `inputs`, including each field’s description, so no template can diverge from
     what the adapter accepts.
 - **One value, two entry points.** An input can be supplied on the command line
-    or in a run file (`env` as `A=1,B=2` or as a table); both resolve through the
-    same declaration into the same `build`.
+    or in a run file (`env` as `--env A=1 B=2` or as a table); both resolve through
+    the same declaration into the same `build`.
 - **Mode-supplied defaults.** A mode can act on a missing input instead of
     omitting the field.
 

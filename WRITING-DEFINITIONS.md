@@ -74,18 +74,18 @@ An `ezdap.Mode` is one runnable configuration:
 | --- | --- | --- |
 | `description` | `string` | A line shown in pickers and `:Ezdap new_run_file` output. |
 | `request` | `"launch"` \| `"attach"` | Which DAP request the mode issues. |
-| `inputs` | `table<string, ezdap.Input>` | What the user is asked for, keyed by the name used as `key=value` on the command line. |
+| `inputs` | `table<string, ezdap.Input>` | What the user is asked for, keyed by the name used as `--name` on the command line. |
 | `build` | `fun(inputs): table?, table\|string?` | Turns answered inputs into the DAP request body and returns it. A second return value is a `host`/`port` table overriding the definition's own. Return `nil, "message"` to abort with that error. It runs in a coroutine, so it may yield; a `vim.ui.select` picker inside `build` is fine. |
 
 An `ezdap.Input` describes one value:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | What the value is. Defaults to `string`. `list` is a table of entries, `map` a table of `key=value` entries. |
+| `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | What the value is. Defaults to `string`. `list` is a table of entries, `map` a table of `KEY=VALUE` entries. |
 | `item_type` | as above, scalars only | The entry type of a `list` or `map`. |
 | `required` | `boolean` | Leaving it unset is an error. Defaults to `false`. |
 | `completion` | `"file"` \| `"dir"` \| `"command"` \| `string[]` \| `fun(partial): string[]` | What the value completes with: a named source, the values themselves, or a function computing them. Suggests only; it never rejects a value. |
-| `description` | `string` | A few words on what the input means. This is what `:Ezdap new_run_file` and `quick_run` completion show. |
+| `description` | `string` | A few words on what the input means. This is what `:Ezdap new_run_file` and command-line completion show. |
 
 ## Modes
 
@@ -127,7 +127,7 @@ return {
 The mode is now everywhere it should be, with no further wiring:
 
 ```vim
-:Ezdap run myadapter binary command=./a.out cwd=/src stop_on_entry=true
+:Ezdap run myadapter binary --command ./a.out --cwd /src --stop_on_entry true
 :Ezdap new_run_file myadapter binary
 ```
 
@@ -136,7 +136,7 @@ How the pieces fit:
 - **`inputs`**: one entry per accepted value, keyed by the name typed on the
   command line or written in a run file's `parameters`. `type` is what `build`
   receives (`string`, `boolean`, `integer`, `number`, and the two collections
-  `list` (`a,b`) and `map` (`A=1,B=2`, string keys)), and it is the whole of
+  `list` and `map` (string keys)), and it is the whole of
   what an input declares about its value. A `list`/`map` declares its *entries*
   the same way under `item_type`: `{ type = "list", item_type = "integer" }` is
   a list of integers, and a collection that declares none holds strings. The
