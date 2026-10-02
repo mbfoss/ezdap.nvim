@@ -11,19 +11,25 @@ speaks DAP.
 ## Features
 
 - **Breakpoints**: line, conditional, hit-count, logpoint, column, function,
-  exception (filters and named types), and data breakpoints / watchpoints.
-- **Debug view**: one side window with sessions, threads, call stacks, scopes,
-  variables, watch expressions and breakpoints in a single tree.
+  exception (filters and named types) and data breakpoints / watchpoints, 
+  all synced live to running sessions and marked with distinct gutter glyphs.
+- **Debug view**: one side window with sessions, threads, run buffers, call
+  stacks, scopes, variables, watch expressions and breakpoints in a single tree,
+  with fold controls and an in-view keymap for inspecting, editing and removing
+  entries.
 - **Inline variable values**: values shown in the source while stopped, in
   several placements (requires a treesitter parser).
-- **Per-session buffers**: REPL, program output, adapter terminal.
-- **Execution control**: jump-to-cursor, restart frame, step-into-targets,
-  exception info, disassembly view and instruction-level stepping.
-- **Parallel sessions**: several debuggees at once, with a picker to switch
-  between them.
+- **Run buffers**: each run gets its own REPL (with Tab completion), program
+  output, adapter terminal and progress log, sharing a split panel window.
+- **Execution control**: step over/in/out, jump-to-cursor, restart frame,
+  step-into-targets, reverse debugging, exception info, disassembly view and
+  instruction-level stepping.
+- **Inspection**: hover the word under the cursor or a visual selection, as an
+  expandable tree or as the full value in one shot.
+- **Parallel sessions**: several debuggees at once, each with its own row and
+  buffers, with pickers to switch sessions, threads and frames.
 - **Project-scoped persistence**: breakpoints and watch expressions saved per
   project and restored automatically.
-- **`:checkhealth ezdap`**: reports the Neovim version, setup and project state.
 
 ## Demo
 
