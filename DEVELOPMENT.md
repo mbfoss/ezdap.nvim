@@ -188,27 +188,32 @@ layered on that one, paid for in every projection (a schema merge, a refine
 step, a check step, and the rule reconciling a `type` with a `format` naming a
 different one), and it bought two behaviours a `build` line each expresses.
 
-#### Two authoring forms
+#### A string form, and the typed form
 
-An input declares a *value space*, reached two ways:
+An input declares a *value space*, reached two ways, but only one of them is
+text:
 
-- the **string form**: text, for a scalar. `:Ezdap run codelldb launch
-  --command ./a.out\ --verbose` is this; on the CLI a collection instead takes
-  one token per entry (`--env A=1 B=2`), which the parser turns into a table.
-- the **typed form**: a Lua value that already has its type -- a run file or API
-  `parameters` writing `env = { A = "1" }`.
+- the **string form**, the command line's: `:Ezdap run codelldb launch
+  --command ./a.out\ --verbose` is this; a collection instead takes one token per
+  entry (`--env A=1 B=2`), which the parser turns into a table.
+- the **typed form**, a run file's or an API caller's: a Lua value that already
+  has its type -- `env = { A = "1" }`, `port = 8080`, `enabled = true`.
 
-A collection has no string form: it is always the table, whether the CLI's tokens
-built it or a run file wrote it. Both routes land on the input's declared `type`,
-so `build` never sees the difference and one call may mix them per input.
+Only `:Ezdap run` parses: it reads each token against the input's `type` before
+resolving the run. A run file or an API caller is already writing Lua, so its
+value must *be* the value -- `port = "8080"` is refused ("expected integer, got
+\"8080\""), which is why `input_schema` describes the typed form alone. A
+collection has no string form at all: it is always the table. Both routes land on
+the input's declared `type`, so `build` never sees the difference.
 
 This is why a row is more than a parser. `map` is the clearest case: `--env A=1
 B=2` on a command line or `{ A = "1" }` in a typed file, and `build` receives one
 table either way. The
-[inputs.lua](lua/ezdap/run/inputs.lua) row states both forms, along with how the
-input gets described to a schema-driven editor, seeded into a scaffolded
-document, and completed on a command line. Adding a type means adding one row,
-and every consumer, in ezdap and easytasks alike, reads it from there.
+[inputs.lua](lua/ezdap/run/inputs.lua) row states how a value is read from text
+and as a typed value, along with how the input gets described to a schema-driven
+editor, seeded into a scaffolded document, and completed on a command line.
+Adding a type means adding one row, and every consumer, in ezdap and easytasks
+alike, reads it from there.
 
 Both forms must describe the *same* value. A transformation into a different
 shape is not a second spelling and doesn't belong in a row: splitting a command

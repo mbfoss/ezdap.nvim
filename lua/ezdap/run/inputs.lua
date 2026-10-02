@@ -247,16 +247,19 @@ local function _show(value)
     return vim.inspect(value)
 end
 
----Hold one scalar to the shape its type names. Both authored forms pass through
----here (a parsed string leaving `parse`, a typed value entering `read`), and this
----is the whole of what the registry refuses: what a *path* or a *port* additionally
----is, `build` says, with the helpers in `ezdap.shared`.
+---Hold one scalar to the shape its type names. A command line's parsed string
+---leaves `parse` and a typed value enters `read`, both landing here; this is the
+---whole of what the registry refuses. What a *path* or a *port* additionally is,
+---`build` says, with the helpers in `ezdap.shared`.
 ---@param r ezdap.inputs.Resolved
 ---@param value any
 ---@return any? value, string? err
 local function _accept(r, value)
     if not _is_type[r.def.type](value) then
-        return nil, ("expected %s, got %s"):format(r.def.type, _show(value))
+        -- A number or a boolean written as text is the command line's form, not
+        -- a typed value's; say so, since `port = "8080"` reads as an answer.
+        local hint = type(value) == "string" and " (a string is only the command line's form)" or ""
+        return nil, ("expected %s, got %s%s"):format(r.def.type, _show(value), hint)
     end
     return value
 end
@@ -348,10 +351,9 @@ function M.parse_entry(input, raw)
     return _parse_scalar(r, raw)
 end
 
----The JSON Schema for one input, as a tasks file authors it: for a scalar with a
----string form, that form as well as the typed one. A collection is its array or
----object shape, and its entries are typed (a table's entries are read, never
----parsed).
+---The JSON Schema for one input, as a run file or a caller authors it: the typed
+---form alone, since a string is the command line's and reaches no document. A
+---collection is its array or object shape, and its entries are typed.
 ---@param input ezdap.Input?
 ---@return table
 function M.json_schema(input)
@@ -364,15 +366,6 @@ function M.json_schema(input)
 
     if r.kind == "list" then return { type = "array", items = schema } end
     if r.kind == "map" then return { type = "object", additionalProperties = schema } end
-
-    -- A scalar whose `parse` reads a string is authored in both forms, and
-    -- `_read_inputs` takes either (`port = "8080"`, `enabled = "true"`). Its type
-    -- names both, and the constraints stay on the typed branch, applying there alone.
-    -- A collection is not: its entries are read, never parsed, so this is the scalar
-    -- path's widening and the branches above return before it.
-    if r.def.parse then
-        schema.type = { schema.type, "string" }
-    end
     return schema
 end
 

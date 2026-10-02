@@ -146,12 +146,13 @@ end
 
 -- Resolving
 
----Read every declared input from `values`: a string is a scalar's string form and
----is `parse`d, any other Lua value (a collection's table included) is `read` as it
----is. Unset inputs are absent (recorded in `missing` when `required`), and a name
----the mode declares nothing for is an error, not a value quietly dropped.
+---Read every declared input from `values`, each as the Lua value it is (a
+---collection's table included). The string form belongs to the command line, which
+---`parse`s it before calling here, so a number or a boolean given as text is
+---refused. Unset inputs are absent, and a name the mode declares nothing for is an
+---error, not a value quietly dropped.
 ---@param mode ezdap.Mode
----@param values table<string, any>  input name → a value in either authoring form
+---@param values table<string, any>  input name → a value in its typed form
 ---@return table<string, any> inputs, string[] missing, string[] errs
 local function _read_inputs(mode, values)
     local inputs, missing, errs = {}, {}, {}
@@ -164,12 +165,7 @@ local function _read_inputs(mode, values)
         if raw == nil or raw == "" then
             if spec.required then missing[#missing + 1] = name end
         else
-            local val, cerr
-            if type(raw) == "string" then
-                val, cerr = inputs_registry.parse(spec, raw)
-            else
-                val, cerr = inputs_registry.read(spec, raw)
-            end
+            local val, cerr = inputs_registry.read(spec, raw)
             if cerr then
                 errs[#errs + 1] = name .. ": " .. cerr
             else
@@ -202,7 +198,7 @@ end
 ---@field adapter       string
 ---@field mode string
 ---@field name?         string              run group name for the resolved task
----@field values?       table<string, any>  input name → a value in either authoring form
+---@field values?       table<string, any>  input name → a value in its typed form
 
 ---Resolve one of an adapter's named modes, plus values for its inputs, into a
 ---runnable `ezdap.Task`: request kind and any task-level connection already in

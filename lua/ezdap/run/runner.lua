@@ -340,9 +340,10 @@ function M.run_file(path)
 end
 
 ---Launch or attach under an adapter's named mode, resolving `inputs` (the
----answers to the mode's declared inputs, in either authoring form) through
----`schema.resolve_task`. The run is returned right away, even when `build` stops
----to ask the user something: it starts, or fails, once they answer.
+---answers to the mode's declared inputs, in their typed form — a number is a
+---number, not text) through `schema.resolve_task`. The run is returned right away,
+---even when `build` stops to ask the user something: it starts, or fails, once
+---they answer.
 ---@param adapter string  adapter name, e.g. "codelldb"
 ---@param mode_name string  mode name, e.g. "binary"
 ---@param inputs? table<string, any>  input name -> value, e.g. { command = "./a.out" }

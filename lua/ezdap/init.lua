@@ -377,8 +377,9 @@ function M.adapter_info(adapter, mode)
 end
 
 ---Launch or attach under an adapter using one of its declared `modes`, assembling
----the request body from `inputs`: the answers to the mode's declared inputs, in
----either authoring form. The entry point behind `:Ezdap run`.
+---the request body from `inputs`: the answers to the mode's declared inputs, each
+---in its typed form — a number, a boolean, a table (text is the command line's
+---form, parsed before `run_mode` sees it). The entry point behind `:Ezdap run`.
 ---
 ---Pass a `presenter` to show the run in a UI of your own: the run's buffers,
 ---progress and outcome go to those callbacks, ezdap's own panel never sees it, and
