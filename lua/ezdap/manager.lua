@@ -5,7 +5,7 @@
 ---this module wraps it with the active-session notion and is the single DAP-layer
 ---dependency surface for consumers (it also re-exports the breakpoint registry).
 ---It performs no user interaction: no prompts, pickers or notifications; that
----all lives in the command surface (command.lua) built on top of it.
+---all lives in the commands module (commands.lua), a peer surface built on it.
 
 local client            = require("ezdap.dap.client")
 local Signal            = require("ezdap.util.Signal")

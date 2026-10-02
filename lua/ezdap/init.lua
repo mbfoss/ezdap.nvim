@@ -106,15 +106,16 @@ local function _warn_if_unpersisted()
         vim.log.levels.WARN)
 end
 
--- The user-command surface. `setup()` registers `:Ezdap` and routes it here
--- through `M.command`/`M.complete`.
+-- The `:Ezdap` dispatcher. `setup()` registers the command and routes it here
+-- through `_command`/`M.complete`; the subcommand bodies it dispatches to live
+-- in the `commands` module.
 
 ---@type table?
 local _command_mod
 
 ---@return table
 local function _cmd()
-    _command_mod = _command_mod or require("ezdap.command")
+    _command_mod = _command_mod or require("ezdap.commands")
     return _command_mod
 end
 
@@ -146,7 +147,7 @@ local _bp_subs = {
     "list",
 }
 
----`set` argument keys, mapped to the fields `command.breakpoint.set` takes.
+---`set` argument keys, mapped to the fields `commands.breakpoint.set` takes.
 local _BP_SET_KEYS = {
     col = "column", cond = "condition", hit = "hit_condition", log = "log_message",
 }
@@ -157,7 +158,7 @@ local _BP_SET_KEYS = {
 ---adapter-offered columns are `:Ezdap breakpoint column`. No arguments at all sets
 ---a plain line breakpoint at the cursor.
 ---@param args string[]
----@return ezdap.command.BpSetOpts?
+---@return ezdap.commands.BpSetOpts?
 local function _parse_bp_set_args(args)
     local opts = {}
     for _, tok in ipairs(args) do

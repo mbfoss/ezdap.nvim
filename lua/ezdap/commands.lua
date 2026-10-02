@@ -1,6 +1,6 @@
----@brief User-facing command surface: the `breakpoint`, `debug` and `view`
----command tables reached through `:Ezdap …`. These sit on top of `manager`
----(active session + control primitives) and own all the command-level UI:
+---@brief User-facing command surface: the `breakpoint`, `debug`, `view` and
+---`panel` tables reached through `:Ezdap …`. These sit on top of `manager`
+---(active session + control primitives) and own all the user interaction:
 ---pickers, prompts, notifications and cursor handling.
 
 local select        = require("ezdap.util.select")
@@ -58,11 +58,11 @@ end
 ---Cursor-follow records, keyed by breakpoint internal_id. Armed when the user adds
 ---a source breakpoint while a session is live; consumed one-shot once the adapter
 ---reports where it bound it, and only while the user is still parked there.
----@class ezdap.command.PendingFollow
+---@class ezdap.commands.PendingFollow
 ---@field win  integer  window the breakpoint was added from
 ---@field file string   source file that window must still show
 ---@field line integer  line it was added at; the cursor must still sit here
----@type table<integer, ezdap.command.PendingFollow>
+---@type table<integer, ezdap.commands.PendingFollow>
 local _pending_follow = {}
 
 -- A follow is keyed to the active session's binding; once the active session
@@ -154,7 +154,7 @@ local function _word_start(line, col)
 end
 
 ---A breakpoint's registry key: what `breakpoints.patch`/`remove` identify it by.
----@class ezdap.command.BpKey
+---@class ezdap.commands.BpKey
 ---@field line   integer
 ---@field column integer?
 
@@ -183,7 +183,7 @@ end
 ---@param file string
 ---@param row  integer
 ---@param opts { ask?: boolean }?
----@param cb   fun(key: ezdap.command.BpKey?, bp: ezdap.dap.SourceBreakpoint?)
+---@param cb   fun(key: ezdap.commands.BpKey?, bp: ezdap.dap.SourceBreakpoint?)
 local function _resolve_target(file, row, opts, cb)
     local cands = _bps_at_row(file, row)
     local function key(bp) return { line = bp.line, column = bp.column }, bp end
@@ -266,7 +266,7 @@ end
 
 ---Fields `:Ezdap breakpoint set` can write. `column` is a `col=` column number;
 ---`""` clears a string field, as in `breakpoints.patch`.
----@class ezdap.command.BpSetOpts
+---@class ezdap.commands.BpSetOpts
 ---@field column        string?  a 1-based column number
 ---@field condition     string?
 ---@field hit_condition string?
@@ -275,7 +275,7 @@ end
 ---Create or update a breakpoint at the cursor. Bare, that is a plain line
 ---breakpoint; with `col=` it targets that column, and without one it edits
 ---whichever breakpoint on the row `_resolve_target` picks.
----@param opts ezdap.command.BpSetOpts
+---@param opts ezdap.commands.BpSetOpts
 function M.breakpoint.set(opts)
     local file, row = _cursor_location()
     if not file then return end
@@ -294,7 +294,7 @@ function M.breakpoint.set(opts)
         end
         column = math.max(1, math.floor(n))
     end
-    ---@param key ezdap.command.BpKey
+    ---@param key ezdap.commands.BpKey
     local function apply(key)
         bps.patch(file, key.line, {
             column        = key.column,
