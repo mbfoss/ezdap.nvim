@@ -313,7 +313,7 @@ end
 -- The projections
 
 ---Read a scalar input from its string form. A collection has none: it is always
----a table, from a run file, the API, or the CLI's `--name` tokens.
+---a table, from a run file or the API.
 ---@param input ezdap.Input?
 ---@param raw string
 ---@return any? value, string? err
@@ -336,41 +336,16 @@ function M.read(input, value)
     return _accept(r, value)
 end
 
----Read one input from the fargs after `--name`: a scalar is one token, a `list`
----one entry per token, a `map` one `KEY=VALUE` per token (split at the first
----`=`). No escaping. An empty list leaves the input unset; a scalar needs one.
+---Read one collection entry (or a scalar's whole value) from its string form. The
+---command line splits a token into an input's `--name`, and a `map` entry into its
+---`KEY=VALUE`, before this is called.
 ---@param input ezdap.Input?
----@param tokens string[]
+---@param raw string
 ---@return any? value, string? err
-function M.parse_tokens(input, tokens)
+function M.parse_entry(input, raw)
     local r, err = _resolve(input)
     if err then return nil, err end
-
-    if not r.kind then
-        if #tokens == 0 then return nil, "expected a value" end
-        if #tokens > 1 then
-            return nil, ("expected one value, got %d"):format(#tokens)
-        end
-        return _parse_scalar(r, tokens[1])
-    end
-
-    if #tokens == 0 then return nil end
-
-    local out = {}
-    for _, tok in ipairs(tokens) do
-        local key = nil
-        if r.kind == "map" then
-            local eq = tok:find("=", 1, true)
-            if not eq or eq == 1 then
-                return nil, ("expected KEY=VALUE, got %q"):format(tok)
-            end
-            key, tok = tok:sub(1, eq - 1), tok:sub(eq + 1)
-        end
-        local value, perr = _parse_scalar(r, tok)
-        if perr then return nil, perr end
-        if key then out[key] = value else out[#out + 1] = value end
-    end
-    return _sealed(r.kind, out)
+    return _parse_scalar(r, raw)
 end
 
 ---@param input ezdap.Input?
@@ -401,38 +376,22 @@ function M.seed(input)
     return vim.deepcopy(r.def.seed)
 end
 
----The part of a token a value completes: everything before what was typed is
----kept. A token is one entry, so only a `map` has anything to split, at its first
----`=`; until that is typed, there is no value to complete.
----@param kind "list"|"map"|nil
----@param partial string
----@return string? head, string? tail  nil when what is being typed is a map's key
-local function _entry_at(kind, partial)
-    if kind ~= "map" then return "", partial end
-    local eq = partial:find("=", 1, true)
-    if not eq then return nil, nil end
-    return partial:sub(1, eq), partial:sub(eq + 1)
-end
-
----Candidate values for one token of an input's value, as typed on a command line:
----the value after `--name`, or one entry of a collection (a map's value follows
----its `=`). An input's own `completion` answers first, then its row.
+---Candidate values for one value of an input: an input's whole value, or one entry
+---of a collection. A `map`'s entry arrives as the part after its `=`, which the
+---command line has already split off. An input's own `completion` answers first,
+---then its row.
 ---@param input ezdap.Input?
 ---@param partial string?  the value typed so far
 ---@return string[]
 function M.completion(input, partial)
     local r = _resolve(input)
-    local head, tail = _entry_at(r.kind, partial or "")
-    if not head or not tail then return {} end
 
     -- What the input asked for stands in place of its type's own: it is the narrower
     -- set of the two, and the only one that knows this particular value.
     local complete = r.complete or r.def.complete
     if not complete then return {} end
 
-    local values = complete(tail)
-    if head == "" then return values end
-    return vim.tbl_map(function(v) return head .. v end, values)
+    return complete(partial or "")
 end
 
 ---What is wrong with how an input is *declared*, if anything: a type that is no

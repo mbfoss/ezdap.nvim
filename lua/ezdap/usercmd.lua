@@ -188,6 +188,46 @@ local _debug_subs = {
     "project", "clean",
 }
 
+---Read one `--name` argument group from the fargs: a scalar takes exactly one
+---token, a `list` one entry per token, a `map` one `KEY=VALUE` per token (split
+---at the first `=`). No escaping. An empty list or map leaves the input unset; a
+---scalar needs one. The registry reads strings; the `--name`/`KEY=VALUE` syntax
+---typed here is this file's.
+---@param spec ezdap.Input
+---@param group string[]
+---@return any? value, string? err
+local function _parse_input_group(spec, group)
+    local inputs = require("ezdap.run.inputs")
+    local decl_err = inputs.check(spec)
+    if decl_err then return nil, decl_err end
+
+    if spec.type ~= "list" and spec.type ~= "map" then
+        if #group == 0 then return nil, "expected a value" end
+        if #group > 1 then
+            return nil, ("expected one value, got %d"):format(#group)
+        end
+        return inputs.parse(spec, group[1])
+    end
+
+    if #group == 0 then return nil end
+
+    local out = {}
+    for _, tok in ipairs(group) do
+        local key = nil
+        if spec.type == "map" then
+            local eq = tok:find("=", 1, true)
+            if not eq or eq == 1 then
+                return nil, ("expected KEY=VALUE, got %q"):format(tok)
+            end
+            key, tok = tok:sub(1, eq - 1), tok:sub(eq + 1)
+        end
+        local value, perr = inputs.parse_entry(spec, tok)
+        if perr then return nil, perr end
+        if key then out[key] = value else out[#out + 1] = value end
+    end
+    return out
+end
+
 ---Read `:Ezdap run <adapter> <mode> [--input value …] …` from the fargs after
 ---`run`. The adapter and mode are the first two positionals; each later token
 ---that starts with `--` names a declared input, and the tokens up to the next
@@ -199,7 +239,6 @@ local _debug_subs = {
 local function _parse_run_args(tokens)
     local adapter, mode = tokens[1], tokens[2]
     local schema = require("ezdap.run.schema")
-    local inputs_registry = require("ezdap.run.inputs")
     local mode_def = adapter and mode and schema.mode(adapter, mode)
     -- No such adapter/mode: leave the flags alone and let run_mode report the
     -- adapter or mode itself, rather than an "unknown input" for every flag.
@@ -227,7 +266,7 @@ local function _parse_run_args(tokens)
             group[#group + 1] = tokens[i]
             i = i + 1
         end
-        local value, err = inputs_registry.parse_tokens(spec, group)
+        local value, err = _parse_input_group(spec, group)
         if err then
             vim.notify("[ezdap] run: --" .. name .. ": " .. err, vim.log.levels.WARN)
             return
@@ -315,6 +354,23 @@ local function _debug_run(_, args, opts)
     end
 end
 
+---Candidate values for the token being completed under the open input. A `map`
+---token is `KEY=VALUE` and only the value completes (a key is free-form): the
+---part after the first `=` is what the registry answers for, with the key kept on
+---each candidate.
+---@param spec ezdap.Input
+---@param arg_lead string
+---@return string[]
+local function _complete_input_value(spec, arg_lead)
+    local inputs = require("ezdap.run.inputs")
+    if spec.type ~= "map" then return inputs.completion(spec, arg_lead) end
+    local eq = arg_lead:find("=", 1, true)
+    if not eq then return {} end
+    local head = arg_lead:sub(1, eq)
+    return vim.tbl_map(function(v) return head .. v end,
+        inputs.completion(spec, arg_lead:sub(eq + 1)))
+end
+
 ---Completion for `:Ezdap run …`: the adapter, then the mode, then each declared
 ---input as `--name`, and a value once a flag is open (paths, true/false, a fixed
 ---set). `--` starts a flag, so a value position is only completed off a `--`.
@@ -342,7 +398,7 @@ local function _run_complete(schema, toks, arg_lead)
     local spec = open and declared[open]
     local collection = spec and (spec.type == "list" or spec.type == "map")
     if spec and not arg_lead:match("^%-%-") and (collection or taken == 0) then
-        return require("ezdap.run.inputs").completion(spec, arg_lead)
+        return _complete_input_value(spec, arg_lead)
     end
 
     local out = {}
