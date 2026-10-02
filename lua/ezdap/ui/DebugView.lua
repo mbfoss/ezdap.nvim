@@ -547,7 +547,7 @@ function DebugView:_set_active(id, sess)
     self._greyout_timer = _cancel_timer(self._greyout_timer)
 
     if not id then
-        -- session ended with no replacement: keep data visible but greyed out
+        self:_load_breakpoints()
         self:_greyout_items()
         return
     end
