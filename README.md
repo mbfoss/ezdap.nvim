@@ -677,10 +677,9 @@ The full contract is in WRITING-DEFINITIONS.md in the repository.
 -->
 
 Added adapters are listed by `:checkhealth ezdap` and `ezdap.available_adapters()`
-too, and document themselves:
-`:Ezdap adapter_info myadapter` renders the modes and inputs declared above, and
-reports whether the definition resolves and its `command` is present on this
-machine, the same as for any shipped definition.
+too, and document themselves: `:Ezdap adapter_info myadapter` renders the modes
+and inputs declared above, and, when the definition names a `command`, whether
+it is present on this machine.
 
 ### Why inputs and not raw DAP <!-- tag: inputs -->
 

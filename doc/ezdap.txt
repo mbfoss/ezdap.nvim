@@ -599,8 +599,7 @@ forwards arguments, range and completion to `:Ezdap`.
   set [col=N] [cond=…] [hit=…] [log=…]   Create or update a breakpoint; bare, a plain
                                          line breakpoint
 
-  column                                 Toggle a column breakpoint at the cursor
-                                         word
+  column                                 Toggle a column breakpoint at the cursor word
 
   remove                                 Remove the breakpoint at the cursor
 
@@ -729,9 +728,8 @@ The full contract is in WRITING-DEFINITIONS.md in the repository.
 
 Added adapters are listed by `:checkhealth ezdap` and
 `ezdap.available_adapters()` too, and document themselves: `:Ezdap adapter_info
-myadapter` renders the modes and inputs declared above, and reports whether the
-definition resolves and its `command` is present on this machine, the same as
-for any shipped definition.
+myadapter` renders the modes and inputs declared above, and, when the
+definition names a `command`, whether it is present on this machine.
 
 
 WHY INPUTS AND NOT RAW DAP                                      *ezdap-inputs*
