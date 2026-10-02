@@ -146,10 +146,10 @@ end
 
 -- Resolving
 
----Read every declared input from `values`, in whichever form it was authored: a
----string is the string form and is `parse`d, any other Lua value is the typed form
----and is `read`. Unset inputs are absent (recorded in `missing` when `required`), and
----a name the mode declares nothing for is an error, not a value quietly dropped.
+---Read every declared input from `values`: a string is a scalar's string form and
+---is `parse`d, any other Lua value (a collection's table included) is `read` as it
+---is. Unset inputs are absent (recorded in `missing` when `required`), and a name
+---the mode declares nothing for is an error, not a value quietly dropped.
 ---@param mode ezdap.Mode
 ---@param values table<string, any>  input name → a value in either authoring form
 ---@return table<string, any> inputs, string[] missing, string[] errs

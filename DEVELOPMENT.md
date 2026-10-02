@@ -190,20 +190,21 @@ different one), and it bought two behaviours a `build` line each expresses.
 
 #### Two authoring forms
 
-An input declares a *value space*, and there are two ways to write into it:
+An input declares a *value space*, reached two ways:
 
-- the **string form**: a command line, where everything is text. `:Ezdap run
-  codelldb launch --command ./a.out\ --verbose` is this.
-- the **typed form**: a structured file that already has types, e.g. an
-  easytasks `tasks.toml` writing `env = { A = "1" }` rather than `--env A=1`.
+- the **string form**: text, for a scalar. `:Ezdap run codelldb launch
+  --command ./a.out\ --verbose` is this; on the CLI a collection instead takes
+  one token per entry (`--env A=1 B=2`), which the parser turns into a table.
+- the **typed form**: a Lua value that already has its type -- a run file or API
+  `parameters` writing `env = { A = "1" }`.
 
-Both land on the input's declared `type`, so `build` never sees the difference
-and a single call may mix the two per input. They are not rival answers to what
-is legal; they are one value space reached from a CLI or from a typed file.
+A collection has no string form: it is always the table, whether the CLI's tokens
+built it or a run file wrote it. Both routes land on the input's declared `type`,
+so `build` never sees the difference and one call may mix them per input.
 
-This is why a row is more than a parser. `map` is the clearest case: you write
-`--env A=1 B=2` on a command line or an object of the same pairs in a typed file,
-and `build` receives one table either way. The
+This is why a row is more than a parser. `map` is the clearest case: `--env A=1
+B=2` on a command line or `{ A = "1" }` in a typed file, and `build` receives one
+table either way. The
 [inputs.lua](lua/ezdap/run/inputs.lua) row states both forms, along with how the
 input gets described to a schema-driven editor, seeded into a scaffolded
 document, and completed on a command line. Adding a type means adding one row,

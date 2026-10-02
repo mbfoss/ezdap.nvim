@@ -81,7 +81,7 @@ An `ezdap.Input` describes one value:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | What the value is. Defaults to `string`. `list` is a table of entries, `map` a table of `KEY=VALUE` entries. |
+| `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | What the value is. Defaults to `string`. `list` is a table of entries, `map` a table of string keys to values. |
 | `item_type` | as above, scalars only | The entry type of a `list` or `map`. |
 | `required` | `boolean` | Leaving it unset is an error. Defaults to `false`. |
 | `completion` | `"file"` \| `"dir"` \| `"command"` \| `string[]` \| `fun(partial): string[]` | What the value completes with: a named source, the values themselves, or a function computing them. Suggests only; it never rejects a value. |
