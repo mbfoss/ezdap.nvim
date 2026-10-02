@@ -3,13 +3,13 @@
 ---Writes a runnable Lua run_file for an adapter + one of its `modes`. The
 ---generated file is mode-based, exactly like `:Ezdap run`: it names the
 ---`adapter` and `mode` and lists that mode's declared inputs under
----`parameters`, each seeded with a starting value (`ezdap.inputs`' `seed`) and
+---`parameters`, each seeded with a starting value (`ezdap.run.inputs`' `seed`) and
 ---annotated with its `description`. `:Ezdap run_file` resolves it through the
----mode's `build` (see `ezdap.schema`), so a run file and `:Ezdap run`
+---mode's `build` (see `ezdap.run.schema`), so a run file and `:Ezdap run`
 ---share one description of a mode, its `inputs`, and never drift.
 
-local schema = require("ezdap.schema")
-local inputs_registry = require("ezdap.inputs")
+local schema = require("ezdap.run.schema")
+local inputs_registry = require("ezdap.run.inputs")
 
 local M = {}
 

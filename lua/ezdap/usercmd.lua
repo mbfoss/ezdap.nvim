@@ -335,7 +335,7 @@ local function _run_complete(schema, raw, arg_lead)
         -- Completing an input's value: whatever the input itself can offer,
         -- paths, true/false, a fixed set of values, nothing for the rest.
         local input  = schema.mode_inputs(adapter, mode_name)[name]
-        local values = require("ezdap.inputs").completion(input, val)
+        local values = require("ezdap.run.inputs").completion(input, val)
         return vim.tbl_map(function(v) return pfx .. v end, values)
     end
 
@@ -370,12 +370,12 @@ local function _complete_subs(_, rest, arg_lead, raw)
     if rest[1] == "run" then
         -- <adapter> <mode> <input>=<value>…, split from the raw line so a value
         -- keeps the backslashes its own parser reads.
-        local schema = require("ezdap.schema")
+        local schema = require("ezdap.run.schema")
         return _run_complete(schema, raw, arg_lead)
     end
     if rest[1] == "adapter_info" then
         -- Positional: [adapter] [mode]; no argument lists every adapter name.
-        local schema = require("ezdap.schema")
+        local schema = require("ezdap.run.schema")
         if #rest == 1 then return ezdap.available_adapters() end
         if #rest == 2 then return schema.mode_names(rest[2]) end
         return {}
@@ -383,7 +383,7 @@ local function _complete_subs(_, rest, arg_lead, raw)
     if rest[1] == "new_run_file" then
         -- Positional: <adapter> [mode] [path]. The path names a new file to
         -- create, so it has no completion.
-        local schema = require("ezdap.schema")
+        local schema = require("ezdap.run.schema")
         local used   = { unpack(rest, 2) }
         local pos    = #used + 1 -- 1-based position of the token being completed
         if pos == 1 then

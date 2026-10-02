@@ -8,7 +8,7 @@
 ---mode's `build` over the supplied values to assemble a runnable task.
 ---
 
-local inputs_registry = require("ezdap.inputs")
+local inputs_registry = require("ezdap.run.inputs")
 
 local M = {}
 
@@ -41,7 +41,7 @@ function M.mode_names(adapter)
 end
 
 ---The inputs a mode declares (`name -> ezdap.Input`), or an empty table. Hand an
----entry to `ezdap.inputs` to learn how to read, describe, seed or complete it; read
+---entry to `ezdap.run.inputs` to learn how to read, describe, seed or complete it; read
 ---the table once rather than looking entries up name-by-name.
 ---@param adapter string
 ---@param mode_name string

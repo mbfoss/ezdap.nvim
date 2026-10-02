@@ -140,7 +140,7 @@ How the pieces fit:
   what an input declares about its value. A `list`/`map` declares its *entries*
   the same way under `item_type`: `{ type = "list", item_type = "integer" }` is
   a list of integers, and a collection that declares none holds strings. The
-  full vocabulary is one row per type in [inputs.lua](lua/ezdap/inputs.lua);
+  full vocabulary is one row per type in [inputs.lua](lua/ezdap/run/inputs.lua);
   every consumer reads those rows.
 - **`completion`**: what the value offers while it is being typed, in whichever
   of three forms fits: a named source (`"file"`, `"dir"`, or `"command"`, which

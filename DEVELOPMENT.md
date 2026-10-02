@@ -24,9 +24,11 @@ Everything past that is lazy. `_ensure_loaded()` brings up the plugin proper
 API call, or when a state file is found at `setup()` or after a cwd change.
 Every public entry point calls `_require_setup()`, which both raises the "call
 setup() first" error and *is* that demand, so each body can assume a loaded
-plugin. The exceptions are the projections (`available_adapters`,
-`load_adapter`, and the `inputs`/`schema` modules), which read the runtimepath
-and the config, bring nothing up, and so answer before any `setup()`. The
+plugin. The exceptions are the projections — `available_adapters`,
+`load_adapter`, the mode projections (`mode`, `mode_names`, `mode_inputs`,
+`mode_required`) and the input projections (`input_seed`, `input_schema`) —
+which read the runtimepath and the config, bring nothing up, and so answer
+before any `setup()`. The
 autocmds are guarded the same way: cold means nothing to persist and no session
 to disconnect.
 
@@ -48,7 +50,7 @@ surface for the UI and commands; prefer it over importing `dap/client` or
 **Public API**: [lua/ezdap/init.lua](lua/ezdap/init.lua) `setup`, the run entry
 points (`run_mode`, `run_file`, `new_run_file`, `rerun`, `remove_run`), and the
 view entry points (`open_debug_view`, `close_debug_view`, `toggle_debug_view`,
-`open_disassembly_view`). Registers the user command (`config.command`)
+`open_disassembly_view`), plus the projections named above. Registers the user command (`config.command`)
 and hands each invocation to `usercmd`.
 
 **`:Ezdap` command line**: [lua/ezdap/usercmd.lua](lua/ezdap/usercmd.lua) Parses
@@ -95,11 +97,11 @@ consuming `manager`.
   assign into it directly. One file per adapter under `ezdap-adapters/` on the
   runtimepath, keyed by filename; the generic `remote` adapter ships as one;
   `ezdap.available_adapters` names them without reading any. The DAP core never
-  reads `modes`; only `ezdap.schema` does.
-- [task.lua](lua/ezdap/task.lua): the task runner backend. Consumes a native
+  reads `modes`; only `ezdap.run.schema` does.
+- [task.lua](lua/ezdap/run/task.lua): the task runner backend. Consumes a native
   task (`name`/`adapter`/`request`/`parameters` + optional `host`/`port`) and
   sends `parameters` as the DAP request body verbatim.
-- [runner.lua](lua/ezdap/runner.lua): the run tracker behind `:Ezdap
+- [runner.lua](lua/ezdap/run/runner.lua): the run tracker behind `:Ezdap
   run`/`run_file`/`rerun`/`clean`, and the single path from a mode to a running
   session: it resolves the mode, tracks every run and cancels it. Every run is
   handed a `runner.Presenter` that takes its buffers, progress and outcome;
@@ -112,21 +114,21 @@ consuming `manager`.
   caller passing a `runner.Presenter` of its own (as tomltasks' `debug` task
   type does) replaces this module for that run: ezdap's own panel never sees it,
   `clean` does not touch it, and it leaves ezdap through `remove_run`.
-- [inputs.lua](lua/ezdap/inputs.lua): the input registry. `M.types` holds one
+- [inputs.lua](lua/ezdap/run/inputs.lua): the input registry. `M.types` holds one
   row per scalar type, stating every way it is read (parsed from a command line,
   described as JSON Schema for a typed file, seeded into a scaffolded document,
   completed), and `M.sources`, the completion an input may ask for by name.
   Nothing else switches on a type name, so adding one is a single row.
-- [schema.lua](lua/ezdap/schema.lua): the engine behind `:Ezdap run`, the reader
+- [schema.lua](lua/ezdap/run/schema.lua): the engine behind `:Ezdap run`, the reader
   for `new_run_file`, and the mode engine `runner` resolves every run through.
   `resolve_task` reads a mode's declared `inputs` from a table of values and
   calls its `build`, delivering a complete `ezdap.Task` to a `done` callback, a
   `build` may stop to ask the user something first, and the returned `cancel`
   drops the answer if the caller has given up by then. Only `runner` resolves:
   every front end names a mode and lets the run do the rest.
-- [scaffold.lua](lua/ezdap/scaffold.lua): backs `:Ezdap new_run_file`, writing a
+- [scaffold.lua](lua/ezdap/run/scaffold.lua): backs `:Ezdap new_run_file`, writing a
   runnable Lua run file naming the `adapter` and `mode` and listing that mode's
-  declared inputs under `parameters`, each seeded via `ezdap.inputs` and
+  declared inputs under `parameters`, each seeded via `ezdap.run.inputs` and
   commented with its `description`, then opens it.
 
 **Persistence**: [store.lua](lua/ezdap/store.lua) A thin path + read/write
@@ -153,7 +155,7 @@ ezdap dependencies: `Signal` (the pub/sub primitive), `Tree`/`TreeBuffer`,
 An `AdapterDef` describes how to launch a DAP adapter (`command`/`host`/`port`,
 optional `setup`/`teardown`, default `request`). Its optional `modes` is a
 `table<string, ezdap.Mode>`: named launch/attach templates (`binary`, `attach`,
-`remote`, …) consumed only by `ezdap.schema`. Adapters carry no separate schema
+`remote`, …) consumed only by `ezdap.run.schema`. Adapters carry no separate schema
 of their own: each mode is wholly self-describing.
 
 Each `ezdap.Mode`:
@@ -174,7 +176,7 @@ Each `ezdap.Input` declares one input up front:
 | `required` | when `true`, the user must supply the value; leaving it unset is a resolve error. Any other unset input arrives at `build` as nil, which `build` may answer by omitting the field, or some other way: an attach `build` asks the user to pick a process for an unset `pid`, so no adapter marks that input `required` |
 | `description` | a few words on what the input means, e.g. `"process id to attach to"` |
 
-Every type is one row in [inputs.lua](lua/ezdap/inputs.lua) stating how a value
+Every type is one row in [inputs.lua](lua/ezdap/run/inputs.lua) stating how a value
 of it is parsed, described as JSON Schema, seeded and completed, and every named
 completion source one entry beside them, so adding either is a single row, never
 an `if type == …` anywhere else.
@@ -202,7 +204,7 @@ is legal; they are one value space reached from a CLI or from a typed file.
 This is why a row is more than a parser. `map` is the clearest case: you write
 `"A=1,B=2"` on a command line or an object of the same pairs in a typed file,
 and `build` receives one table either way. The
-[inputs.lua](lua/ezdap/inputs.lua) row states both forms, along with how the
+[inputs.lua](lua/ezdap/run/inputs.lua) row states both forms, along with how the
 input gets described to a schema-driven editor, seeded into a scaffolded
 document, and completed on a command line. Adding a type means adding one row,
 and every consumer, in ezdap and easytasks alike, reads it from there.

@@ -1,6 +1,6 @@
 ---@brief Standalone task runner for ezdap.
 ---
----Runs a debug task by supplying run callbacks to `ezdap.task.start`, which
+---Runs a debug task by supplying run callbacks to `ezdap.run.task.start`, which
 ---stays provider-agnostic. Every run (`:Ezdap run`, a run file, or another
 ---plugin's task) goes through here, so resolving a mode, tracking the run and
 ---cancelling it are written once.
@@ -41,7 +41,7 @@ local M = {}
 ---@field settled?  boolean  whether the presenter has been told how the run ended
 
 ---Whoever shows a run: it takes the run's buffers, progress and outcome through
----these callbacks, the same ones `ezdap.task` speaks, and disposes of what it
+---these callbacks, the same ones `ezdap.run.task` speaks, and disposes of what it
 ---made when the run is forgotten.
 ---@class ezdap.runner.Presenter : ezdap.TaskCallback
 ---@field name?       string  run group name (defaults to the adapter's)
@@ -187,7 +187,7 @@ local function _start(run, task)
     -- caller's to repeat.
     if run.owned then _last_task = task end
 
-    local cancel, sessions = require("ezdap.task").start(task, {
+    local cancel, sessions = require("ezdap.run.task").start(task, {
         -- Buffers and progress go straight to the presenter, which holds them; only
         -- the outcome is recorded here first.
         add_bufnr = run.presenter.add_bufnr,
@@ -220,7 +220,7 @@ local function _run_spec(spec, presenter)
         if run.state == "running" then _set_state(run, "failed") end
     end
 
-    cancel_resolve = require("ezdap.schema").resolve_task(spec, function(task, err)
+    cancel_resolve = require("ezdap.run.schema").resolve_task(spec, function(task, err)
         -- Cancelled while resolving: the run is already settled and nothing starts.
         if run.state ~= "running" then return end
         if not task then
@@ -349,7 +349,7 @@ end
 ---@param presenter? ezdap.runner.Presenter  a caller showing the run in a UI of its own
 ---@return ezdap.runner.Run?
 function M.run_mode(adapter, mode_name, inputs, presenter)
-    local schema = require("ezdap.schema")
+    local schema = require("ezdap.run.schema")
 
     if not adapter or adapter == "" then
         _warn("run: usage: :Ezdap run <adapter> <mode> [input=value]…")

@@ -169,7 +169,7 @@ local function _init()
     panel.init()
 
     -- Every run ezdap owns is shown through `run_display`, onto that panel.
-    require("ezdap.runner").set_presenter(
+    require("ezdap.run.runner").set_presenter(
         require("ezdap.ui.run_display").for_panel(panel))
 
     local client = require("ezdap.dap.client")
@@ -219,7 +219,7 @@ end
 function M.run_file(path)
     _require_setup("run_file")
     M.clean()
-    local runner = require("ezdap.runner")
+    local runner = require("ezdap.run.runner")
     return runner.run_file(path)
 end
 
@@ -229,7 +229,7 @@ end
 ---@param assignments string[]  positional adapter, mode, path, e.g. { "codelldb", "binary", "./foo.lua" }
 function M.new_run_file(assignments)
     _require_setup("new_run_file")
-    return require("ezdap.scaffold").new_run_file(assignments)
+    return require("ezdap.run.scaffold").new_run_file(assignments)
 end
 
 -- The adapter registry. Definitions are files found by name on the runtimepath
@@ -312,6 +312,59 @@ function M.load_adapter(adapter)
     return def
 end
 
+---One of an adapter's named `modes` (`ezdap.Mode`), or nil. A projection like
+---`available_adapters`: it needs no `setup()` and brings nothing up.
+---@param adapter string
+---@param name string
+---@return ezdap.Mode?
+function M.mode(adapter, name)
+    return require("ezdap.run.schema").mode(adapter, name)
+end
+
+---An adapter's mode names, sorted. Needs no `setup()`, like `available_adapters`.
+---@param adapter string
+---@return string[]
+function M.mode_names(adapter)
+    return require("ezdap.run.schema").mode_names(adapter)
+end
+
+---The inputs a mode declares (`name -> ezdap.Input`), or an empty table. Hand an
+---entry to `ezdap.run.inputs` to read, describe, seed or complete it. Needs no
+---`setup()`, like `available_adapters`.
+---@param adapter string
+---@param mode_name string
+---@return table<string, ezdap.Input>
+function M.mode_inputs(adapter, mode_name)
+    return require("ezdap.run.schema").mode_inputs(adapter, mode_name)
+end
+
+---The input names a mode marks `required = true`, sorted: the ones a run fails
+---without. Needs no `setup()`, like `available_adapters`.
+---@param adapter string
+---@param mode_name string
+---@return string[]
+function M.mode_required(adapter, mode_name)
+    return require("ezdap.run.schema").mode_required(adapter, mode_name)
+end
+
+---A starting value for one declared input, appropriate to the form it is
+---authored in — what `:Ezdap new_run_file` writes. Deep-copied, so a caller may
+---keep or mutate it. Needs no `setup()`, like `available_adapters`.
+---@param input ezdap.Input?
+---@return any
+function M.input_seed(input)
+    return require("ezdap.run.inputs").seed(input)
+end
+
+---One declared input as JSON Schema, for a typed authoring form. Only a
+---written-out set of values is serialized; a source or a function has nothing
+---to say here. Needs no `setup()`, like `available_adapters`.
+---@param input ezdap.Input?
+---@return table
+function M.input_schema(input)
+    return require("ezdap.run.inputs").json_schema(input)
+end
+
 ---Load an adapter's definition, check it, and show what it accepts: anything
 ---wrong with the definition or its tooling, then its modes and the inputs each
 ---declares. With no adapter, lists every registered name without loading one.
@@ -340,7 +393,7 @@ function M.run_mode(adapter, mode, inputs, presenter)
     -- Cleaning is ezdap tidying its own runs before adding another; a run shown
     -- elsewhere is not one of them, and its presenter decides when to drop it.
     if not presenter then M.clean() end
-    return require("ezdap.runner").run_mode(adapter, mode, inputs, presenter)
+    return require("ezdap.run.runner").run_mode(adapter, mode, inputs, presenter)
 end
 
 ---Forget a run: its presenter is told to dispose of what it made (ezdap's own
@@ -351,7 +404,7 @@ end
 ---@param run ezdap.runner.Run
 function M.remove_run(run)
     _require_setup("remove_run")
-    require("ezdap.runner").remove(run)
+    require("ezdap.run.runner").remove(run)
     local view = require("ezdap.commands").view.debug_view_if_open()
     if view then view:clear_sessions(run.sessions) end
 end
@@ -360,7 +413,7 @@ end
 function M.rerun()
     _require_setup("rerun")
     M.clean()
-    require("ezdap.runner").rerun()
+    require("ezdap.run.runner").rerun()
 end
 
 ---Drop every finished run, wiping its buffers, and the rows of the sessions
@@ -368,7 +421,7 @@ end
 ---only cleaned when it exists; cleaning is no reason to create one.
 function M.clean()
     _require_setup("clean")
-    require("ezdap.runner").clean()
+    require("ezdap.run.runner").clean()
     local view = require("ezdap.commands").view.debug_view_if_open()
     if view then view:clear_finished_sessions() end
 end

@@ -11,7 +11,7 @@
 ---definition you edited in your own config, documents itself exactly as the
 ---shipped ones do.
 
-local schema = require("ezdap.schema")
+local schema = require("ezdap.run.schema")
 
 local M = {}
 
