@@ -447,15 +447,16 @@ function M.project_info()
     vim.api.nvim_echo(chunks, false, {})
 end
 
----Register `:Ezdap`. A name someone else holds is never taken silently: it is
----left alone with a warning.
-local function _register_command()
-    if vim.api.nvim_get_commands({})[COMMAND] then
-        vim.notify(("[ezdap] :%s is already taken, so it was left alone"):format(COMMAND),
-            vim.log.levels.WARN)
-        return
-    end
-    vim.api.nvim_create_user_command(COMMAND, function(opts)
+---Register a user command under `name` that forwards its arguments, its range
+---and its completion to the dispatcher: `:Ezdap` itself, and the aliases
+---`create_cmd_alias` makes. A name someone else holds is never taken silently:
+---it is left alone, and the caller says so.
+---@param name string
+---@param desc string
+---@return boolean created  false when `name` was already taken
+local function _register_command(name, desc)
+    if vim.api.nvim_get_commands({})[name] then return false end
+    vim.api.nvim_create_user_command(name, function(opts)
         -- Report an error as a notification rather than a stack trace. nargs="*"
         -- always yields fargs; the fallback only satisfies its optional type.
         local ok, err = pcall(function()
@@ -471,11 +472,12 @@ local function _register_command()
     end, {
         nargs = "*",
         range = true,
-        desc = "ezdap commands",
+        desc = desc,
         complete = function(arg_lead, cmd_line, cursorpos)
             return require("ezdap.usercmd").complete(arg_lead, cmd_line, cursorpos)
         end,
     })
+    return true
 end
 
 ---Install the project-state autocmds. Each is a no-op while cold.
@@ -522,6 +524,31 @@ function M.get_default_config()
     return require("ezdap.config").defaults()
 end
 
+---Register a user command `name` that forwards its arguments, its range and its
+---completion to `:Ezdap`, so `:'<,'>Debug inspect` still reads the selection and
+---a value that escaped its own space (`command=./main.py\ --verbose`) reaches the
+---run parser intact. A name already taken is left alone with a warning.
+---@param name string  a user command name: an uppercase letter, then word characters
+---@return boolean created  false when `name` was already taken
+function M.create_cmd_alias(name)
+    _require_setup("create_cmd_alias")
+    if type(name) ~= "string" or not name:match("^%u") then
+        error("[ezdap] create_cmd_alias() needs a user command name: "
+            .. "an uppercase letter, then word characters", 2)
+    end
+    if name == COMMAND then
+        vim.notify(("[ezdap] :%s is the command itself, so no alias was created"):format(name),
+            vim.log.levels.WARN)
+        return false
+    end
+    if not _register_command(name, ("ezdap commands (alias for :%s)"):format(COMMAND)) then
+        vim.notify(("[ezdap] :%s is already taken, so no alias was created"):format(name),
+            vim.log.levels.WARN)
+        return false
+    end
+    return true
+end
+
 ---Initialise the plugin. Nothing exists before this runs, so `root_markers`
 ---and `data_filename` are in place before anything reads them.
 ---
@@ -544,7 +571,10 @@ function M.setup(opts)
     -- Set first: the wiring below reaches guarded entry points (a session added
     -- during `_init` opens the debug view).
     _setup_done = true
-    _register_command()
+    if not _register_command(COMMAND, "ezdap commands") then
+        vim.notify(("[ezdap] :%s is already taken, so it was left alone"):format(COMMAND),
+            vim.log.levels.WARN)
+    end
     _create_autocmds()
 
     -- Everything past this point is deferred to the first `:Ezdap` or API call,

@@ -530,12 +530,11 @@ Pass options to `setup()`. Defaults when `setup({})` is called are:
 Everything is under the `:Ezdap` command, with completion for every subcommand.
 Bare `:Ezdap`, with no subcommand, opens the debug view.
 
-To use another name such as `:Debug`, define a command that forwards its
-arguments and completion to `:Ezdap`.
+To use another name such as `:Debug`, register an alias after `setup()`. It
+forwards arguments, range and completion to `:Ezdap`.
 
 >lua
-    vim.api.nvim_create_user_command("Debug", function(o) vim.cmd("Ezdap " .. o.args) end,
-      { nargs = "*", complete = function(_, l) return vim.fn.getcompletion((l:gsub("^[%s:]*%a+", "Ezdap", 1)), "cmdline") end })
+    require("ezdap").create_cmd_alias("Debug")
 <
 
 :Ezdap subcommands ~
