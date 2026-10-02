@@ -247,19 +247,13 @@ local function _show(value)
     return vim.inspect(value)
 end
 
----Hold one scalar to the shape its type names. A command line's parsed string
----leaves `parse` and a typed value enters `read`, both landing here; this is the
----whole of what the registry refuses. What a *path* or a *port* additionally is,
----`build` says, with the helpers in `ezdap.shared`.
+---Hold one scalar to the shape its type names
 ---@param r ezdap.inputs.Resolved
 ---@param value any
 ---@return any? value, string? err
 local function _accept(r, value)
     if not _is_type[r.def.type](value) then
-        -- A number or a boolean written as text is the command line's form, not
-        -- a typed value's; say so, since `port = "8080"` reads as an answer.
-        local hint = type(value) == "string" and " (a string is only the command line's form)" or ""
-        return nil, ("expected %s, got %s%s"):format(r.def.type, _show(value), hint)
+        return nil, ("expected %s, got %s"):format(r.def.type, _show(value))
     end
     return value
 end
