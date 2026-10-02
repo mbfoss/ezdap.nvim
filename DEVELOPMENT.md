@@ -46,9 +46,16 @@ surface for the UI and commands; prefer it over importing `dap/client` or
 `dap/breakpoints` directly.
 
 **Public API**: [lua/ezdap/init.lua](lua/ezdap/init.lua) `setup`, the run entry
-points (`run_mode`, `run_file`, `new_run_file`, `rerun`, `remove_run`), the
-debug/disassembly view accessors, and registration of the user command
-(`config.command`, dispatching to the commands module).
+points (`run_mode`, `run_file`, `new_run_file`, `rerun`, `remove_run`), and the
+debug/disassembly view accessors. Registers the user command (`config.command`)
+and hands each invocation to `usercmd`.
+
+**`:Ezdap` command line**: [lua/ezdap/usercmd.lua](lua/ezdap/usercmd.lua) Parses
+a typed invocation, routes it to the `commands` tables (or to init's public API
+for run/project operations), and completes its arguments. Required lazily from
+the command callback, so it -- and `commands` behind it -- load only on first
+use. Splitting the raw line into arguments (`split_args`) lives here too, since
+it encodes the same <f-args> escaping that completion undoes.
 
 **Active session / programmatic API**:
 [lua/ezdap/manager.lua](lua/ezdap/manager.lua) Owns the "which session is
@@ -134,7 +141,7 @@ built on `TreeBuffer`), plus `DisassemblyView`, `InspectView`, `ReplBuffer`,
 
 **Toolkit**: [lua/ezdap/util/](lua/ezdap/util/) Standalone primitives with no
 ezdap dependencies: `Signal` (the pub/sub primitive), `Tree`/`TreeBuffer`,
-`fileextmarks`, `inputwin`, `floatwin`, `fixedwin`, `usercmd`, `term`,
+`fileextmarks`, `inputwin`, `floatwin`, `fixedwin`, `term`,
 `throttle`, `timer`, `fsutil`, `strutil`, `ui`, plus `UndoStack`, `select`,
 `table` and friends.
 
