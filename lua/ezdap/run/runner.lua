@@ -28,10 +28,10 @@ local M = {}
 ---@field bufnr integer
 ---@field opts  ezdap.AddBufOpts
 
----A run: a unique id, the task name, a cancel function, whoever is showing it
----and how it is faring. Runs are tracked together so tasks can run in parallel.
+---A run: a unique number, the task name, a cancel function, whoever is showing
+---it and how it is faring. Runs are tracked together so tasks can run in parallel.
 ---@class ezdap.runner.Run
----@field id        string
+---@field id        integer  the run number, unique per session; names the run's buffers
 ---@field name      string
 ---@field cancel    fun()
 ---@field sessions  integer[]  the sessions this run started, filled in as they start
@@ -150,7 +150,7 @@ local function _new_run(name, presenter)
     -- `presenter` is filled in just below: it needs the run to exist first.
     ---@diagnostic disable-next-line: missing-fields
     local run         = {
-        id       = name .. "-" .. _counter,
+        id       = _counter,
         name     = name,
         cancel   = function() end,
         sessions = {},
@@ -193,7 +193,7 @@ local function _start(run, task)
         add_bufnr = run.presenter.add_bufnr,
         report    = run.presenter.report,
         on_done   = function(ok) _set_state(run, ok and "done" or "failed") end,
-    })
+    }, run)
 
     run.cancel             = cancel
     -- Held by reference: the sessions land in it as they start.

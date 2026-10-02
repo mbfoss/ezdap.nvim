@@ -322,4 +322,15 @@ function M.unique_buf_name(basename)
     return name
 end
 
+---A run buffer's canonical name: `ezdap://<number>/<name>:<type>`, carrying its
+---run's number and group name, distinguished by kind (`:b ezdap://1/debug app:log`).
+---Pair with `unique_buf_name` when the name may already be taken.
+---@param number integer  the run number
+---@param name string     the run group name
+---@param kind string     buffer kind, e.g. "log", "repl", "output"
+---@return string
+function M.run_buf_name(number, name, kind)
+    return ("ezdap://%d/%s:%s"):format(number, name, kind)
+end
+
 return M

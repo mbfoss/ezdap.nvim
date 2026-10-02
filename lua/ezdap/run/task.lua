@@ -29,13 +29,12 @@ local ui_util      = require "ezdap.util.ui"
 ---@class ezdap.TaskTypeDef
 local M            = {}
 
-local _run_counter = 0
-
 ---@param task ezdap.Task  native DAP task (name + adapter + request + parameters, plus optional host/port)
 ---@param callbacks ezdap.TaskCallback
+---@param run ezdap.runner.Run  the run this task starts into, for naming the buffers it makes
 ---@return fun() -- cancel function
 ---@return integer[] -- ids of the sessions this run started, for its teardown
-M.start            = function(task, callbacks)
+M.start            = function(task, callbacks, run)
     local add_bufnr = callbacks.add_bufnr or function() end
     local report    = callbacks.report or function() end
     local on_done   = callbacks.on_done or function() end
@@ -44,10 +43,14 @@ M.start            = function(task, callbacks)
     -- Every session this run produced, live or ended: what `dispose` answers for.
     local started   = {} ---@type integer[]
 
-    _run_counter    = _run_counter + 1
-    local run_key   = (task.name or "debug") .. "~" .. _run_counter
-
     local manager   = require("ezdap.manager")
+
+    ---A buffer name for this run of `kind`, unique against loaded buffers.
+    ---@param kind string
+    ---@return string
+    local function buf_name(kind)
+        return ui_util.unique_buf_name(ui_util.run_buf_name(run.id, run.name, kind))
+    end
 
     -- The task is native DAP: `parameters` is the adapter's raw launch/attach body,
     -- sent verbatim and never inspected or translated here. Scaffolding it from an
@@ -91,7 +94,7 @@ M.start            = function(task, callbacks)
 
     -- REPL buffer: interactive DAP expression evaluation.
     local repl = require("ezdap.ui.ReplBuffer").new({
-        name     = ui_util.unique_buf_name("ezdap://" .. run_key .. ":repl"),
+        name     = buf_name("repl"),
         evaluate = function(expr, cb)
             manager.evaluate(expr, "repl", function(body, err)
                 cb(body and body.result, err)
@@ -112,7 +115,7 @@ M.start            = function(task, callbacks)
         if #lines == 0 then return end
         if not out_buf then
             out_buf = OutputBuffer.new({
-                name        = ui_util.unique_buf_name("ezdap://" .. run_key .. ":output"),
+                name        = buf_name("output"),
                 max_lines   = _config.output_max_lines,
                 ansi_colors = true,
                 autoscroll  = true,
@@ -162,12 +165,10 @@ M.start            = function(task, callbacks)
                     return
                 end
 
-                -- When the adapter spawns a terminal, name it and register it as a
-                -- task buffer. The adapter-supplied title names it best.
-                sess:on("run_in_terminal", function(bufnr, title)
-                    require("ezdap.util.term").rename(bufnr,
-                        ui_util.unique_buf_name("ezdap://" ..
-                            run_key .. ':' .. ((title and title ~= config.adapter) and title or "term")))
+                -- When the adapter spawns a terminal, name it as this run's `term`
+                -- buffer and register it as a task buffer.
+                sess:on("run_in_terminal", function(bufnr)
+                    require("ezdap.util.term").rename(bufnr, buf_name("term"))
                     vim.bo[bufnr].buflisted = true
                     add_bufnr(bufnr, { label = "term", priority = 10 })
                 end)
@@ -176,7 +177,7 @@ M.start            = function(task, callbacks)
                 if _config.raw_messages then
                     local out ---@type ezdap.OutputBuffer?
                     out = OutputBuffer.new({
-                        name        = ui_util.unique_buf_name("ezdap://" .. run_key .. ":dap"),
+                        name        = buf_name("dap"),
                         max_lines   = _config.output_max_lines,
                         ansi_colors = true,
                         autoscroll  = true,

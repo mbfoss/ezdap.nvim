@@ -25,13 +25,13 @@ local M            = {}
 ---@field close_run? fun(run: ezdap.runner.Run)  the run being forgotten, its buffers still valid
 
 ---A run's progress is appended to a scratch log buffer of its own, alongside its
----Output and REPL and reachable by name (`:b ezdap://<run>:log`). Pre-flight
----errors stay on vim.notify, happening before the run exists.
+---Output and REPL and reachable by name (`:b ezdap://<number>/<name>:log`).
+---Pre-flight errors stay on vim.notify, happening before the run exists.
 ---@param run ezdap.runner.Run
 ---@return ezdap.OutputBuffer
 local function _make_log(run)
     return OutputBuffer.new({
-        name       = ui_util.unique_buf_name("ezdap://" .. run.id .. ":log"),
+        name       = ui_util.unique_buf_name(ui_util.run_buf_name(run.id, run.name, "log")),
         max_lines  = _config.output_max_lines,
         autoscroll = true,
     })
