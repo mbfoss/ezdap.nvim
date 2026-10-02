@@ -21,6 +21,13 @@ local _ensure_loaded
 ---@type ezdap.Config
 M.config = require("ezdap.config").current
 
+---The loaded DAP adapter definitions, `name → ezdap.AdapterDef`: a plain table,
+---filled as definitions are read (`load_adapter`), and one a user may assign
+---into directly to register an adapter by hand, no file needed.
+---`available_adapters()` is the list of what can be loaded.
+---@type table<string, ezdap.AdapterDef>
+M.adapters = {}
+
 ---Guard a public API entry point: raise a clear error, pointed at the caller,
 ---when `setup()` has not been called yet. Otherwise this *is* the demand that
 ---brings the plugin up, so every entry point below can assume a loaded plugin.
@@ -271,7 +278,7 @@ function M.available_adapters()
         if not seen[name] and _enabled(name) then out[#out + 1], seen[name] = name, true end
     end
     for name in pairs(_definitions()) do add(name) end
-    for name in pairs(require("ezdap.adapters")) do add(name) end
+    for name in pairs(M.adapters) do add(name) end
     table.sort(out)
     return out
 end
@@ -287,7 +294,7 @@ end
 function M.load_adapter(adapter)
     if not _enabled(adapter) then return nil end
 
-    local loaded = require("ezdap.adapters")
+    local loaded = M.adapters
     if loaded[adapter] then return loaded[adapter] end
 
     local path = _definitions()[adapter]

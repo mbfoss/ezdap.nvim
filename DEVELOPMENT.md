@@ -89,8 +89,8 @@ consuming `manager`.
 - `proto.lua`: a `---@meta` file of DAP spec types; never `require()` it.
 
 **Adapters & tasks**
-- [adapters/init.lua](lua/ezdap/adapters/init.lua): the loaded definitions, a plain `name
-  → ezdap.AdapterDef` table of native DAP process/connection config plus
+- [init.lua](lua/ezdap/init.lua) `M.adapters`: the loaded definitions, a plain
+  `name → ezdap.AdapterDef` table of native DAP process/connection config plus
   optional named `modes`, filled as `ezdap.load_adapter` reads them. Users can
   assign into it directly. One file per adapter under `ezdap-adapters/` on the
   runtimepath, keyed by filename; the generic `remote` adapter ships as one;

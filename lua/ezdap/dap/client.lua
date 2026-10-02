@@ -293,7 +293,7 @@ function M._start_stdio(config, callbacks, progress)
     if vim.fn.executable(cmd[1]) == 0 then
         local msg = ("adapter executable not found: %s "
             .. "(override its `command` in the adapter file under ezdap-adapters/, "
-            .. "or in require('ezdap.adapters'))"):format(cmd[1])
+            .. "or in require('ezdap').adapters)"):format(cmd[1])
         vim.notify("[dap] " .. msg, vim.log.levels.ERROR)
         progress("[dap] " .. msg)
         if callbacks.on_fail then callbacks.on_fail() end
