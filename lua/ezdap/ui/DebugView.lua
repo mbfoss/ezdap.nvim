@@ -132,10 +132,10 @@ end
 ---@param data ezdap.DebugView.ItemData
 ---@param chunks ezdap.DebugView.Chunk[]
 local function _fmt_variable(data, chunks)
-    local base_hl = data.greyout and "NonText" or nil
-    chunks[#chunks + 1] = { data.name, base_hl }
-    chunks[#chunks + 1] = { ": ", base_hl or "NonText" }
-    chunks[#chunks + 1] = { format.oneline(data.value), base_hl or "@string" }
+    local hl = data.greyout and "NonText" or nil
+    chunks[#chunks + 1] = { data.name, hl }
+    chunks[#chunks + 1] = { ": ", hl}
+    chunks[#chunks + 1] = { format.oneline(data.value), hl or "@string" }
 end
 
 ---@param data ezdap.DebugView.ItemData
