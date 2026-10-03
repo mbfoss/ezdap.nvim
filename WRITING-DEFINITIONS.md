@@ -148,9 +148,9 @@ How the pieces fit:
   normally written with when the adapter names them itself (`{ "console",
   "terminal" }`), or a `fun(partial): string[]` when they can only be computed:
   the targets in a workspace, the containers running now. On a `list`/`map` it
-  describes one entry. A written-out set is also what a typed file's schema
-  lists as `examples` and what `:Ezdap new_run_file` writes into the generated
-  file's comments; a source or a function has nothing to serialize. Nothing
+  describes one entry. A written-out set is also what `:Ezdap new_run_file`
+  writes into the generated file's comments; a source or a function has nothing
+  to serialize. Nothing
   rejects a value outside what completes. A boolean input completes as
   `true`/`false` on its own.
 - **Paths and ports**: a path input is a `string` and a port a plain `integer`;

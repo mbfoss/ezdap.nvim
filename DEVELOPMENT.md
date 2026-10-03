@@ -26,7 +26,7 @@ Every public entry point calls `_require_setup()`, which both raises the "call
 setup() first" error and *is* that demand, so each body can assume a loaded
 plugin. The exceptions are the projections — `available_adapters`,
 `load_adapter`, the mode projections (`mode`, `mode_names`, `mode_inputs`,
-`mode_required`) and the input projections (`input_seed`, `input_schema`) —
+`mode_required`) and the input projections (`input_seed`) —
 which read the runtimepath and the config, bring nothing up, and so answer
 before any `setup()`. The
 autocmds are guarded the same way: cold means nothing to persist and no session
@@ -172,7 +172,7 @@ Each `ezdap.Input` declares one input up front:
 | ---------- | ------------------------------------------------------------------------------ |
 | `type`     | what the input *is*, meaning what `build` receives: one of `string`/`boolean`/`integer`/`number`, or a collection, `list` (a table of entries) or `map` (a table of string keys to values). Defaults to `string` |
 | `item_type` | a collection's *entry* type, declared exactly as `type` is but scalars only: `{ type = "list", item_type = "integer" }` is a list of integers. Defaults to `string` |
-| `completion` | what the value completes with, in one of three forms: a named source (`"file"`, `"dir"`, `"command"`, the last completing each token of a command line as a path), the values themselves (`{ "console", "terminal" }`), or a `fun(partial): string[]` computing them. A written-out set also reaches a typed file's schema as `examples` and the scaffolded file as a comment; a source or a function has nothing to serialize. Completion only *suggests*; nothing rejects a value written past it. On a collection it describes one entry |
+| `completion` | what the value completes with, in one of three forms: a named source (`"file"`, `"dir"`, `"command"`, the last completing each token of a command line as a path), the values themselves (`{ "console", "terminal" }`), or a `fun(partial): string[]` computing them. A written-out set also reaches the scaffolded file as a comment; a source or a function has nothing to serialize. Completion only *suggests*; nothing rejects a value written past it. On a collection it describes one entry |
 | `required` | when `true`, the user must supply the value; leaving it unset is a resolve error. Any other unset input arrives at `build` as nil, which `build` may answer by omitting the field, or some other way: an attach `build` asks the user to pick a process for an unset `pid`, so no adapter marks that input `required` |
 | `description` | a few words on what the input means, e.g. `"process id to attach to"` |
 
@@ -202,16 +202,15 @@ text:
 Only `:Ezdap run` parses: it reads each token against the input's `type` before
 resolving the run. A run file or an API caller is already writing Lua, so its
 value must *be* the value -- `port = "8080"` is refused ("expected integer, got
-\"8080\""), which is why `input_schema` describes the typed form alone. A
-collection has no string form at all: it is always the table. Both routes land on
+\"8080\""). A collection has no string form at all: it is always the table. Both routes land on
 the input's declared `type`, so `build` never sees the difference.
 
 This is why a row is more than a parser. `map` is the clearest case: `--env A=1
 B=2` on a command line or `{ A = "1" }` in a typed file, and `build` receives one
 table either way. The
 [inputs.lua](lua/ezdap/run/inputs.lua) row states how a value is read from text
-and as a typed value, along with how the input gets described to a schema-driven
-editor, seeded into a scaffolded document, and completed on a command line.
+and as a typed value, along with how the input is seeded into a scaffolded
+document and completed on a command line.
 Adding a type means adding one row, and every consumer, in ezdap and easytasks
 alike, reads it from there.
 

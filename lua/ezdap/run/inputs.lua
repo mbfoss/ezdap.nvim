@@ -117,13 +117,11 @@ M.sources = {
 
 ---What every projection needs from an input, looked up once: the scalar row its
 ---values (or its *entries*) are read by, whether it is a collection, and what the
----input completes with, as a function, plus the values themselves when it named
----a set (a schema can list those; a function has nothing to serialize).
+---input completes with, as a function.
 ---@class ezdap.inputs.Resolved
 ---@field def      ezdap.InputDef
 ---@field kind     "list"|"map"|nil  nil for a scalar input
 ---@field complete (fun(partial: string): string[])?
----@field values   string[]?
 
 ---A mistake in how an input was *declared*, not in the value answering it: the
 ---mode's `inputs` table says something that can't be read. Said so, because it
@@ -162,14 +160,14 @@ end
 ---a named source, the values themselves, or a function computing them. Nil is the
 ---input that enumerates nothing, and its type's own completion then answers.
 ---@param completion ezdap.Completion?
----@return (fun(partial: string): string[])? complete, string[]? values, string? err
+---@return (fun(partial: string): string[])? complete, string? err
 local function _completion(completion)
     if completion == nil then return nil end
     if type(completion) == "function" then return completion end
     if type(completion) == "string" then
         local source = M.sources[completion]
         if not source then
-            return nil, nil, _decl_err("completion %q: no such source (%s)",
+            return nil, _decl_err("completion %q: no such source (%s)",
                 completion, table.concat(vim.fn.sort(vim.tbl_keys(M.sources)), ", "))
         end
         return source
@@ -177,12 +175,12 @@ local function _completion(completion)
     if type(completion) == "table" and vim.islist(completion) then
         for _, value in ipairs(completion) do
             if type(value) ~= "string" then
-                return nil, nil, _decl_err("completion: expected strings, got a %s entry", type(value))
+                return nil, _decl_err("completion: expected strings, got a %s entry", type(value))
             end
         end
-        return _complete_choices(completion), completion
+        return _complete_choices(completion)
     end
-    return nil, nil, _decl_err("completion: expected a source name, a list of values or a function")
+    return nil, _decl_err("completion: expected a source name, a list of values or a function")
 end
 
 ---An input as the rows that read it. A collection declares its *entries* separately
@@ -206,7 +204,7 @@ local function _resolve(input)
     end
 
     if not err then
-        resolved.complete, resolved.values, err = _completion(input.completion)
+        resolved.complete, err = _completion(input.completion)
     end
     if err then return resolved, err end
 
@@ -329,24 +327,6 @@ function M.parse_entry(input, raw)
     local r, err = _resolve(input)
     if err then return nil, err end
     return _parse_scalar(r, raw)
-end
-
----The JSON Schema for one input, as a run file or a caller authors it: the typed
----form alone, since a string is the command line's and reaches no document. A
----collection is its array or object shape, and its entries are typed.
----@param input ezdap.Input?
----@return table
-function M.json_schema(input)
-    -- A collection's `item_type` and its completion describe one *entry*, so both land
-    -- on the element schema: the array's items, the object's values. Only a written-out
-    -- set of values is sayable here: a source or a function has nothing to serialize.
-    local r = _resolve(input)
-    local schema = vim.deepcopy(r.def.schema)
-    if r.values then schema.examples = vim.deepcopy(r.values) end
-
-    if r.kind == "list" then return { type = "array", items = schema } end
-    if r.kind == "map" then return { type = "object", additionalProperties = schema } end
-    return schema
 end
 
 ---A starting value for an input in a scaffolded document, appropriate to the form

@@ -356,15 +356,6 @@ function M.input_seed(input)
     return require("ezdap.run.inputs").seed(input)
 end
 
----One declared input as JSON Schema, for a typed authoring form. Only a
----written-out set of values is serialized; a source or a function has nothing
----to say here. Needs no `setup()`, like `available_adapters`.
----@param input ezdap.Input?
----@return table
-function M.input_schema(input)
-    return require("ezdap.run.inputs").json_schema(input)
-end
-
 ---Load an adapter's definition, check it, and show what it accepts: anything
 ---wrong with the definition or its tooling, then its modes and the inputs each
 ---declares. With no adapter, lists every registered name without loading one.
