@@ -1,3 +1,5 @@
+---The fields are declared in [meta.lua](meta.lua); binding the table to that class
+---is what makes a mismatched `M.foo` below a diagnostic rather than a silent drift.
 ---@type ezdap.Module
 local M = {}
 
@@ -363,7 +365,7 @@ end
 ---@param mode? string  a single mode to show, e.g. "script"
 function M.adapter_info(adapter, mode)
     _require_setup("adapter_info")
-    return require("ezdap.adapters.info").show(adapter, mode)
+    return require("ezdap.adapter_info").show(adapter, mode)
 end
 
 ---Launch or attach under an adapter using one of its declared `modes`, assembling

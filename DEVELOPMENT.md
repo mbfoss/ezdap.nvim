@@ -90,6 +90,12 @@ consuming `manager`.
   function, exception-filter, exception-name breakpoints).
 - `proto.lua`: a `---@meta` file of DAP spec types; never `require()` it.
 
+**Types**: [lua/ezdap/meta.lua](lua/ezdap/meta.lua) is the `---@meta` file of
+declaration-only types — the adapter definition (`ezdap.AdapterDef`, its modes
+and inputs) and `ezdap.Module`, the public surface [init.lua](lua/ezdap/init.lua)
+returns; that file binds `M` to the class, so a field that drifts from it is a
+diagnostic. Never `require()` it, like `proto.lua`.
+
 **Adapters & tasks**
 - [init.lua](lua/ezdap/init.lua) `M.adapters`: the loaded definitions, a plain
   `name → ezdap.AdapterDef` table of native DAP process/connection config plus
@@ -116,8 +122,8 @@ consuming `manager`.
   `clean` does not touch it, and it leaves ezdap through `remove_run`.
 - [inputs.lua](lua/ezdap/run/inputs.lua): the input registry. `M.types` holds one
   row per scalar type, stating every way it is read (parsed from a command line,
-  described as JSON Schema for a typed file, seeded into a scaffolded document,
-  completed), and `M.sources`, the completion an input may ask for by name.
+  seeded into a scaffolded document, completed), and `M.sources`, the completion
+  an input may ask for by name.
   Nothing else switches on a type name, so adding one is a single row.
 - [schema.lua](lua/ezdap/run/schema.lua): the engine behind `:Ezdap run`, the reader
   for `new_run_file`, and the mode engine `runner` resolves every run through.

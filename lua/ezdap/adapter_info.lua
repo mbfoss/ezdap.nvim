@@ -2,7 +2,7 @@
 ---
 ---An adapter definition documents itself: every mode carries a `description`
 ---and a `request`, every input a type, the values it completes with and a line on
----what it means (see `ezdap.Input` in `adapters/def.lua`). This module is the
+---what it means (see `ezdap.Input` in `meta.lua`). This module is the
 ---reader for that: it loads one adapter's definition, checks it, and renders
 ---what it declares as markdown in a float, so the same declaration that
 ---`:Ezdap run` validates against and `new_run_file` seeds from is what is shown.

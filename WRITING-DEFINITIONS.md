@@ -273,7 +273,7 @@ examples of the common shapes: an adapter spoken to over stdio, one located on
 `PATH` or in a package directory, and one started as a server and then connected
 to. Pick the one closest to your adapter and adapt it. The full contract is in
 the `ezdap.AdapterDef` and `ezdap.Mode` annotations in
-`lua/ezdap/adapters/def.lua`.
+`lua/ezdap/meta.lua`.
 
 Contributions of new definitions are welcome. Follow the structure and
 comment style of the existing files, and cite the adapter's own documentation
