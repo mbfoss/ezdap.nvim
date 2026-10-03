@@ -1,0 +1,37 @@
+---@meta
+error("do not require a meta file")
+
+---The public surface `require("ezdap")` returns. Declared here, in a meta file,
+---rather than inferred from `M` in [init.lua](init.lua): a plugin that sees ezdap
+---only as a LuaLS workspace library resolves a class by name, but not fields
+---inferred from a local. `init.lua` carries `---@type ezdap.Module` so the two
+---cannot drift.
+---@class ezdap.Module
+---@field config                ezdap.Config
+---@field adapters              table<string, ezdap.AdapterDef>
+---@field save_state            fun()
+---@field reload_state          fun()
+---@field shutdown              fun()
+---@field open_debug_view       fun()
+---@field close_debug_view      fun()
+---@field toggle_debug_view     fun()
+---@field open_disassembly_view fun()
+---@field run_file              fun(path: string): ezdap.runner.Run?
+---@field new_run_file          fun(assignments: string[]): string?
+---@field available_adapters    fun(): string[]
+---@field load_adapter          fun(adapter: string): ezdap.AdapterDef?, string?
+---@field mode                  fun(adapter: string, name: string): ezdap.Mode?
+---@field mode_names            fun(adapter: string): string[]
+---@field mode_inputs           fun(adapter: string, mode_name: string): table<string, ezdap.Input>
+---@field mode_required         fun(adapter: string, mode_name: string): string[]
+---@field input_seed            fun(input: ezdap.Input?): any
+---@field adapter_info          fun(adapter?: string, mode?: string)
+---@field run_mode              fun(adapter: string, mode: string, inputs?: table<string, any>, presenter?: ezdap.runner.Presenter): ezdap.runner.Run?
+---@field remove_run            fun(run: ezdap.runner.Run)
+---@field rerun                 fun()
+---@field clean                 fun()
+---@field project_info          fun()
+---@field is_setup              fun(): boolean
+---@field get_default_config    fun(): ezdap.Config
+---@field create_cmd_alias      fun(name: string): boolean
+---@field setup                 fun(opts?: ezdap.Config)

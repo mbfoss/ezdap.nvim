@@ -354,9 +354,8 @@ on the run's first buffer, follows along as higher-priority buffers appear or
 the shown one is deleted, and closes with the run's last buffer. `:Ezdap panel`
 toggles it; `panel_auto_open` and `panel_height_ratio` adjust it.
 
-Each run keeps its own log, `ezdap://<number>/<name>:log`, wiped with the run, rather
-than appending to a shared one, so parallel runs never interleave. Any of a
-run's buffers can be reached by name; see [Run buffers](#run-buffers).
+Each run keeps its own log, `ezdap://<number>/<name>:log`, wiped with the run. 
+Any of a run's buffers can be reached by name; see [Run buffers](#run-buffers).
 
 ### Inline variable values <!-- tag: inline-values -->
 

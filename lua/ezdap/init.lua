@@ -1,3 +1,4 @@
+---@type ezdap.Module
 local M = {}
 
 local COMMAND = "Ezdap"
@@ -18,14 +19,12 @@ local _ensure_loaded
 --- The live options: read an option off it directly
 --- (`require("ezdap").config.inline_vars`). `setup()` refills this same table,
 --- so holding it is safe; copying an option out of it is not.
----@type ezdap.Config
 M.config = require("ezdap.config").current
 
 ---The loaded DAP adapter definitions, `name → ezdap.AdapterDef`: a plain table,
 ---filled as definitions are read (`load_adapter`), and one a user may assign
 ---into directly to register an adapter by hand, no file needed.
 ---`available_adapters()` is the list of what can be loaded.
----@type table<string, ezdap.AdapterDef>
 M.adapters = {}
 
 ---Guard a public API entry point: raise a clear error, pointed at the caller,
