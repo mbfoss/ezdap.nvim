@@ -55,7 +55,7 @@ end
 ---@param values string[]
 ---@return string[]
 local function _escaped(values)
-    return vim.tbl_map(function(v) return vim.fn.escape(v, " \t") end, values)
+    return vim.tbl_map(function(v) return vim.fn.shell(v, " \t") end, values)
 end
 
 ---Completion drawn from Neovim's own `getcompletion`: paths, for the path-ish
@@ -158,21 +158,6 @@ local function _scalar_def(type_name, what)
     return def
 end
 
----Which of an input's declarations don't apply to the shape it is: `item_type`
----on a scalar, an entry type that is itself a collection. A mistake, not a silent
----no-op, since either would read as a string.
----@param input ezdap.Input
----@param kind "list"|"map"|nil
----@return string? err
-local function _stray_decl(input, kind)
-    if not kind then
-        return input.item_type and _decl_err("item_type: only a list or map declares entries") or nil
-    end
-    if _collection_kind(input.item_type) then
-        return _decl_err("item_type %q: a collection's entries are scalars", input.item_type)
-    end
-end
-
 ---What an input completes with, from the three forms `completion` is written in:
 ---a named source, the values themselves, or a function computing them. Nil is the
 ---input that enumerates nothing, and its type's own completion then answers.
@@ -210,7 +195,16 @@ local function _resolve(input)
     local kind = _collection_kind(input.type)
     local resolved = { def = M.types.string, kind = kind }
 
-    local err = _stray_decl(input, kind)
+    -- A declaration that doesn't apply to the shape the input is: `item_type` on a
+    -- scalar, or an entry type that is itself a collection. A mistake, not a silent
+    -- no-op, since either would read as a string.
+    local err
+    if not kind and input.item_type then
+        err = _decl_err("item_type: only a list or map declares entries")
+    elseif _collection_kind(input.item_type) then
+        err = _decl_err("item_type %q: a collection's entries are scalars", input.item_type)
+    end
+
     if not err then
         resolved.complete, resolved.values, err = _completion(input.completion)
     end
@@ -273,15 +267,6 @@ local function _parse_scalar(r, raw)
     return _accept(r, value)
 end
 
----An empty Lua table encodes as a JSON array, so an empty map must say it is one.
----@param kind "list"|"map"
----@param out table
----@return table
-local function _sealed(kind, out)
-    if kind == "map" and next(out) == nil then return vim.empty_dict() end
-    return out
-end
-
 ---Read a collection from its table: `item_type` describes one entry, so that is
 ---what each of them answers to; the collection is rebuilt rather than the caller's
 ---own table written through.
@@ -304,7 +289,8 @@ local function _read_collection(r, value)
         if err then return nil, ("%s: %s"):format(key, err) end
         out[key] = entry
     end
-    return _sealed(r.kind, out)
+    if r.kind == "map" and next(out) == nil then return vim.empty_dict() end
+    return out
 end
 
 -- The projections
