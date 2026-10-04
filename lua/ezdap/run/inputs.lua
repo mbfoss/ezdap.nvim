@@ -55,7 +55,7 @@ end
 ---@param values string[]
 ---@return string[]
 local function _escaped(values)
-    return vim.tbl_map(function(v) return vim.fn.shell(v, " \t") end, values)
+    return vim.tbl_map(function(v) return vim.fn.escape(v, " \t") end, values)
 end
 
 ---Completion drawn from Neovim's own `getcompletion`: paths, for the path-ish
