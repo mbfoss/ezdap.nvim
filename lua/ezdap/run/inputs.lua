@@ -49,13 +49,32 @@ end
 
 -- Completion
 
----Candidates carry their spaces escaped, the way the argument they extend was
----typed: an unescaped candidate no longer starts with the ArgLead it is filtered
----against, and is dropped before it is ever offered.
+---Escape `name` for one `<f-args>`-split command argument, and -- a layer in --
+---for a word of a `command` value. Only backslash and whitespace are special
+---there, so escaping anything else (as `fnameescape()` does) would corrupt the
+---argument instead of protecting it.
+---@param name string
+---@return string
+local function _escape_arg(name)
+    return (name:gsub("\\", "\\\\"):gsub("[ \t]", { [" "] = "\\ ", ["\t"] = "\\\t" }))
+end
+
+---Candidates carry their escapes, the way the argument they extend was typed: an
+---unescaped candidate no longer starts with the ArgLead it is filtered against,
+---and is dropped before it is ever offered.
 ---@param values string[]
 ---@return string[]
 local function _escaped(values)
-    return vim.tbl_map(function(v) return vim.fn.escape(v, " \t") end, values)
+    return vim.tbl_map(_escape_arg, values)
+end
+
+---A `getcompletion()` pattern for `s`. It returns nothing for a pattern ending in
+---an escaped whitespace (`a\ `), so spell whitespace literally there; it reads
+---backslashes itself, so those are left for it.
+---@param s string
+---@return string
+local function _completion_pattern(s)
+    return (s:gsub("\\([ \t])", "%1"))
 end
 
 ---Completion drawn from Neovim's own `getcompletion`: paths, for the path-ish
@@ -63,23 +82,42 @@ end
 ---@param kind string
 ---@return fun(partial: string): string[]
 local function _complete_path(kind)
-    return function(partial) return _escaped(vim.fn.getcompletion(partial, kind)) end
+    return function(partial)
+        return _escaped(vim.fn.getcompletion(_completion_pattern(partial), kind))
+    end
+end
+
+---The head (separator included) and the token after it, split at the last
+---whitespace that is *not* escaped: an escaped space belongs to the token being
+---typed, a bare one separates it.
+---@param line string
+---@return string head, string tail
+local function _split_last_token(line)
+    local cut, i = 0, 1
+    while i <= #line do
+        local c = line:sub(i, i)
+        if c == "\\" then
+            i = i + 2 -- the backslash and the character it escapes
+        else
+            if c == " " or c == "\t" then cut = i end
+            i = i + 1
+        end
+    end
+    return line:sub(1, cut), line:sub(cut + 1)
 end
 
 ---Completion for a command line: paths, for the program and for every argument
 ---after it. A debuggee is a binary the project built, not a name on `$PATH`, so
----this is `file` completion applied to whichever token is being typed.
+---this is `file` completion applied to whichever token is being typed. Tokens
+---would be separated by bare whitespace, but the whole command is one `<f-args>`
+---argument, so every space in it is escaped and a trailing `a\ ` is a token's own
+---space -- not a separator -- completing paths that start with `a `.
 ---@param partial string
 ---@return string[]
 local function _complete_command(partial)
-    -- Vim's argument splitting means the value arrives with its spaces escaped;
-    -- tokens are found in the real line, and the head goes back onto each
-    -- candidate.
-    local line = (partial:gsub("\\(%s)", "%1"))
-    local head = line:match("^.*%s") or ""
-    local tail = line:sub(#head + 1)
-    return _escaped(vim.tbl_map(function(v) return head .. v end,
-        vim.fn.getcompletion(tail, "file")))
+    local head, tail = _split_last_token(partial)
+    return vim.tbl_map(function(v) return head .. _escape_arg(v) end,
+        vim.fn.getcompletion(_completion_pattern(tail), "file"))
 end
 
 ---Completion over a fixed set of values, offering those that extend `partial`.

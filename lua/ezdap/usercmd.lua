@@ -419,7 +419,7 @@ local function _complete_subs(_, rest, arg_lead)
         return #rest == 1 and _view_subs or {}
     end
     if rest[1] == "run_file" and #rest == 1 then
-        return vim.fn.getcompletion(arg_lead, "file")
+        return M.complete_filename(arg_lead, "file")
     end
     if rest[1] == "run" then
         return _run_complete(require("ezdap.run.schema"), { unpack(rest, 2) }, arg_lead)
@@ -455,6 +455,28 @@ end
 ---(up to the token being completed), and that token.
 ---@alias ezdap.usercmd.subcommand fun(cmd:string,rest:string[],arg_lead:string):string[]
 
+---Escape `name` for use as one `<f-args>`-split command argument. Only
+---backslash and whitespace are special there, so escaping anything else (as
+---`fnameescape()` does) would corrupt the argument instead of protecting it.
+---@param name string
+---@return string
+function M.escape_arg(name)
+    return (name:gsub("\\", "\\\\"):gsub("[ \t]", { [" "] = "\\ ", ["\t"] = "\\\t" }))
+end
+
+---Filename completion for a command argument. `arg_lead` arrives escaped as
+---typed, but `getcompletion()` returns nothing for a pattern ending in an
+---escaped whitespace ("a\ "), so spell whitespace literally there -- the
+---pattern means the same either way. Matches come back unescaped; escape them
+---so that `M.complete`'s filter and the command line both see valid arguments.
+---@param arg_lead string
+---@param type string e.g. "file", "dir"
+---@return string[]
+function M.complete_filename(arg_lead, type)
+    local pattern = arg_lead:gsub("\\([ \t])", "%1")
+    return vim.tbl_map(M.escape_arg, vim.fn.getcompletion(pattern, type))
+end
+
 ---The `complete` callback for `:Ezdap`, in the shape `nvim_create_user_command`
 ---calls: re-split the raw line the way <f-args> would, then hand the pieces to
 ---`_complete_subs`.
@@ -477,10 +499,12 @@ function M.complete(arg_lead, cmd_line)
     local ok, parsed = pcall(vim.api.nvim_parse_cmd, cmd_line, {})
     if not ok then return {} end
 
-    -- Trailing whitespace means a new, still-empty argument has begun; without
-    -- it the last argument is the one being completed, not context for it.
+    -- A non-empty `arg_lead` is the argument currently being completed, so the
+    -- last parsed argument is that same word, not context for it. An empty
+    -- `arg_lead` means a new argument has begun (or none was typed), leaving
+    -- every parsed argument as context.
     local rest = parsed.args or {}
-    if not cmd_line:match("%s$") then
+    if arg_lead ~= "" then
         rest[#rest] = nil
     end
 
