@@ -1,5 +1,10 @@
 # ndebug.nvim
 
+> [!NOTE]
+> **Work in progress.** Stable and usable as it stands, but still evolving:
+> changes, including breaking ones, can land at any time. Pin a commit if you
+> need a fixed target.
+
 A **Debug Adapter Protocol (DAP) client for Neovim**: pause a program on a
 breakpoint, inspect variables and the call stack, and step through execution
 without leaving the editor. It implements the protocol directly, and works with
