@@ -446,12 +446,13 @@ require("ndebug").setup({
   -- Project detection: the nearest ancestor holding one of these is
   -- the root.
   root_markers        = { ".git" },
+  -- Per-project state file, written at the project root.
+  data_filename       = ".ndebug.json",
+
   -- Adapters to make available, by name. Unset (the default) leaves every
   -- registered adapter available; a list narrows the registry to exactly
   -- those names, hiding the rest from listing, completion and `:Ndebug run`.
-  -- enabled_adapters = { "debugpy", "codelldb" },
-  -- Per-project state file, written at the project root.
-  data_filename       = ".ndebug.json",
+  enabled_adapters = nil, -- { "debugpy", "codelldb" },
 
   -- Max call-stack frames shown (extended when the frame is deeper).
   stack_trace_limit   = 10,
