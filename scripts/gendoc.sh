@@ -15,7 +15,7 @@
 # vimdoc-only comment, uncommented here on the way to panvimdoc:
 #
 #   <!-- vimdoc-only
-#   See |ezdap-configuration| for the full option list.
+#   See |ndebug-configuration| for the full option list.
 #   -->
 #
 # Needs pandoc (brew install pandoc). panvimdoc itself is fetched on first run
@@ -30,7 +30,7 @@ PANVIMDOC_COMMIT=662fb20304d20c539fb48a0bda628f5165507de7 # v4.0.1
 PANVIMDOC_URL=https://github.com/kdheepak/panvimdoc.git
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-project=ezdap
+project=ndebug
 description="A Debug Adapter Protocol client for Neovim"
 vimversion="Neovim >= 0.10"
 
