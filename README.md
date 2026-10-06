@@ -639,8 +639,8 @@ plugin, or copy the one definition file you need out of it into
 More generally, a definition is a single Lua file under an `ndebug-adapters/`
 directory anywhere on the runtimepath, returning a table. It needs a way to
 reach the adapter (a `command` to spawn, or a `host`/`port` to connect to) and
-`modes`, each naming the `inputs` it accepts and a `build` that turns them into
-the native DAP body:
+`modes`, each naming the `inputs` it accepts and a `build` that turns the
+`parameters` into the native DAP body:
 
 ```lua
 -- ~/.config/nvim/ndebug-adapters/myadapter.lua
@@ -654,8 +654,8 @@ return {
       inputs      = {
         program = { required = true, completion = "file", description = "executable to debug" },
       },
-      build = function(inputs)
-        return { program = require("ndebug.shared").normalize_path(inputs.program), stopOnEntry = true }
+      build = function(parameters)
+        return { program = require("ndebug.shared").normalize_path(parameters.program), stopOnEntry = true }
       end,
     },
   },

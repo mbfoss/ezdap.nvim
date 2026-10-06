@@ -5,7 +5,7 @@
 ---are wholly self-describing. A mode declares its inputs up front in an
 ---`inputs` table (`name -> ndebug.Input`), which both `:Ndebug run` and a
 ---scaffolded run file read, then resolve the same way: `resolve_task` runs the
----mode's `build` over the supplied values to assemble a runnable task.
+---mode's `build` over the supplied parameters to assemble a runnable task.
 ---
 
 local inputs_registry = require("ndebug.run.inputs")
@@ -146,20 +146,20 @@ end
 
 -- Resolving
 
----Read every declared input from `values`, each as the Lua value it is (a
+---Read every declared input from `parameters`, each as the Lua value it is (a
 ---collection's table included). The string form belongs to the command line, which
 ---`parse`s it before calling here, so a number or a boolean given as text is
 ---refused. Unset inputs are absent, and a name the mode declares nothing for is an
 ---error, not a value quietly dropped.
 ---@param mode ndebug.Mode
----@param values table<string, any>  input name → a value in its typed form
----@return table<string, any> inputs, string[] missing, string[] errs
-local function _read_inputs(mode, values)
-    local inputs, missing, errs = {}, {}, {}
+---@param parameters table<string, any>  input name → a value in its typed form
+---@return table<string, any> out, string[] missing, string[] errs
+local function _read_inputs(mode, parameters)
+    local out, missing, errs = {}, {}, {}
     local declared = {}
     for name, spec in pairs(mode.inputs or {}) do
         declared[name] = true
-        local raw = values[name]
+        local raw = parameters[name]
         -- An input cleared rather than answered (an empty string) is one that was
         -- not supplied: `build` assigns it unconditionally, and only nil drops the field.
         if raw == nil or raw == "" then
@@ -169,7 +169,7 @@ local function _read_inputs(mode, values)
             if cerr then
                 errs[#errs + 1] = name .. ": " .. cerr
             else
-                inputs[name] = val
+                out[name] = val
             end
         end
     end
@@ -177,7 +177,7 @@ local function _read_inputs(mode, values)
     -- `parameters`, a caller's table — is read by nothing, so `build` would never see
     -- it. Refused rather than dropped, the way a value that will not parse is.
     local unknown = {}
-    for name in pairs(values) do
+    for name in pairs(parameters) do
         if not declared[name] then unknown[#unknown + 1] = name end
     end
     if #unknown > 0 then
@@ -189,18 +189,19 @@ local function _read_inputs(mode, values)
     -- `pairs` order is arbitrary; sort so the reported set is stable.
     table.sort(missing)
     table.sort(errs)
-    return inputs, missing, errs
+    return out, missing, errs
 end
 
----What to resolve: an adapter's named mode, the values for its inputs, and
----the name the resulting task should run under.
+---What to resolve: an adapter's named mode, the parameters answering its inputs,
+---and the name the resulting task should run under.
 ---@class ndebug.ResolveSpec
 ---@field adapter       string
 ---@field mode string
 ---@field name?         string              run group name for the resolved task
----@field values?       table<string, any>  input name → a value in its typed form
+---@field parameters?   table<string, any>  input name → a value in its typed form
 
----Resolve one of an adapter's named modes, plus values for its inputs, into a
+---Resolve one of an adapter's named modes, plus parameters answering its inputs,
+---into a
 ---runnable `ndebug.Task`: request kind and any task-level connection already in
 ---place. This is the single seam between a mode and a front end.
 ---@param spec ndebug.ResolveSpec
@@ -227,7 +228,7 @@ function M.resolve_task(spec, done)
         return cancel
     end
 
-    local inputs, missing, errs = _read_inputs(mode, spec.values or {})
+    local parameters, missing, errs = _read_inputs(mode, spec.parameters or {})
     if #errs > 0 then
         finish(nil, table.concat(errs, "; "))
         return cancel
@@ -246,24 +247,24 @@ function M.resolve_task(spec, done)
         -- and the resolved AdapterDef's own host/port apply instead.
         local has_connect = next(connect) ~= nil
         finish({
-            name       = spec.name,
-            adapter    = spec.adapter,
-            mode       = spec.mode,
-            request    = mode.request,
-            parameters = body,
-            host       = has_connect and connect.host or nil,
-            port       = has_connect and connect.port or nil,
+            name         = spec.name,
+            adapter      = spec.adapter,
+            mode         = spec.mode,
+            request      = mode.request,
+            request_args = body,
+            host         = has_connect and connect.host or nil,
+            port         = has_connect and connect.port or nil,
         })
     end
 
-    -- A mode with no `build` takes no inputs into the body: the request goes out bare.
+    -- A mode with no `build` takes no parameters into the body: the request goes out bare.
     if not mode.build then
         deliver({}, {})
         return cancel
     end
 
     local co = coroutine.create(function()
-        local ok, body, connect = xpcall(mode.build, debug.traceback, inputs)
+        local ok, body, connect = xpcall(mode.build, debug.traceback, parameters)
         -- `build` raised: `body` holds the traceback the handler produced.
         if not ok then return finish(nil, tostring(body)) end
         -- `build` gave up (a cancelled picker, an unresolvable pid) and named why

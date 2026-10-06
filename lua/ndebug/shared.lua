@@ -62,7 +62,7 @@ end
 
 ---One port input, held to the range a port has. Returns the port unchanged, or nil
 ---and a message: the `nil, err` pair `build` returns to abort a run:
----`local port, err = shared.resolve_port(inputs.port)`. An unset optional input is
+---`local port, err = shared.resolve_port(parameters.port)`. An unset optional input is
 ---nil in and nil out, with no error, so only a written value is checked.
 ---@param port integer?  a port input's value
 ---@return integer? port, string? err

@@ -235,7 +235,7 @@ end
 ---each for a map). Names are checked against the mode here, so a typo is
 ---refused before the run starts.
 ---@param tokens string[]  the fargs after `run`
----@return string? adapter, string? mode, table<string, any>? values
+---@return string? adapter, string? mode, table<string, any>? parameters
 local function _parse_run_args(tokens)
     local adapter, mode = tokens[1], tokens[2]
     local schema = require("ndebug.run.schema")
@@ -245,7 +245,7 @@ local function _parse_run_args(tokens)
     if not mode_def then return adapter, mode, {} end
     local declared = mode_def.inputs or {}
 
-    local inputs, seen, i = {}, {}, 3
+    local parameters, seen, i = {}, {}, 3
     while i <= #tokens do
         local name = tokens[i]:match("^%-%-(.+)$")
         local spec = name and declared[name]
@@ -271,9 +271,9 @@ local function _parse_run_args(tokens)
             vim.notify("[ndebug] run: --" .. name .. ": " .. err, vim.log.levels.WARN)
             return
         end
-        inputs[name] = value
+        parameters[name] = value
     end
-    return adapter, mode, inputs
+    return adapter, mode, parameters
 end
 
 local function _debug_run(_, args, opts)
@@ -285,8 +285,8 @@ local function _debug_run(_, args, opts)
     elseif sub == "run_file" then
         ndebug.run_file(args[2])
     elseif sub == "run" then
-        local adapter, mode, inputs = _parse_run_args({ unpack(args, 2) })
-        if inputs then ndebug.run_mode(adapter or "", mode or "", inputs) end
+        local adapter, mode, parameters = _parse_run_args({ unpack(args, 2) })
+        if parameters then ndebug.run_mode(adapter or "", mode or "", parameters) end
     elseif sub == "new_run_file" then
         ndebug.new_run_file({ unpack(args, 2) })
     elseif sub == "adapter_info" then

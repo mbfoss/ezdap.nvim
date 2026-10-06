@@ -369,24 +369,25 @@ function M.adapter_info(adapter, mode)
 end
 
 ---Launch or attach under an adapter using one of its declared `modes`, assembling
----the request body from `inputs`: the answers to the mode's declared inputs, each
----in its typed form — a number, a boolean, a table (text is the command line's
----form, parsed before `run_mode` sees it). The entry point behind `:Ndebug run`.
+---the request body from `parameters`: the answers to the mode's declared inputs,
+---each in its typed form — a number, a boolean, a table (text is the command
+---line's form, parsed before `run_mode` sees it). The entry point behind
+---`:Ndebug run`.
 ---
 ---Pass a `presenter` to show the run in a UI of your own: the run's buffers,
 ---progress and outcome go to those callbacks, ndebug's own panel never sees it, and
 ---the run is yours to `remove_run` when you are done with it.
 ---@param adapter string  adapter name, e.g. "debugpy"
 ---@param mode string  mode name, e.g. "binary"
----@param inputs? table<string, any>  input name -> value, e.g. { command = "./main.py" }
+---@param parameters? table<string, any>  input name -> value, e.g. { command = "./main.py" }
 ---@param presenter? ndebug.runner.Presenter  a caller showing the run itself
 ---@return ndebug.runner.Run?
-function M.run_mode(adapter, mode, inputs, presenter)
+function M.run_mode(adapter, mode, parameters, presenter)
     _require_setup("run_mode")
     -- Cleaning is ndebug tidying its own runs before adding another; a run shown
     -- elsewhere is not one of them, and its presenter decides when to drop it.
     if not presenter then M.clean() end
-    return require("ndebug.run.runner").run_mode(adapter, mode, inputs, presenter)
+    return require("ndebug.run.runner").run_mode(adapter, mode, parameters, presenter)
 end
 
 ---Forget a run: its presenter is told to dispose of what it made (ndebug's own

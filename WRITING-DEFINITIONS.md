@@ -33,8 +33,8 @@ return {
             inputs      = {
                 command = { type = "string", completion = "command", required = true, description = "command line to debug" },
             },
-            build       = function(inputs) -- inputs -> DAP body
-                local program, args = require("ndebug.shared").split_command(inputs.command)
+            build       = function(parameters) -- parameters -> DAP body
+                local program, args = require("ndebug.shared").split_command(parameters.command)
                 return { program = program, args = args }
             end,
         },
@@ -75,7 +75,7 @@ An `ndebug.Mode` is one runnable configuration:
 | `description` | `string` | A line shown in pickers and `:Ndebug new_run_file` output. |
 | `request` | `"launch"` \| `"attach"` | Which DAP request the mode issues. |
 | `inputs` | `table<string, ndebug.Input>` | What the user is asked for, keyed by the name used as `--name` on the command line. |
-| `build` | `fun(inputs): table?, table\|string?` | Turns answered inputs into the DAP request body and returns it. A second return value is a `host`/`port` table overriding the definition's own. Return `nil, "message"` to abort with that error. It runs in a coroutine, so it may yield; a `vim.ui.select` picker inside `build` is fine. |
+| `build` | `fun(parameters): table?, table\|string?` | Turns answered inputs into the DAP request body and returns it. A second return value is a `host`/`port` table overriding the definition's own. Return `nil, "message"` to abort with that error. It runs in a coroutine, so it may yield; a `vim.ui.select` picker inside `build` is fine. |
 
 An `ndebug.Input` describes one value:
 
@@ -92,8 +92,8 @@ An `ndebug.Input` describes one value:
 A definition without `modes` cannot be run at all: nothing completes, and
 nothing can be generated, because a raw DAP body describes nothing about itself
 (see [Why inputs](README.md#why-inputs-and-not-raw-dap)). Each mode declares the
-`inputs` it accepts and a `build` that turns supplied values into the native
-body:
+`inputs` it accepts and a `build` that turns the supplied `parameters` into the
+native body:
 
 ```lua
 return {
@@ -108,15 +108,15 @@ return {
                 env           = { type = "map",                             description = "environment variables" },
                 stop_on_entry = { type = "boolean",                         description = "break at program entry" },
             },
-            build = function(inputs)
+            build = function(parameters)
                 local shared = require("ndebug.shared")
-                local program, args = shared.split_command(inputs.command)
+                local program, args = shared.split_command(parameters.command)
                 return {
                     program     = program,
                     args        = args,
-                    cwd         = shared.normalize_path(inputs.cwd),
-                    env         = inputs.env,
-                    stopOnEntry = inputs.stop_on_entry,
+                    cwd         = shared.normalize_path(parameters.cwd),
+                    env         = parameters.env,
+                    stopOnEntry = parameters.stop_on_entry,
                 }
             end,
         },
@@ -154,18 +154,18 @@ How the pieces fit:
   rejects a value outside what completes. A boolean input completes as
   `true`/`false` on its own.
 - **Paths and ports**: a path input is a `string` and a port a plain `integer`;
-  what either additionally is, `build` says: `shared.normalize_path(inputs.cwd)`
+  what either additionally is, `build` says: `shared.normalize_path(parameters.cwd)`
   resolves `~` and `$VAR` (nil in, nil out, and a `list`/`map` entry by entry),
-  and `local port, err = shared.resolve_port(inputs.port)` holds a port to its
+  and `local port, err = shared.resolve_port(parameters.port)` holds a port to its
   range, giving back the `nil, err` pair an abort already returns.
 - **`required`**: an unset required input is a resolve error naming the input.
   Leave it off and an unset input arrives as `nil`; since Lua drops
-  nil-valued keys, `cwd = inputs.cwd` omits `cwd` entirely. Write the field
+  nil-valued keys, `cwd = parameters.cwd` omits `cwd` entirely. Write the field
   unconditionally and optional fields take care of themselves.
-- **`build(inputs)`**: returns the native DAP body (write the adapter's own key
-  names, plus any identity fields it pins, as literals). `inputs` arrives
-  already read into each declared `type`, whichever form the caller authored it
-  in. A **second** return value is for adapters whose *connection* is what an
+- **`build(parameters)`**: returns the native DAP body (write the adapter's own
+  key names, plus any identity fields it pins, as literals). `parameters`
+  arrives already read into each declared `type`, whichever form the caller
+  authored it in. A **second** return value is for adapters whose *connection* is what an
   input configures: return a `host`/`port` table, or nothing at all, and the
   definition's own values stay in force.
 - **Aborting**: return `nil` and a message. The slot that carries the connection
@@ -173,12 +173,12 @@ How the pieces fit:
   reads as the `nil, err` pair any Lua function returns.
 - **Asking the user**: `build` runs on a coroutine, so it may yield. That is how
   an attach mode with no `pid` opens a process picker rather than sending a
-  meaningless body: `local pid, err = shared.resolve_pid(inputs.pid); if not pid
+  meaningless body: `local pid, err = shared.resolve_pid(parameters.pid); if not pid
   then return nil, err end`. It must always resume, returning either a body or
   an abort, so the caller waiting on it hears back.
 
 Because `:Ndebug run`, `:Ndebug new_run_file` and mode-based run files all resolve
-through the same `inputs` → `build` path, a mode is described in exactly one
+through the same `parameters` → `build` path, a mode is described in exactly one
 place and the three cannot drift apart. The shipped `remote` adapter in
 [remote.lua](ndebug-adapters/remote.lua) is a compact reference for a mode that
 returns a connection (a task-level `host`/`port`) rather than a body; for a

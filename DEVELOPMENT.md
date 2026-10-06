@@ -127,7 +127,7 @@ diagnostic. Never `require()` it, like `proto.lua`.
   Nothing else switches on a type name, so adding one is a single row.
 - [schema.lua](lua/ndebug/run/schema.lua): the engine behind `:Ndebug run`, the reader
   for `new_run_file`, and the mode engine `runner` resolves every run through.
-  `resolve_task` reads a mode's declared `inputs` from a table of values and
+  `resolve_task` reads a mode's declared `inputs` from a table of parameters and
   calls its `build`, delivering a complete `ndebug.Task` to a `done` callback, a
   `build` may stop to ask the user something first, and the returned `cancel`
   drops the answer if the caller has given up by then. Only `runner` resolves:
@@ -170,7 +170,7 @@ Each `ndebug.Mode`:
 | ------------- | ------------------------------------------------------------------------------- |
 | `request`     | `"launch"` or `"attach"`                                                        |
 | `inputs`      | what the mode accepts: `name -> ndebug.Input`; see below             |
-| `build`       | `fun(inputs): table?, table\|string?`, returning the native request body, plus any task-level TCP endpoint; or `nil, err` to abort |
+| `build`       | `fun(parameters): table?, table\|string?`, returning the native request body, plus any task-level TCP endpoint; or `nil, err` to abort |
 
 Each `ndebug.Input` declares one input up front:
 
@@ -242,15 +242,15 @@ declared inputs under `parameters`, each seeded by its row and commented with
 its `description`, so it and `:Ndebug run` cannot drift, and there is no second
 field list to keep in step.
 
-- **`build(inputs)`** returns everything a run needs: the request body, and
-  optionally a second table naming a task-level TCP endpoint. `inputs` arrives
-  already read into each input's declared `type` whichever form the caller wrote
-  them in. Identity fields the adapter pins (`type`/`name`) and fixed defaults
+- **`build(parameters)`** returns everything a run needs: the request body, and
+  optionally a second table naming a task-level TCP endpoint. `parameters`
+  arrives already read into each input's declared `type` whichever form the
+  caller wrote them in. Identity fields the adapter pins (`type`/`name`) and fixed defaults
   go in the body too, as plain literals. An unset input is nil, and Lua drops
-  nil-valued keys, so `cwd = inputs.cwd` omits `cwd` when it wasn't supplied;
+  nil-valued keys, so `cwd = parameters.cwd` omits `cwd` when it wasn't supplied;
   write the field unconditionally and optional fields take care of themselves.
   Guard only when a field is *derived* from an input (`targetCreateCommands =
-  inputs.program and { "target create " .. inputs.program }`), since indexing
+  parameters.program and { "target create " .. parameters.program }`), since indexing
   nil would throw. Return no second value unless the adapter takes a task-level
   TCP endpoint; without one the adapter def's own host/port stay in force.
 
@@ -260,8 +260,8 @@ field list to keep in step.
   an unset `pid` by asking the user to pick one:
 
   ```lua
-  build = function(inputs)
-      local pid, err = shared.resolve_pid(inputs.pid)
+  build = function(parameters)
+      local pid, err = shared.resolve_pid(parameters.pid)
       if not pid then return nil, err end   -- cancelled: abort the run
       return { processId = pid }
   end,
@@ -283,7 +283,7 @@ just the command line. Scaffold a mode after editing it (`:Ndebug new_run_file
 Input *names* are `snake_case` (`stop_on_entry`, `wait_for`): they are ndebug's
 own user-facing vocabulary (the `--name` flags typed at `:Ndebug run`), not
 the adapter's. The `params` keys they fill keep whatever casing the adapter's
-wire protocol uses, so pairings like `params.stopOnEntry = inputs.stop_on_entry`
+wire protocol uses, so pairings like `params.stopOnEntry = parameters.stop_on_entry`
 are normal and correct.
 
 Which names a mode takes is up to it, and there is no portable role vocabulary

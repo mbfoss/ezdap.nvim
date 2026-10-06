@@ -19,10 +19,10 @@ return {
                 },
                 port = { type = "integer", description = "DAP server port" },
             },
-            build = function(inputs)
-                local port, err = shared.resolve_port(inputs.port)
+            build = function(parameters)
+                local port, err = shared.resolve_port(parameters.port)
                 if err then return nil, err end
-                return {}, { host = inputs.host, port = port }
+                return {}, { host = parameters.host, port = port }
             end,
         },
     },

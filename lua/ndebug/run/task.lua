@@ -2,7 +2,7 @@ local OutputBuffer = require "ndebug.ui.OutputBuffer"
 local _config      = require("ndebug.config").current
 local ui_util      = require "ndebug.util.ui"
 
----A debug task, native DAP, sent as-is. `parameters` is the adapter's raw
+---A debug task, native DAP, sent as-is. `request_args` is the adapter's raw
 ---launch/attach body, produced by a mode's `build`. This is the resolved shape
 ---`ndebug.run.runner` runs, which run files and `:Ndebug run` both produce via
 ---`ndebug.run.schema`'s `resolve_task`.
@@ -11,7 +11,7 @@ local ui_util      = require "ndebug.util.ui"
 ---@field adapter       string                     an adapter name, see `ndebug.available_adapters`
 ---@field mode?         string                     the mode this was resolved from, for the adapter's `setup`
 ---@field request?      "launch"|"attach"          defaults to "launch"
----@field parameters?   table                      native DAP launch/attach body (the adapter's own keys), sent verbatim
+---@field request_args? table                      native DAP launch/attach body (the adapter's own keys), sent verbatim
 ---@field host?         string                     attach/TCP connection target
 ---@field port?         integer                    attach/TCP connection target (required for the `remote` adapter)
 
@@ -54,7 +54,7 @@ local function make_setup_buf_name(run)
     end
 end
 
----@param task ndebug.Task  native DAP task (name + adapter + request + parameters, plus optional host/port)
+---@param task ndebug.Task  native DAP task (name + adapter + request + request_args, plus optional host/port)
 ---@param callbacks ndebug.TaskCallback
 ---@param run ndebug.runner.Run  the run this task starts into, for naming the buffers it makes
 ---@return fun() -- cancel function
@@ -79,9 +79,10 @@ M.start            = function(task, callbacks, run)
 
     local setup_buf_name = make_setup_buf_name(run)
 
-    -- The task is native DAP: `parameters` is the adapter's raw launch/attach body,
-    -- sent verbatim and never inspected or translated here. Scaffolding it from an
-    -- adapter schema is new_run_file's job. No `parameters` sends an empty body.
+    -- The task is native DAP: `request_args` is the adapter's raw launch/attach
+    -- body, sent verbatim and never inspected or translated here. Scaffolding it
+    -- from an adapter schema is new_run_file's job. No `request_args` sends an
+    -- empty body.
     local base, load_err = require("ndebug").load_adapter(task.adapter)
     if not base then
         report(load_err
@@ -109,7 +110,7 @@ M.start            = function(task, callbacks, run)
         host                = not spawns and base.host or nil,
         port                = not spawns and base.port or nil,
         request             = request,
-        request_args        = vim.deepcopy(task.parameters or {}),
+        request_args        = vim.deepcopy(task.request_args or {}),
     }
 
     -- Adapters with setup manage config.host/port themselves (e.g. debugpy picks a

@@ -29,7 +29,7 @@ error("do not require a meta file")
 ---@field mode_required         fun(adapter: string, mode_name: string): string[]
 ---@field input_seed            fun(input: ndebug.Input?): any
 ---@field adapter_info          fun(adapter?: string, mode?: string)
----@field run_mode              fun(adapter: string, mode: string, inputs?: table<string, any>, presenter?: ndebug.runner.Presenter): ndebug.runner.Run?
+---@field run_mode              fun(adapter: string, mode: string, parameters?: table<string, any>, presenter?: ndebug.runner.Presenter): ndebug.runner.Run?
 ---@field remove_run            fun(run: ndebug.runner.Run)
 ---@field rerun                 fun()
 ---@field clean                 fun()
@@ -92,7 +92,7 @@ error("do not require a meta file")
 ---@field description  string
 ---@field request      "launch"|"attach"
 ---@field inputs?      table<string, ndebug.Input>  the mode's declared inputs
----@field build?       fun(inputs: table<string, any>): table?, table|string?  the DAP request body, plus an optional host/port overriding the adapter's; or nil and a message to abort
+---@field build?       fun(parameters: table<string, any>): table?, table|string?  the DAP request body, plus an optional host/port overriding the adapter's; or nil and a message to abort
 
 ---@class ndebug.AdapterDef
 ---@field command?               string|string[]

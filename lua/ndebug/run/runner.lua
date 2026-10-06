@@ -329,27 +329,27 @@ function M.run_file(path)
     -- `parameters`; resolve it through the mode's `build`, as `:Ndebug run` does.
     if type(spec.mode) == "string" then
         return _run_spec({
-            adapter = spec.adapter,
-            mode    = spec.mode,
-            name    = spec.name or vim.fn.fnamemodify(resolved, ":t"),
-            values  = spec.parameters,
+            adapter    = spec.adapter,
+            mode       = spec.mode,
+            name       = spec.name or vim.fn.fnamemodify(resolved, ":t"),
+            parameters = spec.parameters,
         })
     end
 
     _err("run: " .. vim.fn.fnamemodify(resolved, ":t") .. " must set `mode` (a named mode)")
 end
 
----Launch or attach under an adapter's named mode, resolving `inputs` (the
+---Launch or attach under an adapter's named mode, resolving `parameters` (the
 ---answers to the mode's declared inputs, in their typed form — a number is a
 ---number, not text) through `schema.resolve_task`. The run is returned right away,
 ---even when `build` stops to ask the user something: it starts, or fails, once
 ---they answer.
 ---@param adapter string  adapter name, e.g. "codelldb"
 ---@param mode_name string  mode name, e.g. "binary"
----@param inputs? table<string, any>  input name -> value, e.g. { command = "./a.out" }
+---@param parameters? table<string, any>  input name -> value, e.g. { command = "./a.out" }
 ---@param presenter? ndebug.runner.Presenter  a caller showing the run in a UI of its own
 ---@return ndebug.runner.Run?
-function M.run_mode(adapter, mode_name, inputs, presenter)
+function M.run_mode(adapter, mode_name, parameters, presenter)
     local schema = require("ndebug.run.schema")
 
     if not adapter or adapter == "" then
@@ -370,10 +370,10 @@ function M.run_mode(adapter, mode_name, inputs, presenter)
     end
 
     return _run_spec({
-        adapter = adapter,
-        mode    = mode_name,
-        name    = (presenter and presenter.name) or adapter,
-        values  = inputs or {},
+        adapter    = adapter,
+        mode       = mode_name,
+        name       = (presenter and presenter.name) or adapter,
+        parameters = parameters or {},
     }, presenter)
 end
 
