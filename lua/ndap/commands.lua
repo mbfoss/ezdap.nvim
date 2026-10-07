@@ -589,43 +589,54 @@ function M.debug.step_in() manager.step_in() end
 
 function M.debug.step_out() manager.step_out() end
 
-function M.debug.step_back() manager.step_back() end
+---Step back one instruction (reverse debugging). Requires supportsStepBack.
+function M.debug.step_back()
+    _with_capability("supportsStepBack", "step back", function() manager.step_back() end)
+end
 
-function M.debug.reverse_continue() manager.reverse_continue() end
+---Resume reverse execution until a breakpoint is hit. Requires supportsStepBack.
+function M.debug.reverse_continue()
+    _with_capability("supportsStepBack", "reverse continue", function() manager.reverse_continue() end)
+end
 
 function M.debug.pause() manager.pause() end
 
-function M.debug.restart() manager.restart() end
+---Restart the debuggee. Requires supportsRestartRequest.
+function M.debug.restart()
+    _with_capability("supportsRestartRequest", "restart", function() manager.restart() end)
+end
 
 function M.debug.stop() manager.stop() end
 
 function M.debug.stop_all() manager.stop_all() end
 
 ---Step into a specific call on the current line. Prompts when the line has
----multiple call targets; falls back to a plain step-in when unsupported or
----there is only one target.
+---multiple call targets; falls back to a plain step-in when the adapter reports
+---none. Requires supportsStepInTargetsRequest.
 function M.debug.step_in_target()
-    local sess = manager.session()
-    if not sess then
-        vim.notify("[dap] no active session", vim.log.levels.WARN); return
-    end
-    local frame = sess:current_stack_frame()
-    if not frame then
-        vim.notify("[dap] no selected frame", vim.log.levels.WARN); return
-    end
-    manager.step_in_targets(frame.id, function(targets, _)
-        if not targets or #targets == 0 then
-            manager.step_in(); return
+    _with_capability("supportsStepInTargetsRequest", "step-in targets", function(sess)
+        local frame = sess:current_stack_frame()
+        if not frame then
+            vim.notify("[dap] no selected frame", vim.log.levels.WARN); return
         end
-        if #targets == 1 then
-            manager.step_in(targets[1].id)
-            return
-        end
-        select.open({
-            prompt = "Step into",
-            items  = vim.tbl_map(function(t) return { label = t.label, data = t } end, targets),
-        }, function(t)
-            if t then manager.step_in(t.id) end
+        manager.step_in_targets(frame.id, function(targets, err)
+            if err then
+                vim.notify("[dap] step-in targets failed: " .. err, vim.log.levels.WARN)
+                return
+            end
+            if not targets or #targets == 0 then
+                manager.step_in(); return
+            end
+            if #targets == 1 then
+                manager.step_in(targets[1].id)
+                return
+            end
+            select.open({
+                prompt = "Step into",
+                items  = vim.tbl_map(function(t) return { label = t.label, data = t } end, targets),
+            }, function(t)
+                if t then manager.step_in(t.id) end
+            end)
         end)
     end)
 end
