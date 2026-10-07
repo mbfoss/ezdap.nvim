@@ -1,24 +1,21 @@
 # Writing an adapter definition
 
-An adapter definition is a single Lua file under an `ndap-adapters/` directory
-on the runtimepath (beside `lsp/` and `plugin/`, not under `lua/`; it is a
-definition read by filename, not a Lua module), registered under its filename:
-`myadapter.lua` becomes the `myadapter` adapter, the name `:Ndap run` takes. It
-is configuration only: it says how to reach the debug adapter (the program that
-actually speaks DAP, such as `codelldb` or `gdb --interpreter=dap`) and what
-that adapter can be asked to do.
+One Lua file under an `ndap-adapters/` directory on the runtimepath (beside
+`lsp/` and `plugin/`, not under `lua/`). It is configuration: how to reach the
+debug adapter — the program that speaks DAP, such as `codelldb` or `gdb
+--interpreter=dap` — and what that adapter can be asked to do. It is registered
+under its filename: `myadapter.lua` becomes the `myadapter` adapter, the name
+`:Ndap run` takes.
 
-Three things get named in these files, and DAP keeps them distinct:
+DAP's three names, kept distinct:
 
-- **debug adapter**: the program ndap spawns or dials, the one speaking DAP:
-  `codelldb`, `lldb-dap`, `gdb --interpreter=dap`, `dlv dap`.
-- **debugger**: what that adapter drives underneath. Sometimes a separate
-  program (`codelldb` drives LLDB), sometimes the adapter itself (`gdb` and
-  `dlv` speak DAP directly).
-- **debuggee**: the program being debugged.
+- **debug adapter** — the program ndap spawns or dials, the one speaking DAP:
+  `codelldb`, `lldb-dap`, `dlv dap`.
+- **debugger** — what that adapter drives. `codelldb` drives LLDB; `gdb` and
+  `dlv` speak DAP directly.
+- **debuggee** — the program being debugged.
 
-"Adapter" on its own always means the first. This file is an adapter
-*definition*: it describes an adapter, it is not one.
+"Adapter" alone always means the first.
 
 Each file returns one `ndap.AdapterDef`:
 
@@ -42,31 +39,30 @@ return {
 }
 ```
 
-Each definition is read the first time something reaches for that adapter by
-name (`ndap.load_adapter`), a run, `:Ndap adapter_info <adapter>`, and never
-when ndap starts. Listing adapters (`ndap.available_adapters`, `:checkhealth`)
-reads their filenames only, so keep top-level work to building the table:
-anything expensive belongs in `setup`, which runs per run. It is read with
-`loadfile`, so it is never a Lua module: nothing can `require` it, and it cannot
-have siblings it requires; pull shared helpers from `ndap.shared` instead.
+A definition is read the first time something reaches for that adapter by name
+(`ndap.load_adapter`, a run, `:Ndap adapter_info <adapter>`), never at startup.
+Listing adapters (`ndap.available_adapters`, `:checkhealth`) reads filenames
+only. Keep top-level work to building the table and put anything expensive in
+`setup`, which runs per run. It is read with `loadfile`, not `require`: nothing
+can `require` it and it can require no sibling. Helpers come from `ndap.shared`.
 
 ## `ndap.AdapterDef`
 
-The table an adapter definition returns. Every field is optional; what is set
-decides how the adapter is reached and what it can run.
+Every field is optional; what is set decides how the adapter is reached and what
+it can run.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `command` | `string` \| `string[]` | The adapter process to spawn, spoken to over stdio. A string is split on shell whitespace, so `"python3 -m debugpy"` works; a list is used verbatim. A missing executable is reported before the session starts. **`command` takes priority**: a definition with both `command` and `host`/`port` spawns `command`, and its `host`/`port` are ignored. |
-| `host` | `string` | Host of an already-running adapter to connect to, used only when there is no `command`. Defaults to `127.0.0.1`. No shipped definition sets this: a mode's `build`, or a `setup`, is what supplies the connection. |
-| `port` | `integer` | Port to connect to, used only when there is no `command`; ndap dials `host:port`, retrying for ~3s. A port that `setup` or a mode's `build` sets for the run still selects TCP over `command`: that is how a definition whose `setup` starts the adapter as a server connects to it, and how the shipped `remote` connects at all. A run left with neither a command nor a port is reported before it starts. |
+| `command` | `string` \| `string[]` | Adapter process to spawn, spoken to over stdio. A string is split on shell whitespace (`"python3 -m debugpy"`); a list is verbatim. A missing executable is reported before the session starts. Wins over `host`/`port`: with both set, this spawns and they are ignored. |
+| `host` | `string` | Host of an already-running adapter, used only when there is no `command`. Defaults to `127.0.0.1`. No shipped definition sets it; a mode's `build` or a `setup` supplies the connection. |
+| `port` | `integer` | Port to connect to, used only when there is no `command`; ndap dials `host:port`, retrying for ~3s. A port set for the run by `setup` or a mode's `build` also selects TCP over `command` — how the shipped `remote` connects. A run with neither a command nor a port is refused before it starts. |
 | `cwd` | `string` | Working directory for the spawned adapter. Defaults to Neovim's cwd. |
-| `env` | `table<string,string>` | Environment for the spawned adapter, meaning the adapter's own environment, not the debuggee's; merged over Neovim's, so set only what the adapter needs, such as a search path or a flag it reads from the environment. |
-| `type` | `string` | DAP `adapterID` override. Defaults to the adapter's name, i.e. the filename stem. |
-| `defer_launch_attach` | `boolean` | Send `launch`/`attach` after `configurationDone` rather than straight after `initialize`, for adapters that require that order. |
-| `modes` | `table<string, ndap.Mode>` | The named modes this definition offers, keyed by the name `:Ndap run <adapter> <mode>` takes. |
+| `env` | `table<string,string>` | The adapter's own environment, not the debuggee's; merged over Neovim's. Set only what the adapter needs, such as a search path. |
+| `type` | `string` | DAP `adapterID` override. Defaults to the filename stem. |
+| `defer_launch_attach` | `boolean` | Send `launch`/`attach` after `configurationDone` rather than after `initialize`, for adapters requiring that order. |
+| `modes` | `table<string, ndap.Mode>` | The named modes, keyed by the name `:Ndap run <adapter> <mode>` takes. |
 | `setup` | `fun(config, ctx, callback)` | Runs before the session; see below. |
-| `teardown` | `fun(config, state)` | Runs after the session, with whatever `setup` passed as its `state`. |
+| `teardown` | `fun(config, state)` | Runs after the session, with whatever `setup` passed as `state`; also when `setup` fails. |
 
 An `ndap.Mode` is one runnable configuration:
 
@@ -74,26 +70,25 @@ An `ndap.Mode` is one runnable configuration:
 | --- | --- | --- |
 | `description` | `string` | A line shown in pickers and `:Ndap new_run_file` output. |
 | `request` | `"launch"` \| `"attach"` | Which DAP request the mode issues. |
-| `inputs` | `table<string, ndap.Input>` | What the user is asked for, keyed by the name used as `--name` on the command line. |
-| `build` | `fun(parameters): table?, table\|string?` | Turns answered inputs into the DAP request body and returns it. A second return value is a `host`/`port` table naming the connection the run should dial. Return `nil, "message"` to abort with that error. It runs in a coroutine, so it may yield; a `vim.ui.select` picker inside `build` is fine. |
+| `inputs` | `table<string, ndap.Input>` | What the user is asked for, keyed by the name used as `--name`. |
+| `build` | `fun(parameters): table?, table\|string?` | Turns inputs into the request body. A second return value is a `host`/`port` table the run should dial; `nil, "message"` aborts. Runs in a coroutine and may yield, so a `vim.ui.select` picker inside it is fine. |
 
 An `ndap.Input` describes one value:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | What the value is. Defaults to `string`. `list` is a table of entries, `map` a table of string keys to values — JSON's `array` and `object` under DAP's own names. |
-| `item_type` | as above, scalars only | The entry type of a `list` or `map`. |
+| `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | Defaults to `string`. `list` is a table of entries, `map` a table of string keys to values — JSON's `array` and `object` under DAP's names. |
+| `item_type` | as above, scalars only | The entry type of a `list` or `map`. Defaults to `string`. |
 | `required` | `boolean` | Leaving it unset is an error. Defaults to `false`. |
-| `completion` | `"file"` \| `"dir"` \| `"command"` \| `string[]` \| `fun(partial): string[]` | What the value completes with: a named source, the values themselves, or a function computing them. Suggests only; it never rejects a value. |
-| `description` | `string` | A few words on what the input means. This is what `:Ndap new_run_file` and command-line completion show. |
+| `completion` | `"file"` \| `"dir"` \| `"command"` \| `string[]` \| `fun(partial): string[]` | What the value completes with. Suggests only; never rejects a value. |
+| `description` | `string` | A few words on what the input means, shown by `:Ndap new_run_file` and command-line completion. |
 
 ## Modes
 
-A definition without `modes` cannot be run at all: nothing completes, and
-nothing can be generated, because a raw DAP body describes nothing about itself
-(see [Why inputs](README.md#why-inputs-and-not-raw-dap)). Each mode declares the
-`inputs` it accepts and a `build` that turns the supplied `parameters` into the
-native body:
+A definition without `modes` cannot be run: nothing completes and nothing can be
+generated, since a raw DAP body describes nothing about itself (see
+[Why inputs](README.md#why-inputs-and-not-raw-dap)). A mode declares the `inputs`
+it accepts and a `build` turning `parameters` into the native body:
 
 ```lua
 return {
@@ -124,97 +119,90 @@ return {
 }
 ```
 
-The mode is now everywhere it should be, with no further wiring:
+No further wiring is needed:
 
 ```vim
 :Ndap run myadapter binary --command ./a.out --cwd /src --stop_on_entry true
 :Ndap new_run_file myadapter binary
 ```
 
-How the pieces fit:
-
-- **`inputs`**: one entry per accepted value, keyed by the name typed on the
-  command line or written in a run file's `parameters`. `type` is what `build`
-  receives (`string`, `boolean`, `integer`, `number`, and the two collections
-  `list` and `map` (string keys)), and it is the whole of
-  what an input declares about its value. A `list`/`map` declares its *entries*
-  the same way under `item_type`: `{ type = "list", item_type = "integer" }` is
-  a list of integers, and a collection that declares none holds strings. A `map`
-  entry is written `key=value`, and a directional one is *described* the same
-  way, the key naming the side being translated: `local=remote` where the local
-  path becomes the remote one, `remote=local` where it is the other way round.
-  The adapter's own documentation decides which; the two shipped in
+- **`inputs`**: one entry per accepted value, keyed by the name typed at
+  `:Ndap run` or written under a run file's `parameters`. `type` is what `build`
+  receives and all an input declares about its value. A collection (`list`, or
+  `map` with string keys) declares its *entries* under `item_type`:
+  `{ type = "list", item_type = "integer" }`; without one, entries are strings.
+  A `map` entry is written `key=value`, and a directional one is *described* the
+  same way, the key naming the translated side — `local=remote` where the local
+  path becomes the remote one, `remote=local` the other way round. The adapter's
+  documentation decides which; the two shipped in
   [ndap-adapters.nvim](https://github.com/mbfoss/ndap-adapters.nvim) differ
-  because the adapters do. The
-  full vocabulary is one row per type in [inputs.lua](lua/ndap/run/inputs.lua);
-  every consumer reads those rows.
-- **`completion`**: what the value offers while it is being typed, in whichever
-  of three forms fits: a named source (`"file"`, `"dir"`, or `"command"`, which
-  completes each token of a command line as a path), the values the input is
-  normally written with when the adapter names them itself (`{ "console",
-  "terminal" }`), or a `fun(partial): string[]` when they can only be computed:
-  the targets in a workspace, the containers running now. On a `list`/`map` it
-  describes one entry. A written-out set is also what `:Ndap new_run_file`
-  writes into the generated file's comments; a source or a function has nothing
-  to serialize. Nothing
-  rejects a value outside what completes. A boolean input completes as
-  `true`/`false` on its own.
-- **Paths and ports**: a path input is a `string` and a port a plain `integer`;
-  what either additionally is, `build` says: `shared.normalize_path(parameters.cwd)`
-  resolves `~` and `$VAR` (nil in, nil out), `shared.normalize_paths` does the
-  same for a `list`, entry by entry, and `local port, err =
-  shared.resolve_port(parameters.port)` holds a port to its range, giving back
-  the `nil, err` pair an abort already returns. Both remain strict: hand
-  `normalize_path` anything but a string or nil — a whole `map` where one entry
-  belongs, say — and it raises, which the run reports as the mode's abort rather
-  than sending a body with an empty path in it.
+  because the adapters do. Every type is one row in
+  [inputs.lua](lua/ndap/run/inputs.lua), which every consumer reads.
+- **`completion`**: a named source (`"file"`, `"dir"`, `"command"` — the last
+  completing each token of a command line as a path); the values themselves
+  (`{ "console", "terminal" }`); or `fun(partial): string[]` when they can only
+  be computed. On a `list`/`map` it describes one entry. Only a written-out set
+  reaches the scaffolded file, as a comment. A boolean completes as
+  `true`/`false`.
+- **Paths and ports**: a path input is a `string` and a port an `integer`; what
+  either additionally is, `build` says.
+  `shared.normalize_path(parameters.cwd)` resolves `~` and `$VAR` (nil in, nil
+  out), `shared.normalize_paths` does the same for a `list`, entry by entry, and
+  `shared.resolve_port(parameters.port)` holds a port to its range, returning the
+  `nil, err` pair an abort already returns. `normalize_path` is strict: anything
+  but a string or nil — a whole `map` where one entry belongs, say — raises, and
+  the run reports it as the mode's abort rather than send a body with an empty
+  path.
 - **`required`**: an unset required input is a resolve error naming the input.
-  Leave it off and an unset input arrives as `nil`; since Lua drops
-  nil-valued keys, `cwd = parameters.cwd` omits `cwd` entirely. Write the field
-  unconditionally and optional fields take care of themselves.
-- **`build(parameters)`**: returns the native DAP body (write the adapter's own
-  key names, plus any identity fields it pins, as literals). `parameters`
-  arrives already read into each declared `type`, whichever form the caller
-  authored it in. A **second** return value is for adapters whose *connection* is
-  what an input configures: the `host`/`port` the run should dial. Return nothing
-  and the definition's own `host`/`port` stay in force, if it sets any; a run
-  left with no command and no port is refused before it starts, naming the mode.
-- **Aborting**: return `nil` and a message — a string in the slot a successful
-  call returns the connection in. So an abort reads as the `nil, err` pair any
-  Lua function returns, and the two are told apart by what the first value is.
-- **Asking the user**: `build` runs on a coroutine, so it may yield. That is how
-  an attach mode with no `pid` opens a process picker rather than sending a
-  meaningless body: `local pid, err = shared.resolve_pid(parameters.pid); if not pid
-  then return nil, err end`. It must always resume, returning either a body or
-  an abort, so the caller waiting on it hears back.
+  Otherwise an unset input arrives as `nil`, and Lua drops nil-valued keys, so
+  `cwd = parameters.cwd` omits `cwd`. Write the field unconditionally and
+  optional fields take care of themselves.
+- **`build(parameters)`**: returns the request body — the adapter's own key
+  names, plus any identity fields it pins, as literals. `parameters` arrives read
+  into each declared `type`, whichever form the caller wrote. A **second** return
+  value is the `host`/`port` the run should dial, for an adapter whose connection
+  an input configures; return none and the definition's own `host`/`port` stay in
+  force. A run with no command and no port is refused before it starts.
+- **Aborting**: return `nil` and a message, a string where a successful call
+  returns the connection — the ordinary `nil, err` pair.
+- **Asking the user**: `build` may yield, which is how an attach mode with no
+  `pid` opens a process picker instead of sending a meaningless body: `local pid,
+  err = shared.resolve_pid(parameters.pid); if not pid then return nil, err end`.
+  Always resume, with a body or an abort.
 
-Because `:Ndap run`, `:Ndap new_run_file` and mode-based run files all resolve
-through the same `parameters` → `build` path, a mode is described in exactly one
-place and the three cannot drift apart. The shipped `remote` adapter in
-[remote.lua](ndap-adapters/remote.lua) is a compact reference for a mode that
-returns a connection (a task-level `host`/`port`) rather than a body; for a
-spawn-then-connect definition that starts a server and points the connection at
-it, see the `setup`/`teardown` example below.
+`:Ndap run`, `:Ndap new_run_file` and mode-based run files all resolve through
+this one `parameters` → `build` path, so a mode is described once and the three
+cannot drift. The shipped [remote.lua](ndap-adapters/remote.lua) is a compact
+reference for a mode returning a connection rather than a body; for a
+spawn-then-connect definition, see the example below.
 
 ## Setup and teardown
 
-`setup` runs before ndap connects. Use it to start the adapter as a server and
-report its port, or to locate its binary and fail with a readable message.
-Return errors through `callback("...")`. Pass state as the second argument,
-`callback(nil, { handle = h })`, and it arrives as `teardown`'s second argument,
-which is how `teardown` stops what `setup` started. It must call `callback(err,
-state)` exactly once, so the run either proceeds or aborts.
+`setup` runs after a mode's `build` and before ndap connects, to start the
+adapter as a server and report its port, or to locate its binary and fail with a
+readable message. Errors go through `callback("...")`. State passed as the second
+argument, `callback(nil, { handle = h })`, arrives as `teardown`'s second
+argument, which is how `teardown` stops what `setup` started; hand the same state
+back *with* an error and `teardown` runs on the failure too. `callback(err,
+state)` must fire exactly once.
 
 `setup` may edit `config` in place, most usefully `config.host`/`config.port`,
-which is how an adapter that is really a TCP server gets started and then
-connected to. Its `ctx` carries `report(msg)` for progress lines,
-`add_bufnr(bufnr, opts?)` to attach a buffer it created to the run so it is
-listed under the session, `make_buf_name(kind)` to name a buffer the way the
-run's own are (`:b ndap://<number>/<name>:<kind>`; a reserved kind or a name
-already taken is an error rather than a suffix), and `mode`, the mode name this
-run resolved from, so a `setup` can gate one mode rather than the whole
-definition (refusing a mode whose feature the installed binary is too old for,
-say). Treat an unrecognized name as "none of mine" and let the run proceed.
+which is how a TCP-server adapter gets started and then connected to. A
+connection `build` returned is already in `config`; `setup` runs last and may
+overwrite it. Its `ctx` carries:
+
+- `report(msg)` — a progress line.
+- `add_bufnr(bufnr, opts?)` — attach a buffer `setup` created to the run, so it
+  is listed under the session.
+- `make_buf_name(kind)` — name a buffer the way the run's own are
+  (`:b ndap://<number>/<name>:<kind>`). A reserved kind (`repl`, `output`,
+  `term`, `dap`, `log`) or a name already taken is an error rather than a suffix.
+- `mode` — the mode name this run resolved from, for gating one mode rather than
+  the whole definition (refusing a mode the installed binary is too old for,
+  say). Treat an unrecognized `mode` as "none of mine" and proceed.
+- `parameters` — the answered inputs `build` was called with, how a `setup` that
+  starts the debuggee learns what to start. A raw task names no mode, and so
+  carries none.
 
 ```lua
 local shared = require("ndap.shared")
@@ -253,17 +241,16 @@ return {
 }
 ```
 
-When a definition has a `setup`, ndap leaves `config.host`/`port` entirely to
-it and ignores the task's: the definition knows where it put the server. Any
-adapter that announces its port on startup fits this shape; only the pattern
-matched against its output changes.
+Any adapter announcing its port on startup fits this shape; only the pattern
+matched against its output changes. A `setup` that starts the debuggee is the
+same shape one step out, reading the command line from `ctx.parameters`.
 
 ## Helpers
 
-Locating the adapter binary is most of what a definition does before it can run,
-so `ndap.shared` helps: `split_command`, `normalize_path`, `resolve_port`,
-`resolve_pid`, `spawn`, and `resolve_path(candidates, accept, opts?)`, which
-returns the first candidate `accept` approves, plus everything tried:
+`ndap.shared` carries `split_command`, `normalize_path`, `normalize_paths`,
+`resolve_port`, `resolve_pid`, `spawn`, and `resolve_path(candidates, accept,
+opts?)`, which returns the first candidate `accept` approves and everything
+tried:
 
 ```lua
 local shared = require("ndap.shared")
@@ -272,33 +259,30 @@ local exe, tried = shared.resolve_path({ "dlv", "$GOBIN/dlv" }, shared.is_execut
 
 `shared.split_command(command)` splits a `command` input into the
 `program`/`args` pair a launch body wants, quotes and backslashes included. It
-splits only: every token is passed through as written, so `~`, `$VAR`, `%`, `#`
-and a glob are ordinary characters — a Go package pattern like `./...` stays
-`./...` — and a list is taken as it stands. Expand a token yourself with
-`normalize_path` when the field is a path.
+splits only, passing every token through as written: `~`, `$VAR`, `%`, `#` and
+globs are ordinary characters (`./...` stays `./...`), and a list is used
+verbatim. Expand a token with `normalize_path` when the field is a path.
 
-An entry is a literal path, with no globbing. `$VAR` and `~` in it expand wherever
-they appear, exactly as `vim.fs.normalize` expands them anywhere else in Neovim;
-`${VAR}` braces are not expanded. An entry naming an unset or empty variable is
-skipped, which is what makes a list like the one above work with only `$GOBIN`
-set. A relative entry resolves against `opts.cwd`, and pass no `cwd` for a list of
-programs, where a bare name is meant to be looked up on `$PATH`.
+An entry is a literal path, never a glob. `$VAR` and `~` expand wherever they
+appear, as `vim.fs.normalize` does elsewhere in Neovim; `${VAR}` braces do not. An
+entry naming an unset or empty variable is skipped, which is what lets the list
+above work with only `$GOBIN` set. A relative entry resolves against `opts.cwd`;
+pass no `cwd` for a list of programs, where a bare name is looked up on `$PATH`.
 
-Use `shared.is_directory` for directories, your own predicate when working means
-more than present (a minimum version, say), and write the file inside a directory
-into the entry to test that — a virtualenv's `"$VIRTUAL_ENV/bin/python"` rather
-than `"$VIRTUAL_ENV"`.
+Use `shared.is_directory` for directories, your own predicate when *working*
+means more than present (a minimum version, say), and write the file inside a
+directory into the entry to test that: a virtualenv's `"$VIRTUAL_ENV/bin/python"`,
+not `"$VIRTUAL_ENV"`.
 
 ## Templates
 
 The definitions in
 [ndap-adapters.nvim](https://github.com/mbfoss/ndap-adapters.nvim) are worked
-examples of the common shapes: an adapter spoken to over stdio, one located on
-`PATH` or in a package directory, and one started as a server and then connected
-to. Pick the one closest to your adapter and adapt it. The full contract is in
-the `ndap.AdapterDef` and `ndap.Mode` annotations in
-`lua/ndap/meta.lua`.
+examples of the common shapes: an adapter over stdio, one located on `PATH` or in
+a package directory, and one started as a server and then connected to. Adapt the
+closest. The full contract is in the `ndap.AdapterDef` and `ndap.Mode`
+annotations in [lua/ndap/meta.lua](lua/ndap/meta.lua).
 
-Contributions of new definitions are welcome. Follow the structure and
-comment style of the existing files, and cite the adapter's own documentation
-that the field set is based on at the top of the file.
+New definitions are welcome: follow the structure and comment style of the
+existing files, and cite the adapter's documentation the field set is based on at
+the top of the file.

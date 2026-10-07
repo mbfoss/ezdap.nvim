@@ -11,11 +11,10 @@ local M = {}
 ---@type fun(cmd: string|string[], opts: ndap.util.SpawnOpts, bufnr?: integer): ndap.util.TermHandle?, string?
 M.spawn = require("ndap.util.term").spawn
 
----Split a `command` input into the `program`/`args` pair a launch body wants. The
----command line is split on shell whitespace with quote and backslash handling, and
----every token is passed through as written: nothing is expanded, so `~`, `$VAR`, `%`,
----`#` and a glob are ordinary characters. A list is accepted as-is; an unset command
----yields an empty program.
+---Split a `command` input into the `program`/`args` pair a launch body wants, on
+---shell whitespace with quote and backslash handling. Tokens pass through as written
+---— `~`, `$VAR`, `%`, `#` and globs are ordinary characters. A list is taken as-is;
+---an unset command yields an empty program.
 ---@param command string|string[]|nil  a command line, or an argument list
 ---@return string program, string[] args
 function M.split_command(command)
@@ -49,10 +48,8 @@ function M.expand_path(path, cwd)
 end
 
 ---A path as an adapter body wants it: `~` and `$VAR` expanded by `vim.fs.normalize`,
----which leaves an unset variable literal. Nil in, nil out (an unset optional input).
----Anything else is a mistake — a whole `map`/`list` where one entry was meant — and
----raises, which a mode's `build` turns into the run's abort message (see
----`ndap.run.schema`).
+---which leaves an unset variable literal. Nil in, nil out. Anything else raises,
+---which a mode's `build` turns into the run's abort message.
 ---@param path string?
 ---@return string?
 function M.normalize_path(path)
@@ -145,8 +142,7 @@ function M.select_process(prompt)
     if not co then
         return nil, "select_process must be called from a coroutine"
     end
-    -- The list is read with `ps`; where that does not exist, say so rather than
-    -- report an empty process list.
+    -- No `ps` here: say so rather than report an empty process list.
     if vim.fn.has("win32") == 1 then
         return nil, "Process selection is not available on Windows; pass a pid"
     end
@@ -159,8 +155,7 @@ function M.select_process(prompt)
     ---@type {label:string, pid:string}[]
     local choices = {}
     for _, line in ipairs(lines) do
-        -- A `ps` header has no numeric first field, so it drops out here: nothing
-        -- depends on the header being line one, or on a header being printed at all.
+        -- A header has no numeric first field, so it drops out here.
         local pid, user, name = line:match("^%s*(%d+)%s+(%S+)%s+(.-)%s*$")
         if pid then
             choices[#choices + 1] = {

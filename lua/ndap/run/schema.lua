@@ -132,12 +132,9 @@ function M.validate(adapter)
     end
 
     local out = {}
-    -- Reachability is not knowable statically: a mode's `build` returns the
-    -- connection at run time, so a definition with no command, host/port or setup is
-    -- still valid as long as some mode can build one (the shipped `remote` and
-    -- `jdtls` are reached that way). Only when no mode has a `build` either is it
-    -- unreachable for certain. A definition whose `build` returns no connection is
-    -- caught before the run starts, in `ndap.run.task`.
+    -- Reachability is not static: a mode's `build` supplies the connection at run
+    -- time, so only a definition with no `build` anywhere is unreachable for certain.
+    -- One whose `build` returns no connection is caught before the run starts.
     local reachable = def.command ~= nil or def.host ~= nil or def.port ~= nil
         or def.setup ~= nil
     if not reachable and type(def.modes) == "table" then
@@ -259,10 +256,8 @@ function M.resolve_task(spec, done)
     ---@param body table  the DAP request body
     ---@param connect table  the host/port the run should dial, possibly empty
     local function deliver(body, connect)
-        -- `connect` is task-level, not a body field: a `build` returns the host/port
-        -- the run should dial. An empty one reports none, and the resolved
-        -- AdapterDef's own host/port apply instead. A task left with neither is
-        -- caught before it starts (see `ndap.run.task`).
+        -- `connect` is task-level, not a body field. An empty one reports none, leaving
+        -- the AdapterDef's own host/port in force.
         local has_connect = next(connect) ~= nil
         finish({
             name         = spec.name,
@@ -272,6 +267,7 @@ function M.resolve_task(spec, done)
             request_args = body,
             host         = has_connect and connect.host or nil,
             port         = has_connect and connect.port or nil,
+            parameters   = parameters,
         })
     end
 
@@ -285,9 +281,8 @@ function M.resolve_task(spec, done)
         local ok, body, connect = xpcall(mode.build, debug.traceback, parameters)
         -- `build` raised: `body` holds the traceback the handler produced.
         if not ok then return finish(nil, tostring(body)) end
-        -- `build` gave up (a cancelled picker, an unresolvable pid) and named why in
-        -- the slot a successful call returns `connect` in. Only a string is that
-        -- reason: a table here would render as `table: 0x…`, which says nothing.
+        -- `build` gave up and named why in the slot a successful call returns
+        -- `connect` in. Only a string is a reason; a table renders as `table: 0x…`.
         if body == nil then
             if type(connect) == "string" then return finish(nil, connect) end
             return finish(nil, "build produced no request body")

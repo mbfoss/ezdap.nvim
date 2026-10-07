@@ -14,6 +14,7 @@ local ui_util      = require "ndap.util.ui"
 ---@field request_args? table                      native DAP launch/attach body (the adapter's own keys), sent verbatim
 ---@field host?         string                     attach/TCP connection target
 ---@field port?         integer                    attach/TCP connection target (a mode's `build` or the adapter's `setup` supplies it)
+---@field parameters?   table<string, any>         the mode's answered inputs, as `build` received them (see `ndap.AdapterSetupCtx`)
 
 ---Presentation options for a buffer registered with whoever is showing the run.
 ---@class ndap.AddBufOpts
@@ -113,12 +114,9 @@ M.start            = function(task, callbacks, run)
         request_args        = vim.deepcopy(task.request_args or {}),
     }
 
-    -- Adapters with setup manage config.host/port themselves (e.g. debugpy picks a
-    -- free local port during setup). Only take the task's host/port otherwise.
-    if base.setup == nil then
-        if task.host ~= nil then config.host = task.host end
-        if task.port ~= nil then config.port = task.port end
-    end
+    -- Applied before `setup`, which runs last and may overwrite both.
+    if task.host ~= nil then config.host = task.host end
+    if task.port ~= nil then config.port = task.port end
 
     -- REPL buffer: interactive DAP expression evaluation.
     local repl = require("ndap.ui.ReplBuffer").new({
@@ -162,8 +160,12 @@ M.start            = function(task, callbacks, run)
         add_bufnr     = add_bufnr,
         report        = report,
         mode          = task.mode,
+        parameters    = task.parameters,
         make_buf_name = setup_buf_name,
     }
+
+    -- Bound before `setup`: a failed one hands its state back with the error.
+    local _teardown = base.teardown
 
     local function _run_setup(cb)
         if not base.setup then return cb(nil) end
@@ -172,7 +174,7 @@ M.start            = function(task, callbacks, run)
             if err then
                 vim.notify("[dap] setup failed: " .. tostring(err), vim.log.levels.ERROR)
                 _setup_ctx.report("setup failed: " .. tostring(err))
-                cb(nil, true)
+                cb(state, true)
             else
                 _setup_ctx.report("setup: ready")
                 cb(state)
@@ -182,15 +184,16 @@ M.start            = function(task, callbacks, run)
 
     _run_setup(function(setup_result, failed)
         if failed then
+            -- A `setup` that gives up may still have started something; the state it
+            -- hands back with the error is what stops it.
+            if _teardown then pcall(_teardown, config, setup_result) end
             if unsub_progress then unsub_progress() end
             on_done(false)
             return
         end
 
-        -- Nothing to spawn and nowhere to dial: no command, and no port the mode's
-        -- `build` (or `setup`) supplied. Say so before starting, naming the mode, since
-        -- the resolved config records neither. A port of 0 is the same as none: it is
-        -- never a valid connect target.
+        -- Nothing to spawn and nowhere to dial. Say so before starting, naming the
+        -- mode, since the resolved config records neither; port 0 is the same as none.
         if config.command == nil and (config.port == nil or config.port == 0) then
             local where = task.mode
                 and ("adapter %s mode %s"):format(task.adapter, task.mode)
@@ -199,12 +202,12 @@ M.start            = function(task, callbacks, run)
                 .. "nothing says how to reach the adapter"
             report(msg)
             vim.notify("[dap] " .. msg, vim.log.levels.ERROR)
+            -- Setup succeeded but nothing will use what it made.
+            if _teardown then pcall(_teardown, config, setup_result) end
             if unsub_progress then unsub_progress() end
             on_done(false)
             return
         end
-
-        local _teardown = base.teardown
 
         manager.start(config, {
             on_session = function(id, sess)

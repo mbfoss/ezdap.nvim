@@ -44,6 +44,9 @@ error("do not require a meta file")
 ---adapter (e.g. a feature only a newer binary supports). A `setup` should still
 ---treat nil as "not one of mine" and let the run proceed.
 ---
+---`parameters` is the inputs `build` was called with, read into each declared
+---`type`: how a `setup` that starts the debuggee itself learns what to start.
+---
 ---`make_buf_name(kind)` names a buffer the same way the run's own do, so a
 ---buffer a `setup` spawns is reached by the run's number and name like the rest
 ---(`:b ndap://<number>/<name>:<kind>`). Use it for `spawn`'s `bufname`. It will
@@ -56,6 +59,7 @@ error("do not require a meta file")
 ---@field report        fun(message: string)
 ---@field make_buf_name fun(kind: string): string
 ---@field mode?         string
+---@field parameters?   table<string, any>  the mode's answered inputs, as `build` received them
 
 ---What an input's value *is*. A collection holds entries read as scalars, which its
 ---`item_type` names.
@@ -104,4 +108,4 @@ error("do not require a meta file")
 ---@field defer_launch_attach?   boolean
 ---@field modes?                 table<string, ndap.Mode>
 ---@field setup?                 fun(config: ndap.dap.Config, ctx: ndap.AdapterSetupCtx, callback: fun(err?: string, state?: any))
----@field teardown?              fun(config: ndap.dap.Config, ctx: any)
+---@field teardown?              fun(config: ndap.dap.Config, state: any)  runs after the session, and after a `setup` that failed, with the state `setup` handed back

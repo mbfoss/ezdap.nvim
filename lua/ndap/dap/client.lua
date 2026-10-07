@@ -267,9 +267,8 @@ function M.start(config, callbacks)
     elseif cfg.command then
         M._start_stdio(cfg, callbacks, progress)
     else
-        -- Neither a port to dial nor a command to spawn. `_start_stdio` would only say
-        -- "no command in config", which does not say what is missing; `M.start` is
-        -- reachable directly, so the message has to stand on its own here.
+        -- Neither: `_start_stdio` would only say "no command in config", which does not
+        -- say what is missing, and `M.start` is reachable directly.
         local what = cfg.adapter and (" for adapter " .. cfg.adapter) or ""
         local msg = ("no port and no command%s: nothing says how to reach the adapter"):format(what)
         vim.notify("[dap] " .. msg, vim.log.levels.ERROR)
