@@ -64,8 +64,8 @@ error("do not require a meta file")
 ---| "boolean"
 ---| "integer"
 ---| "number"
----| "list"     # a table of entries
----| "map"      # a table of `key=value` entries
+---| "list"     # a table of entries (JSON `array`)
+---| "map"      # a table of `key=value` entries (JSON `object`)
 
 ---What an input offers when its value is being typed, in any of three forms: a
 ---named source, the values themselves, or a function computing them from what has
@@ -92,7 +92,7 @@ error("do not require a meta file")
 ---@field description  string
 ---@field request      "launch"|"attach"
 ---@field inputs?      table<string, ndap.Input>  the mode's declared inputs
----@field build?       fun(parameters: table<string, any>): table?, table|string?  the DAP request body, plus an optional host/port overriding the adapter's; or nil and a message to abort
+---@field build?       fun(parameters: table<string, any>): table?, table|string?  the DAP request body, plus an optional host/port the run should connect to; or nil and a message to abort
 
 ---@class ndap.AdapterDef
 ---@field command?               string|string[]

@@ -58,8 +58,8 @@ decides how the adapter is reached and what it can run.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `command` | `string` \| `string[]` | The adapter process to spawn, spoken to over stdio. A string is split on shell whitespace, so `"python3 -m debugpy"` works; a list is used verbatim. A missing executable is reported before the session starts. **`command` takes priority**: a definition with both `command` and `host`/`port` spawns `command`, and its `host`/`port` are ignored. |
-| `host` | `string` | Host of an already-running adapter to connect to, used only when there is no `command`. Defaults to `127.0.0.1`. |
-| `port` | `integer` | Port to connect to, used only when there is no `command`; ndap dials `host:port`, retrying for ~3s. A port that `setup` or a mode's `build` sets for the run still selects TCP over `command`: that is how a definition whose `setup` starts the adapter as a server connects to it. |
+| `host` | `string` | Host of an already-running adapter to connect to, used only when there is no `command`. Defaults to `127.0.0.1`. No shipped definition sets this: a mode's `build`, or a `setup`, is what supplies the connection. |
+| `port` | `integer` | Port to connect to, used only when there is no `command`; ndap dials `host:port`, retrying for ~3s. A port that `setup` or a mode's `build` sets for the run still selects TCP over `command`: that is how a definition whose `setup` starts the adapter as a server connects to it, and how the shipped `remote` connects at all. A run left with neither a command nor a port is reported before it starts. |
 | `cwd` | `string` | Working directory for the spawned adapter. Defaults to Neovim's cwd. |
 | `env` | `table<string,string>` | Environment for the spawned adapter, meaning the adapter's own environment, not the debuggee's; merged over Neovim's, so set only what the adapter needs, such as a search path or a flag it reads from the environment. |
 | `type` | `string` | DAP `adapterID` override. Defaults to the adapter's name, i.e. the filename stem. |
@@ -75,13 +75,13 @@ An `ndap.Mode` is one runnable configuration:
 | `description` | `string` | A line shown in pickers and `:Ndap new_run_file` output. |
 | `request` | `"launch"` \| `"attach"` | Which DAP request the mode issues. |
 | `inputs` | `table<string, ndap.Input>` | What the user is asked for, keyed by the name used as `--name` on the command line. |
-| `build` | `fun(parameters): table?, table\|string?` | Turns answered inputs into the DAP request body and returns it. A second return value is a `host`/`port` table overriding the definition's own. Return `nil, "message"` to abort with that error. It runs in a coroutine, so it may yield; a `vim.ui.select` picker inside `build` is fine. |
+| `build` | `fun(parameters): table?, table\|string?` | Turns answered inputs into the DAP request body and returns it. A second return value is a `host`/`port` table naming the connection the run should dial. Return `nil, "message"` to abort with that error. It runs in a coroutine, so it may yield; a `vim.ui.select` picker inside `build` is fine. |
 
 An `ndap.Input` describes one value:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | What the value is. Defaults to `string`. `list` is a table of entries, `map` a table of string keys to values. |
+| `type` | `"string"` \| `"boolean"` \| `"integer"` \| `"number"` \| `"list"` \| `"map"` | What the value is. Defaults to `string`. `list` is a table of entries, `map` a table of string keys to values — JSON's `array` and `object` under DAP's own names. |
 | `item_type` | as above, scalars only | The entry type of a `list` or `map`. |
 | `required` | `boolean` | Leaving it unset is an error. Defaults to `false`. |
 | `completion` | `"file"` \| `"dir"` \| `"command"` \| `string[]` \| `fun(partial): string[]` | What the value completes with: a named source, the values themselves, or a function computing them. Suggests only; it never rejects a value. |
@@ -139,7 +139,13 @@ How the pieces fit:
   `list` and `map` (string keys)), and it is the whole of
   what an input declares about its value. A `list`/`map` declares its *entries*
   the same way under `item_type`: `{ type = "list", item_type = "integer" }` is
-  a list of integers, and a collection that declares none holds strings. The
+  a list of integers, and a collection that declares none holds strings. A `map`
+  entry is written `key=value`, and a directional one is *described* the same
+  way, the key naming the side being translated: `local=remote` where the local
+  path becomes the remote one, `remote=local` where it is the other way round.
+  The adapter's own documentation decides which; the two shipped in
+  [ndap-adapters.nvim](https://github.com/mbfoss/ndap-adapters.nvim) differ
+  because the adapters do. The
   full vocabulary is one row per type in [inputs.lua](lua/ndap/run/inputs.lua);
   every consumer reads those rows.
 - **`completion`**: what the value offers while it is being typed, in whichever
@@ -155,9 +161,13 @@ How the pieces fit:
   `true`/`false` on its own.
 - **Paths and ports**: a path input is a `string` and a port a plain `integer`;
   what either additionally is, `build` says: `shared.normalize_path(parameters.cwd)`
-  resolves `~` and `$VAR` (nil in, nil out, and a `list`/`map` entry by entry),
-  and `local port, err = shared.resolve_port(parameters.port)` holds a port to its
-  range, giving back the `nil, err` pair an abort already returns.
+  resolves `~` and `$VAR` (nil in, nil out), `shared.normalize_paths` does the
+  same for a `list`, entry by entry, and `local port, err =
+  shared.resolve_port(parameters.port)` holds a port to its range, giving back
+  the `nil, err` pair an abort already returns. Both remain strict: hand
+  `normalize_path` anything but a string or nil — a whole `map` where one entry
+  belongs, say — and it raises, which the run reports as the mode's abort rather
+  than sending a body with an empty path in it.
 - **`required`**: an unset required input is a resolve error naming the input.
   Leave it off and an unset input arrives as `nil`; since Lua drops
   nil-valued keys, `cwd = parameters.cwd` omits `cwd` entirely. Write the field
@@ -165,12 +175,13 @@ How the pieces fit:
 - **`build(parameters)`**: returns the native DAP body (write the adapter's own
   key names, plus any identity fields it pins, as literals). `parameters`
   arrives already read into each declared `type`, whichever form the caller
-  authored it in. A **second** return value is for adapters whose *connection* is what an
-  input configures: return a `host`/`port` table, or nothing at all, and the
-  definition's own values stay in force.
-- **Aborting**: return `nil` and a message. The slot that carries the connection
-  on a successful call carries the reason on an unsuccessful one, so an abort
-  reads as the `nil, err` pair any Lua function returns.
+  authored it in. A **second** return value is for adapters whose *connection* is
+  what an input configures: the `host`/`port` the run should dial. Return nothing
+  and the definition's own `host`/`port` stay in force, if it sets any; a run
+  left with no command and no port is refused before it starts, naming the mode.
+- **Aborting**: return `nil` and a message — a string in the slot a successful
+  call returns the connection in. So an abort reads as the `nil, err` pair any
+  Lua function returns, and the two are told apart by what the first value is.
 - **Asking the user**: `build` runs on a coroutine, so it may yield. That is how
   an attach mode with no `pid` opens a process picker rather than sending a
   meaningless body: `local pid, err = shared.resolve_pid(parameters.pid); if not pid
@@ -258,6 +269,13 @@ returns the first candidate `accept` approves, plus everything tried:
 local shared = require("ndap.shared")
 local exe, tried = shared.resolve_path({ "dlv", "$GOBIN/dlv" }, shared.is_executable)
 ```
+
+`shared.split_command(command)` splits a `command` input into the
+`program`/`args` pair a launch body wants, quotes and backslashes included. It
+splits only: every token is passed through as written, so `~`, `$VAR`, `%`, `#`
+and a glob are ordinary characters — a Go package pattern like `./...` stays
+`./...` — and a list is taken as it stands. Expand a token yourself with
+`normalize_path` when the field is a path.
 
 An entry is a literal path, with no globbing. `$VAR` and `~` in it expand wherever
 they appear, exactly as `vim.fs.normalize` expands them anywhere else in Neovim;

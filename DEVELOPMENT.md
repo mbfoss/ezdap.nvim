@@ -176,7 +176,7 @@ Each `ndap.Input` declares one input up front:
 
 | Field      | Meaning                                                                        |
 | ---------- | ------------------------------------------------------------------------------ |
-| `type`     | what the input *is*, meaning what `build` receives: one of `string`/`boolean`/`integer`/`number`, or a collection, `list` (a table of entries) or `map` (a table of string keys to values). Defaults to `string` |
+| `type`     | what the input *is*, meaning what `build` receives: one of `string`/`boolean`/`integer`/`number`, or a collection, `list` (a table of entries, JSON's `array`) or `map` (a table of string keys to values, JSON's `object`). Defaults to `string` |
 | `item_type` | a collection's *entry* type, declared exactly as `type` is but scalars only: `{ type = "list", item_type = "integer" }` is a list of integers. Defaults to `string` |
 | `completion` | what the value completes with, in one of three forms: a named source (`"file"`, `"dir"`, `"command"`, the last completing each token of a command line as a path), the values themselves (`{ "console", "terminal" }`), or a `fun(partial): string[]` computing them. A written-out set also reaches the scaffolded file as a comment; a source or a function has nothing to serialize. Completion only *suggests*; nothing rejects a value written past it. On a collection it describes one entry |
 | `required` | when `true`, the user must supply the value; leaving it unset is a resolve error. Any other unset input arrives at `build` as nil, which `build` may answer by omitting the field, or some other way: an attach `build` asks the user to pick a process for an unset `pid`, so no adapter marks that input `required` |
@@ -188,7 +188,10 @@ completion source one entry beside them, so adding either is a single row, never
 an `if type == …` anywhere else.
 
 What a value additionally *is* (a path, a port) is not a row: `build` says it,
-with `shared.normalize_path` and `shared.resolve_port`. A row states what a
+with `shared.normalize_path` and `shared.resolve_port`. `normalize_path` is
+strict, nil in and nil out, anything else raising — a wrong type there is a
+mistake in the definition, and the run reports it as the mode's abort rather
+than put an empty path in the body. A row states what a
 value **is**; narrowing one kind of string into another was a second vocabulary
 layered on that one, paid for in every projection (a schema merge, a refine
 step, a check step, and the rule reconciling a `type` with a `format` naming a
@@ -224,7 +227,8 @@ Both forms must describe the *same* value. A transformation into a different
 shape is not a second spelling and doesn't belong in a row: splitting a command
 line into `program` + `args` lived here as a `shell_args` type until it moved to
 the launch `build`s that wanted it (`shared.split_command`, which takes a
-command line or an argument list).
+command line or an argument list and splits only: no token is expanded, so `~`,
+`$VAR`, `%`, `#` and a glob reach the body as written).
 
 ### One description, two entry points
 
@@ -251,8 +255,11 @@ field list to keep in step.
   write the field unconditionally and optional fields take care of themselves.
   Guard only when a field is *derived* from an input (`targetCreateCommands =
   parameters.program and { "target create " .. parameters.program }`), since indexing
-  nil would throw. Return no second value unless the adapter takes a task-level
-  TCP endpoint; without one the adapter def's own host/port stay in force.
+  nil would throw. Return a second value only when the adapter takes a
+  task-level TCP endpoint — the host/port the run should dial, which is how the
+  shipped `remote` connects at all; return none and the adapter def's own
+  host/port stay in force. A run left with neither a command nor a port is
+  refused before it starts, naming the adapter and mode.
 
   Omitting the field is only the *default* answer to an unset input; `build` is
   where a mode decides otherwise, because it alone knows what the request means.
@@ -290,7 +297,9 @@ Which names a mode takes is up to it, and there is no portable role vocabulary
 across adapters, but by convention a `launch` mode takes one `command` input (a
 string completing as `"command"`) carrying the whole command line, and `build`
 splits it into that adapter's own program/args fields via
-`shared.split_command`. The shipped `remote` (under `ndap-adapters/`) is the
+`shared.split_command` — the split only, no expansion, since the line's other
+tokens are arguments rather than paths (`./...` is a Go package pattern, not a
+directory to resolve). The shipped `remote` (under `ndap-adapters/`) is the
 `connect`-only shape; the definitions in
 [ndap-adapters.nvim](https://github.com/mbfoss/ndap-adapters.nvim) are worked
 examples of the rest, such as inputs that feed both the body and the connection.

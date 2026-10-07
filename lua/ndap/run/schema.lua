@@ -132,8 +132,25 @@ function M.validate(adapter)
     end
 
     local out = {}
-    if def.command == nil and def.host == nil and def.port == nil and def.setup == nil then
-        out[#out + 1] = "no command, host/port or setup: nothing says how to reach the adapter"
+    -- Reachability is not knowable statically: a mode's `build` returns the
+    -- connection at run time, so a definition with no command, host/port or setup is
+    -- still valid as long as some mode can build one (the shipped `remote` and
+    -- `jdtls` are reached that way). Only when no mode has a `build` either is it
+    -- unreachable for certain. A definition whose `build` returns no connection is
+    -- caught before the run starts, in `ndap.run.task`.
+    local reachable = def.command ~= nil or def.host ~= nil or def.port ~= nil
+        or def.setup ~= nil
+    if not reachable and type(def.modes) == "table" then
+        for _, mode in pairs(def.modes) do
+            if type(mode) == "table" and mode.build ~= nil then
+                reachable = true
+                break
+            end
+        end
+    end
+    if not reachable then
+        out[#out + 1] =
+            "no command, host/port or setup, and no mode with a build: nothing says how to reach the adapter"
     end
 
     local names = M.mode_names(adapter)
@@ -240,11 +257,12 @@ function M.resolve_task(spec, done)
 
     ---Package what `build` returned into the task it describes.
     ---@param body table  the DAP request body
-    ---@param connect table  host/port overriding the AdapterDef's, possibly empty
+    ---@param connect table  the host/port the run should dial, possibly empty
     local function deliver(body, connect)
-        -- No spec governs `connect` (it's task-level, not a body field), so an unset
-        -- host/port is always optional: a `build` that returns none reports none,
-        -- and the resolved AdapterDef's own host/port apply instead.
+        -- `connect` is task-level, not a body field: a `build` returns the host/port
+        -- the run should dial. An empty one reports none, and the resolved
+        -- AdapterDef's own host/port apply instead. A task left with neither is
+        -- caught before it starts (see `ndap.run.task`).
         local has_connect = next(connect) ~= nil
         finish({
             name         = spec.name,
@@ -267,10 +285,12 @@ function M.resolve_task(spec, done)
         local ok, body, connect = xpcall(mode.build, debug.traceback, parameters)
         -- `build` raised: `body` holds the traceback the handler produced.
         if not ok then return finish(nil, tostring(body)) end
-        -- `build` gave up (a cancelled picker, an unresolvable pid) and named why
-        -- in the slot a successful call returns `connect` in.
+        -- `build` gave up (a cancelled picker, an unresolvable pid) and named why in
+        -- the slot a successful call returns `connect` in. Only a string is that
+        -- reason: a table here would render as `table: 0x…`, which says nothing.
         if body == nil then
-            return finish(nil, connect and tostring(connect) or "build produced no request body")
+            if type(connect) == "string" then return finish(nil, connect) end
+            return finish(nil, "build produced no request body")
         end
         if type(body) ~= "table" then
             return finish(nil, ("build returned a %s, expected the request body"):format(type(body)))

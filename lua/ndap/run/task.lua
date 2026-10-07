@@ -13,7 +13,7 @@ local ui_util      = require "ndap.util.ui"
 ---@field request?      "launch"|"attach"          defaults to "launch"
 ---@field request_args? table                      native DAP launch/attach body (the adapter's own keys), sent verbatim
 ---@field host?         string                     attach/TCP connection target
----@field port?         integer                    attach/TCP connection target (required for the `remote` adapter)
+---@field port?         integer                    attach/TCP connection target (a mode's `build` or the adapter's `setup` supplies it)
 
 ---Presentation options for a buffer registered with whoever is showing the run.
 ---@class ndap.AddBufOpts
@@ -182,6 +182,23 @@ M.start            = function(task, callbacks, run)
 
     _run_setup(function(setup_result, failed)
         if failed then
+            if unsub_progress then unsub_progress() end
+            on_done(false)
+            return
+        end
+
+        -- Nothing to spawn and nowhere to dial: no command, and no port the mode's
+        -- `build` (or `setup`) supplied. Say so before starting, naming the mode, since
+        -- the resolved config records neither. A port of 0 is the same as none: it is
+        -- never a valid connect target.
+        if config.command == nil and (config.port == nil or config.port == 0) then
+            local where = task.mode
+                and ("adapter %s mode %s"):format(task.adapter, task.mode)
+                or ("adapter %s"):format(task.adapter)
+            local msg = where .. ": no port to connect to and no command to spawn: "
+                .. "nothing says how to reach the adapter"
+            report(msg)
+            vim.notify("[dap] " .. msg, vim.log.levels.ERROR)
             if unsub_progress then unsub_progress() end
             on_done(false)
             return

@@ -12,13 +12,15 @@ local M = {}
 M.spawn = require("ndap.util.term").spawn
 
 ---Split a `command` input into the `program`/`args` pair a launch body wants. The
----first word is expanded (`~`, `$VAR`) as the program, the rest are its arguments
----verbatim; a list is accepted as-is. An unset command yields an empty program.
+---command line is split on shell whitespace with quote and backslash handling, and
+---every token is passed through as written: nothing is expanded, so `~`, `$VAR`, `%`,
+---`#` and a glob are ordinary characters. A list is accepted as-is; an unset command
+---yields an empty program.
 ---@param command string|string[]|nil  a command line, or an argument list
 ---@return string program, string[] args
 function M.split_command(command)
     local argv = str_util.cmd_to_string_array(command or "")
-    return vim.fn.expand(argv[1] or ""), { unpack(argv, 2) }
+    return argv[1] or "", { unpack(argv, 2) }
 end
 
 ---Expand one candidate path from a lookup list: `$VAR` and `~` expand wherever
@@ -46,21 +48,30 @@ function M.expand_path(path, cwd)
     return path
 end
 
+---A path as an adapter body wants it: `~` and `$VAR` expanded by `vim.fs.normalize`,
+---which leaves an unset variable literal. Nil in, nil out (an unset optional input).
+---Anything else is a mistake — a whole `map`/`list` where one entry was meant — and
+---raises, which a mode's `build` turns into the run's abort message (see
+---`ndap.run.schema`).
 ---@param path string?
 ---@return string?
 function M.normalize_path(path)
-    if not path then return nil end
-    if type(path) ~= "string" then return "" end
-    return path and vim.fs.normalize(path) or ""
+    if path == nil then return nil end
+    if type(path) ~= "string" then
+        error(("normalize_path: expected a string, got %s"):format(type(path)), 2)
+    end
+    return vim.fs.normalize(path)
 end
 
 ---@param list string[]?
 ---@return string[]?
 function M.normalize_paths(list)
-    if not list then return nil end
-    if type(list) ~= "table" then return {} end
+    if list == nil then return nil end
+    if type(list) ~= "table" then
+        error(("normalize_paths: expected a list, got %s"):format(type(list)), 2)
+    end
     local out = {}
-    for _, entry in ipairs(list) do out[#out + 1] = M.normalize_path(entry) end
+    for i, entry in ipairs(list) do out[i] = M.normalize_path(entry) end
     return out
 end
 
@@ -134,6 +145,11 @@ function M.select_process(prompt)
     if not co then
         return nil, "select_process must be called from a coroutine"
     end
+    -- The list is read with `ps`; where that does not exist, say so rather than
+    -- report an empty process list.
+    if vim.fn.has("win32") == 1 then
+        return nil, "Process selection is not available on Windows; pass a pid"
+    end
 
     local lines = vim.fn.systemlist("ps -eo pid,user,comm 2>/dev/null")
     if not lines or #lines == 0 then
@@ -142,15 +158,15 @@ function M.select_process(prompt)
 
     ---@type {label:string, pid:string}[]
     local choices = {}
-    for i, line in ipairs(lines) do
-        if i > 1 then -- skip header
-            local pid, user, name = line:match("^%s*(%d+)%s+(%S+)%s+(.-)%s*$")
-            if pid then
-                choices[#choices + 1] = {
-                    label = ("%8s | %s - %s"):format(pid, user, name),
-                    pid   = pid,
-                }
-            end
+    for _, line in ipairs(lines) do
+        -- A `ps` header has no numeric first field, so it drops out here: nothing
+        -- depends on the header being line one, or on a header being printed at all.
+        local pid, user, name = line:match("^%s*(%d+)%s+(%S+)%s+(.-)%s*$")
+        if pid then
+            choices[#choices + 1] = {
+                label = ("%8s | %s - %s"):format(pid, user, name),
+                pid   = pid,
+            }
         end
     end
     if #choices == 0 then return nil, "No processes found" end
