@@ -261,9 +261,10 @@ local exe, tried = shared.resolve_path({ "dlv", "$GOBIN/dlv" }, shared.is_execut
 ```
 
 Use `shared.is_directory` for directories, your own predicate when working means
-more than present (a minimum version, say), and `opts.transform` to test a file
-inside a found directory (a virtualenv mapped to its `bin/python`, for
-instance).
+more than present (a minimum version, say), and write the file inside a
+directory into the entry to test that (a virtualenv's `"$VIRTUAL_ENV/bin/python"`
+rather than `"$VIRTUAL_ENV"`): only the leading `$VAR`/`~`/relative part is
+expanded, so the rest rides along.
 
 ## Templates
 

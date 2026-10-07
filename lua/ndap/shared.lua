@@ -76,18 +76,19 @@ end
 
 ---Walk a list of candidate locations and return the first one `accept` approves,
 ---alongside every candidate actually tried (for an error message naming them).
----Entries are expanded by `expand_path`, mapped through `opts.transform` when one
----is given, and de-duplicated. Entries are literal paths, with no globbing.
+---Entries are expanded by `expand_path` and de-duplicated. Entries are literal
+---paths, with no globbing: a path *inside* a directory is written into the entry
+---itself (`"$VIRTUAL_ENV/bin/python"`), since only the leading `$VAR`/`~`/relative
+---part is expanded and the rest rides along.
 ---@param candidates string[]  lookup list, in preference order
 ---@param accept fun(path: string): boolean  the test a usable candidate passes
----@param opts? { cwd?: string, transform?: fun(path: string): string }
+---@param opts? { cwd?: string }
 ---@return string? found, string[] tried
 function M.resolve_path(candidates, accept, opts)
     opts = opts or {}
     local tried, seen = {}, {}
     for _, cand in ipairs(candidates) do
         local path = M.expand_path(cand, opts.cwd)
-        if path and opts.transform then path = opts.transform(path) end
         if path and not seen[path] then
             seen[path] = true
             tried[#tried + 1] = path

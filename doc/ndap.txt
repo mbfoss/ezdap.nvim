@@ -418,7 +418,7 @@ The entry needs a GUI or a terminal with mouse support.
     :Ndap step_over        " (alias: :Ndap next)
     :Ndap step_in
     :Ndap step_out
-    :Ndap step_in_target    " pick which call on the line to step into
+    :Ndap step_in_target   " pick which call on the line to step into
     :Ndap step_back        " reverse debugging (adapter permitting)
     :Ndap reverse_continue
     :Ndap jump_to_cursor   " set the next statement to the cursor line
@@ -431,6 +431,10 @@ The entry needs a GUI or a terminal with mouse support.
 
 Stepping granularity follows the focused window: line-wise everywhere, and
 instruction-wise while the disassembly view is current.
+
+Commands the adapter has not advertised — `step_back`, `reverse_continue`,
+`step_in_target`, `restart`, `jump_to_cursor`, `restart_frame` — say so in a
+notification when called, rather than doing nothing.
 
 Switch the active target with pickers:
 
