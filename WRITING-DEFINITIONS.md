@@ -252,19 +252,24 @@ matched against its output changes.
 Locating the adapter binary is most of what a definition does before it can run,
 so `ndap.shared` helps: `split_command`, `normalize_path`, `resolve_port`,
 `resolve_pid`, `spawn`, and `resolve_path(candidates, accept, opts?)`, which
-expands `$VAR` and `~` and returns the first candidate `accept` approves, plus
-everything tried:
+returns the first candidate `accept` approves, plus everything tried:
 
 ```lua
 local shared = require("ndap.shared")
 local exe, tried = shared.resolve_path({ "dlv", "$GOBIN/dlv" }, shared.is_executable)
 ```
 
+An entry is a literal path, with no globbing. `$VAR` and `~` in it expand wherever
+they appear, exactly as `vim.fs.normalize` expands them anywhere else in Neovim;
+`${VAR}` braces are not expanded. An entry naming an unset or empty variable is
+skipped, which is what makes a list like the one above work with only `$GOBIN`
+set. A relative entry resolves against `opts.cwd`, and pass no `cwd` for a list of
+programs, where a bare name is meant to be looked up on `$PATH`.
+
 Use `shared.is_directory` for directories, your own predicate when working means
-more than present (a minimum version, say), and write the file inside a
-directory into the entry to test that (a virtualenv's `"$VIRTUAL_ENV/bin/python"`
-rather than `"$VIRTUAL_ENV"`): only the leading `$VAR`/`~`/relative part is
-expanded, so the rest rides along.
+more than present (a minimum version, say), and write the file inside a directory
+into the entry to test that — a virtualenv's `"$VIRTUAL_ENV/bin/python"` rather
+than `"$VIRTUAL_ENV"`.
 
 ## Templates
 

@@ -21,25 +21,29 @@ function M.split_command(command)
     return vim.fn.expand(argv[1] or ""), { unpack(argv, 2) }
 end
 
----Expand one candidate path from a lookup list: a leading `$VAR` becomes the
----environment variable's value (nil when unset, so the caller skips the entry),
----`~` becomes the home directory, and a relative entry is taken against `cwd` when
----one is given. Pass no `cwd` for a list of programs, where a bare name is meant
----to be looked up on $PATH rather than resolved against a directory.
+---Expand one candidate path from a lookup list: `$VAR` and `~` expand wherever
+---they appear, as `vim.fs.normalize` does everywhere else, and a relative entry is
+---taken against `cwd` when one is given. An entry naming a variable that is unset
+---or empty is nil, so the caller skips it. `${VAR}` braces are not expanded. Pass
+---no `cwd` for a list of programs, where a bare name is meant to be looked up on
+---$PATH rather than resolved against a directory.
 ---@param path string
 ---@param cwd? string  base for relative entries; without it they are left as-is
 ---@return string?
 function M.expand_path(path, cwd)
-    local var, rest = path:match("^%$([%w_]+)(.*)$")
-    if var then
+    -- `vim.fs.normalize` leaves an unset variable literal and collapses an empty
+    -- one ("$V" becomes ".", "$V/bin/py" becomes "/bin/py"). Neither is a path the
+    -- user asked for, and "." would pass `is_directory`; an empty variable does not
+    -- survive normalization in any recognizable form, so check before expanding.
+    for var in path:gmatch("%$([%w_]+)") do
         local value = vim.env[var]
         if not value or value == "" then return nil end
-        path = value .. rest
     end
+    path = vim.fs.normalize(path)
     if cwd and not path:match("^~") and vim.fn.isabsolutepath(path) == 0 then
-        path = vim.fs.joinpath(cwd, path)
+        path = vim.fs.normalize(vim.fs.joinpath(cwd, path))
     end
-    return vim.fs.normalize(path)
+    return path
 end
 
 ---@param path string?
@@ -76,10 +80,9 @@ end
 
 ---Walk a list of candidate locations and return the first one `accept` approves,
 ---alongside every candidate actually tried (for an error message naming them).
----Entries are expanded by `expand_path` and de-duplicated. Entries are literal
----paths, with no globbing: a path *inside* a directory is written into the entry
----itself (`"$VIRTUAL_ENV/bin/python"`), since only the leading `$VAR`/`~`/relative
----part is expanded and the rest rides along.
+---Entries are expanded by `expand_path` — `$VAR` and `~` anywhere, a relative entry
+---against `opts.cwd`, and an unset or empty variable skipping the entry — and
+---de-duplicated. Entries are literal paths, with no globbing.
 ---@param candidates string[]  lookup list, in preference order
 ---@param accept fun(path: string): boolean  the test a usable candidate passes
 ---@param opts? { cwd?: string }
