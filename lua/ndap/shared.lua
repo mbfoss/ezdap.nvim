@@ -86,6 +86,23 @@ function M.resolve_port(port)
     return port
 end
 
+---An unused TCP port, taken by binding port 0 and letting the kernel pick.
+---Errors if no port can be taken, rather than returning one nobody can bind.
+---@return integer
+function M.free_port()
+    local tcp = assert(vim.uv.new_tcp(), "uv.new_tcp failed")
+    -- `bind` fails by returning, not raising, and a socket that failed to bind
+    -- still answers `getsockname` - with port 0 - so the bind is what says whether
+    -- the port is real. Closing unconditionally leaves no handle to the GC.
+    local bound, err = tcp:bind("127.0.0.1", 0)
+    local addr = bound and tcp:getsockname()
+    tcp:close()
+    if not (addr and addr.port and addr.port > 0) then
+        error("free_port: " .. tostring(err or "no port was assigned"), 2)
+    end
+    return addr.port
+end
+
 ---Walk a list of candidate locations and return the first one `accept` approves,
 ---alongside every candidate actually tried (for an error message naming them).
 ---Entries are expanded by `expand_path` — `$VAR` and `~` anywhere, a relative entry

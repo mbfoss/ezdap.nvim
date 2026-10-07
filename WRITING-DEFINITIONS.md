@@ -205,10 +205,9 @@ overwrite it. Its `ctx` carries:
   carries none.
 
 ```lua
-local shared = require("ndap.shared")
-
 return {
     setup = function(config, ctx, callback)
+        local shared = require("ndap.shared")
         local handle, err
         local done = false -- callback must fire exactly once
         handle, err = shared.spawn({ "my-dap", "--listen", "127.0.0.1:0" }, {
@@ -248,14 +247,21 @@ same shape one step out, reading the command line from `ctx.parameters`.
 ## Helpers
 
 `ndap.shared` carries `split_command`, `normalize_path`, `normalize_paths`,
-`resolve_port`, `resolve_pid`, `spawn`, and `resolve_path(candidates, accept,
-opts?)`, which returns the first candidate `accept` approves and everything
-tried:
+`resolve_port`, `free_port`, `resolve_pid`, `spawn`, and
+`resolve_path(candidates, accept, opts?)`, which returns the first candidate
+`accept` approves and everything tried:
 
 ```lua
 local shared = require("ndap.shared")
 local exe, tried = shared.resolve_path({ "dlv", "$GOBIN/dlv" }, shared.is_executable)
 ```
+
+Several modes sharing fields declare them once in a group and compose each
+mode's `inputs` with `vim.tbl_extend("error", _common_inputs, { … })` — groups
+left to right, and a name declared twice raises rather than silently overriding.
+The merge is shallow, so a spec is shared with every mode composing that group:
+treat one as read-only. `free_port()` is a currently-unused port, for an adapter
+that has to be told one; it errors rather than hand back a port nobody can bind.
 
 `shared.split_command(command)` splits a `command` input into the
 `program`/`args` pair a launch body wants, quotes and backslashes included. It
