@@ -1,11 +1,11 @@
-# ndebug.nvim demos
+# ndap.nvim demos
 
 Each clip is a recorded Neovim session debugging the same small Python program
 through [debugpy](https://github.com/microsoft/debugpy). Commands are typed in
-full (`:Ndebug …`) to show what each step does; map them to keys for daily use,
+full (`:Ndap …`) to show what each step does; map them to keys for daily use,
 see [Keymaps example](README.md#keymaps-example).
 
-The editor is Neovim with ndebug.
+The editor is Neovim with ndap.
 
 ## Breakpoints, stepping and the debug view
 
@@ -13,29 +13,29 @@ Set a breakpoint and launch. The debug view opens on the stop, showing sessions,
 stack, locals, watch expressions and breakpoints in one tree; the frame's values
 are rendered inline in the source.
 
-![Breakpoints and stepping](https://raw.githubusercontent.com/mbfoss/ndebug.nvim/assets/demos/01-breakpoint-step.gif)
+![Breakpoints and stepping](https://raw.githubusercontent.com/mbfoss/ndap.nvim/assets/demos/01-breakpoint-step.gif)
 
 ## Conditions and logpoints
 
 A breakpoint that only stops when `amount > 50`, and a logpoint that prints
 every scaling operation without pausing the program.
 
-![Conditional breakpoints and logpoints](https://raw.githubusercontent.com/mbfoss/ndebug.nvim/assets/demos/02-condition-logpoint.gif)
+![Conditional breakpoints and logpoints](https://raw.githubusercontent.com/mbfoss/ndap.nvim/assets/demos/02-condition-logpoint.gif)
 
 ## Function and exception breakpoints
 
 Break on `scale` by name wherever it is called from, then run into the
-program's uncaught `ValueError` and read it with `:Ndebug exception_info`.
+program's uncaught `ValueError` and read it with `:Ndap exception_info`.
 
-![Function and exception breakpoints](https://raw.githubusercontent.com/mbfoss/ndebug.nvim/assets/demos/03-function-exception.gif)
+![Function and exception breakpoints](https://raw.githubusercontent.com/mbfoss/ndap.nvim/assets/demos/03-function-exception.gif)
 
 ## Inspecting and changing values
 
-`:Ndebug inspect` expands the identifier under the cursor, `i` in the debug view adds
+`:Ndap inspect` expands the identifier under the cursor, `i` in the debug view adds
 a watch expression, and `c` on a variable writes a new value back into the
 running program.
 
-![Inspect and watch expressions](https://raw.githubusercontent.com/mbfoss/ndebug.nvim/assets/demos/04-watch-inspect.gif)
+![Inspect and watch expressions](https://raw.githubusercontent.com/mbfoss/ndap.nvim/assets/demos/04-watch-inspect.gif)
 
 ## REPL and run buffers
 
@@ -43,18 +43,18 @@ Each run has its own buffers: progress log, REPL, adapter terminal and program
 output. The REPL evaluates expressions in the stopped frame, function calls
 included.
 
-![REPL and run buffers](https://raw.githubusercontent.com/mbfoss/ndebug.nvim/assets/demos/05-repl.gif)
+![REPL and run buffers](https://raw.githubusercontent.com/mbfoss/ndap.nvim/assets/demos/05-repl.gif)
 
 ## Jump to cursor, step in and out
 
 Move the execution point to the cursor without running the code in between,
 then step into a call and back out. The return value appears in the locals.
 
-![Jump to cursor and stepping in](https://raw.githubusercontent.com/mbfoss/ndebug.nvim/assets/demos/06-step-in-jump.gif)
+![Jump to cursor and stepping in](https://raw.githubusercontent.com/mbfoss/ndap.nvim/assets/demos/06-step-in-jump.gif)
 
 ## Parallel sessions
 
 Two debuggees paused at the same breakpoint at once, each with a row in the debug view.
-`:Ndebug session` selects which one the stepping commands apply to.
+`:Ndap session` selects which one the stepping commands apply to.
 
-![Parallel sessions](https://raw.githubusercontent.com/mbfoss/ndebug.nvim/assets/demos/07-parallel-sessions.gif)
+![Parallel sessions](https://raw.githubusercontent.com/mbfoss/ndap.nvim/assets/demos/07-parallel-sessions.gif)

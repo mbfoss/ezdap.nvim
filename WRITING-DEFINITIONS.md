@@ -1,16 +1,16 @@
 # Writing an adapter definition
 
-An adapter definition is a single Lua file under an `ndebug-adapters/` directory
+An adapter definition is a single Lua file under an `ndap-adapters/` directory
 on the runtimepath (beside `lsp/` and `plugin/`, not under `lua/`; it is a
 definition read by filename, not a Lua module), registered under its filename:
-`myadapter.lua` becomes the `myadapter` adapter, the name `:Ndebug run` takes. It
+`myadapter.lua` becomes the `myadapter` adapter, the name `:Ndap run` takes. It
 is configuration only: it says how to reach the debug adapter (the program that
 actually speaks DAP, such as `codelldb` or `gdb --interpreter=dap`) and what
 that adapter can be asked to do.
 
 Three things get named in these files, and DAP keeps them distinct:
 
-- **debug adapter**: the program ndebug spawns or dials, the one speaking DAP:
+- **debug adapter**: the program ndap spawns or dials, the one speaking DAP:
   `codelldb`, `lldb-dap`, `gdb --interpreter=dap`, `dlv dap`.
 - **debugger**: what that adapter drives underneath. Sometimes a separate
   program (`codelldb` drives LLDB), sometimes the adapter itself (`gdb` and
@@ -20,7 +20,7 @@ Three things get named in these files, and DAP keeps them distinct:
 "Adapter" on its own always means the first. This file is an adapter
 *definition*: it describes an adapter, it is not one.
 
-Each file returns one `ndebug.AdapterDef`:
+Each file returns one `ndap.AdapterDef`:
 
 ```lua
 return {
@@ -34,7 +34,7 @@ return {
                 command = { type = "string", completion = "command", required = true, description = "command line to debug" },
             },
             build       = function(parameters) -- parameters -> DAP body
-                local program, args = require("ndebug.shared").split_command(parameters.command)
+                local program, args = require("ndap.shared").split_command(parameters.command)
                 return { program = program, args = args }
             end,
         },
@@ -43,14 +43,14 @@ return {
 ```
 
 Each definition is read the first time something reaches for that adapter by
-name (`ndebug.load_adapter`), a run, `:Ndebug adapter_info <adapter>`, and never
-when ndebug starts. Listing adapters (`ndebug.available_adapters`, `:checkhealth`)
+name (`ndap.load_adapter`), a run, `:Ndap adapter_info <adapter>`, and never
+when ndap starts. Listing adapters (`ndap.available_adapters`, `:checkhealth`)
 reads their filenames only, so keep top-level work to building the table:
 anything expensive belongs in `setup`, which runs per run. It is read with
 `loadfile`, so it is never a Lua module: nothing can `require` it, and it cannot
-have siblings it requires; pull shared helpers from `ndebug.shared` instead.
+have siblings it requires; pull shared helpers from `ndap.shared` instead.
 
-## `ndebug.AdapterDef`
+## `ndap.AdapterDef`
 
 The table an adapter definition returns. Every field is optional; what is set
 decides how the adapter is reached and what it can run.
@@ -59,25 +59,25 @@ decides how the adapter is reached and what it can run.
 | --- | --- | --- |
 | `command` | `string` \| `string[]` | The adapter process to spawn, spoken to over stdio. A string is split on shell whitespace, so `"python3 -m debugpy"` works; a list is used verbatim. A missing executable is reported before the session starts. **`command` takes priority**: a definition with both `command` and `host`/`port` spawns `command`, and its `host`/`port` are ignored. |
 | `host` | `string` | Host of an already-running adapter to connect to, used only when there is no `command`. Defaults to `127.0.0.1`. |
-| `port` | `integer` | Port to connect to, used only when there is no `command`; ndebug dials `host:port`, retrying for ~3s. A port that `setup` or a mode's `build` sets for the run still selects TCP over `command`: that is how a definition whose `setup` starts the adapter as a server connects to it. |
+| `port` | `integer` | Port to connect to, used only when there is no `command`; ndap dials `host:port`, retrying for ~3s. A port that `setup` or a mode's `build` sets for the run still selects TCP over `command`: that is how a definition whose `setup` starts the adapter as a server connects to it. |
 | `cwd` | `string` | Working directory for the spawned adapter. Defaults to Neovim's cwd. |
 | `env` | `table<string,string>` | Environment for the spawned adapter, meaning the adapter's own environment, not the debuggee's; merged over Neovim's, so set only what the adapter needs, such as a search path or a flag it reads from the environment. |
 | `type` | `string` | DAP `adapterID` override. Defaults to the adapter's name, i.e. the filename stem. |
 | `defer_launch_attach` | `boolean` | Send `launch`/`attach` after `configurationDone` rather than straight after `initialize`, for adapters that require that order. |
-| `modes` | `table<string, ndebug.Mode>` | The named modes this definition offers, keyed by the name `:Ndebug run <adapter> <mode>` takes. |
+| `modes` | `table<string, ndap.Mode>` | The named modes this definition offers, keyed by the name `:Ndap run <adapter> <mode>` takes. |
 | `setup` | `fun(config, ctx, callback)` | Runs before the session; see below. |
 | `teardown` | `fun(config, state)` | Runs after the session, with whatever `setup` passed as its `state`. |
 
-An `ndebug.Mode` is one runnable configuration:
+An `ndap.Mode` is one runnable configuration:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `description` | `string` | A line shown in pickers and `:Ndebug new_run_file` output. |
+| `description` | `string` | A line shown in pickers and `:Ndap new_run_file` output. |
 | `request` | `"launch"` \| `"attach"` | Which DAP request the mode issues. |
-| `inputs` | `table<string, ndebug.Input>` | What the user is asked for, keyed by the name used as `--name` on the command line. |
+| `inputs` | `table<string, ndap.Input>` | What the user is asked for, keyed by the name used as `--name` on the command line. |
 | `build` | `fun(parameters): table?, table\|string?` | Turns answered inputs into the DAP request body and returns it. A second return value is a `host`/`port` table overriding the definition's own. Return `nil, "message"` to abort with that error. It runs in a coroutine, so it may yield; a `vim.ui.select` picker inside `build` is fine. |
 
-An `ndebug.Input` describes one value:
+An `ndap.Input` describes one value:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ An `ndebug.Input` describes one value:
 | `item_type` | as above, scalars only | The entry type of a `list` or `map`. |
 | `required` | `boolean` | Leaving it unset is an error. Defaults to `false`. |
 | `completion` | `"file"` \| `"dir"` \| `"command"` \| `string[]` \| `fun(partial): string[]` | What the value completes with: a named source, the values themselves, or a function computing them. Suggests only; it never rejects a value. |
-| `description` | `string` | A few words on what the input means. This is what `:Ndebug new_run_file` and command-line completion show. |
+| `description` | `string` | A few words on what the input means. This is what `:Ndap new_run_file` and command-line completion show. |
 
 ## Modes
 
@@ -109,7 +109,7 @@ return {
                 stop_on_entry = { type = "boolean",                         description = "break at program entry" },
             },
             build = function(parameters)
-                local shared = require("ndebug.shared")
+                local shared = require("ndap.shared")
                 local program, args = shared.split_command(parameters.command)
                 return {
                     program     = program,
@@ -127,8 +127,8 @@ return {
 The mode is now everywhere it should be, with no further wiring:
 
 ```vim
-:Ndebug run myadapter binary --command ./a.out --cwd /src --stop_on_entry true
-:Ndebug new_run_file myadapter binary
+:Ndap run myadapter binary --command ./a.out --cwd /src --stop_on_entry true
+:Ndap new_run_file myadapter binary
 ```
 
 How the pieces fit:
@@ -140,7 +140,7 @@ How the pieces fit:
   what an input declares about its value. A `list`/`map` declares its *entries*
   the same way under `item_type`: `{ type = "list", item_type = "integer" }` is
   a list of integers, and a collection that declares none holds strings. The
-  full vocabulary is one row per type in [inputs.lua](lua/ndebug/run/inputs.lua);
+  full vocabulary is one row per type in [inputs.lua](lua/ndap/run/inputs.lua);
   every consumer reads those rows.
 - **`completion`**: what the value offers while it is being typed, in whichever
   of three forms fits: a named source (`"file"`, `"dir"`, or `"command"`, which
@@ -148,7 +148,7 @@ How the pieces fit:
   normally written with when the adapter names them itself (`{ "console",
   "terminal" }`), or a `fun(partial): string[]` when they can only be computed:
   the targets in a workspace, the containers running now. On a `list`/`map` it
-  describes one entry. A written-out set is also what `:Ndebug new_run_file`
+  describes one entry. A written-out set is also what `:Ndap new_run_file`
   writes into the generated file's comments; a source or a function has nothing
   to serialize. Nothing
   rejects a value outside what completes. A boolean input completes as
@@ -177,17 +177,17 @@ How the pieces fit:
   then return nil, err end`. It must always resume, returning either a body or
   an abort, so the caller waiting on it hears back.
 
-Because `:Ndebug run`, `:Ndebug new_run_file` and mode-based run files all resolve
+Because `:Ndap run`, `:Ndap new_run_file` and mode-based run files all resolve
 through the same `parameters` → `build` path, a mode is described in exactly one
 place and the three cannot drift apart. The shipped `remote` adapter in
-[remote.lua](ndebug-adapters/remote.lua) is a compact reference for a mode that
+[remote.lua](ndap-adapters/remote.lua) is a compact reference for a mode that
 returns a connection (a task-level `host`/`port`) rather than a body; for a
 spawn-then-connect definition that starts a server and points the connection at
 it, see the `setup`/`teardown` example below.
 
 ## Setup and teardown
 
-`setup` runs before ndebug connects. Use it to start the adapter as a server and
+`setup` runs before ndap connects. Use it to start the adapter as a server and
 report its port, or to locate its binary and fail with a readable message.
 Return errors through `callback("...")`. Pass state as the second argument,
 `callback(nil, { handle = h })`, and it arrives as `teardown`'s second argument,
@@ -199,14 +199,14 @@ which is how an adapter that is really a TCP server gets started and then
 connected to. Its `ctx` carries `report(msg)` for progress lines,
 `add_bufnr(bufnr, opts?)` to attach a buffer it created to the run so it is
 listed under the session, `make_buf_name(kind)` to name a buffer the way the
-run's own are (`:b ndebug://<number>/<name>:<kind>`; a reserved kind or a name
+run's own are (`:b ndap://<number>/<name>:<kind>`; a reserved kind or a name
 already taken is an error rather than a suffix), and `mode`, the mode name this
 run resolved from, so a `setup` can gate one mode rather than the whole
 definition (refusing a mode whose feature the installed binary is too old for,
 say). Treat an unrecognized name as "none of mine" and let the run proceed.
 
 ```lua
-local shared = require("ndebug.shared")
+local shared = require("ndap.shared")
 
 return {
     setup = function(config, ctx, callback)
@@ -242,7 +242,7 @@ return {
 }
 ```
 
-When a definition has a `setup`, ndebug leaves `config.host`/`port` entirely to
+When a definition has a `setup`, ndap leaves `config.host`/`port` entirely to
 it and ignores the task's: the definition knows where it put the server. Any
 adapter that announces its port on startup fits this shape; only the pattern
 matched against its output changes.
@@ -250,13 +250,13 @@ matched against its output changes.
 ## Helpers
 
 Locating the adapter binary is most of what a definition does before it can run,
-so `ndebug.shared` helps: `split_command`, `normalize_path`, `resolve_port`,
+so `ndap.shared` helps: `split_command`, `normalize_path`, `resolve_port`,
 `resolve_pid`, `spawn`, and `resolve_path(candidates, accept, opts?)`, which
 expands `$VAR` and `~` and returns the first candidate `accept` approves, plus
 everything tried:
 
 ```lua
-local shared = require("ndebug.shared")
+local shared = require("ndap.shared")
 local exe, tried = shared.resolve_path({ "dlv", "$GOBIN/dlv" }, shared.is_executable)
 ```
 
@@ -268,12 +268,12 @@ instance).
 ## Templates
 
 The definitions in
-[ndebug-adapters.nvim](https://github.com/mbfoss/ndebug-adapters.nvim) are worked
+[ndap-adapters.nvim](https://github.com/mbfoss/ndap-adapters.nvim) are worked
 examples of the common shapes: an adapter spoken to over stdio, one located on
 `PATH` or in a package directory, and one started as a server and then connected
 to. Pick the one closest to your adapter and adapt it. The full contract is in
-the `ndebug.AdapterDef` and `ndebug.Mode` annotations in
-`lua/ndebug/meta.lua`.
+the `ndap.AdapterDef` and `ndap.Mode` annotations in
+`lua/ndap/meta.lua`.
 
 Contributions of new definitions are welcome. Follow the structure and
 comment style of the existing files, and cite the adapter's own documentation
