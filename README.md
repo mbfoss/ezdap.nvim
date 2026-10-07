@@ -281,11 +281,8 @@ sessions.
 ```vim
 :Ndap breakpoint               " toggle a line breakpoint at the cursor
 :Ndap breakpoint toggle        " the same, spelled out
-:Ndap breakpoint set           " add a line breakpoint, never remove one
 :Ndap breakpoint condition     " condition + hit condition (prompts)
 :Ndap breakpoint logpoint      " logpoint (prompts for log message)
-:Ndap breakpoint set cond=x>3  " conditional breakpoint
-:Ndap breakpoint set col=42    " column breakpoint at column 42
 :Ndap breakpoint column        " toggle a column bp at the cursor word
 :Ndap breakpoint fn <name>     " function breakpoint by name
 :Ndap breakpoint data          " watchpoint on a variable/expression
@@ -293,11 +290,6 @@ sessions.
 :Ndap breakpoint exception_filter              " toggle an adapter filter
 :Ndap breakpoint exception_type <name> [mode]  " named exception type
 ```
-
-`set` is the non-interactive form: `col=` takes a column number, and
-`cond=`/`hit=`/`log=` write the condition, hit condition and log message. Values
-are split by Vim's rules, so escape spaces (`cond=x\ >\ 3`), and an empty value
-clears a field.
 
 `column` toggles a column breakpoint at the start of the word under the cursor.
 A breakpoint already at that column is removed.
@@ -420,7 +412,7 @@ The entry needs a GUI or a terminal with mouse support.
 :Ndap step_over        " (alias: :Ndap next)
 :Ndap step_in
 :Ndap step_out
-:Ndap step_into_targets" pick which call on the line to step into
+:Ndap step_in_target    " pick which call on the line to step into
 :Ndap step_back        " reverse debugging (adapter permitting)
 :Ndap reverse_continue
 :Ndap jump_to_cursor   " set the next statement to the cursor line
@@ -538,7 +530,7 @@ require("ndap").create_cmd_alias("Debug")
 | `panel`               | Toggle the panel                                  |
 | `continue` / `continue_all` | Continue the active / every session         |
 | `step_over` (`next`) / `step_in` / `step_out` | Stepping             |
-| `step_into_targets`   | Pick a call target to step into                   |
+| `step_in_target`      | Pick a call target to step into                   |
 | `step_back` / `reverse_continue` | Reverse debugging                      |
 | `jump_to_cursor`      | Set the next statement to the cursor line         |
 | `restart_frame`       | Restart the selected stack frame                  |
@@ -561,7 +553,6 @@ require("ndap").create_cmd_alias("Debug")
 | Subcommand           | Description                            |
 | -------------------- | -------------------------------------- |
 | `toggle` (default)   | Toggle a line breakpoint at the cursor             |
-| `set [col=N] [cond=…] [hit=…] [log=…]` | Create or update a breakpoint; bare, a plain line breakpoint |
 | `column`             | Toggle a column breakpoint at the cursor word      |
 | `remove`             | Remove the breakpoint at the cursor                |
 | `condition`          | Set condition + hit condition                      |

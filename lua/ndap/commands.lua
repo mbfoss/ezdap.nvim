@@ -222,52 +222,6 @@ local function _resolve_target(file, row, opts, cb)
     end)
 end
 
----Fields `:Ndap breakpoint set` can write. `column` is a `col=` column number;
----`""` clears a string field, as in `breakpoints.patch`.
----@class ndap.commands.BpSetOpts
----@field column        string?  a 1-based column number
----@field condition     string?
----@field hit_condition string?
----@field log_message   string?
-
----Create or update a breakpoint at the cursor. Bare, that is a plain line
----breakpoint; with `col=` it targets that column, and without one it edits
----whichever breakpoint on the row `_resolve_target` picks.
----@param opts ndap.commands.BpSetOpts
-function M.breakpoint.set(opts)
-    local file, row = _cursor_location()
-    if not file then return end
-    local bps = manager.breakpoints
-    if not (opts.column or opts.condition or opts.hit_condition or opts.log_message) then
-        bps.add(file, row)
-        return
-    end
-    local column
-    if opts.column then
-        local n = tonumber(opts.column)
-        if not n then
-            vim.notify("[dap] col: expected a column number, got '" .. opts.column .. "'",
-                vim.log.levels.WARN)
-            return
-        end
-        column = math.max(1, math.floor(n))
-    end
-    ---@param key ndap.commands.BpKey
-    local function apply(key)
-        bps.patch(file, key.line, {
-            column        = key.column,
-            condition     = opts.condition,
-            hit_condition = opts.hit_condition,
-            log_message   = opts.log_message,
-        })
-    end
-    if column then
-        apply({ line = row, column = column })
-    else
-        _resolve_target(file, row, nil, function(key) apply(key or { line = row }) end)
-    end
-end
-
 ---Toggle a column breakpoint at the cursor, at the start of the word under it.
 ---A breakpoint already at that column is removed; otherwise one is created. The
 ---column counterpart of the plain line toggle.
@@ -650,7 +604,7 @@ function M.debug.stop_all() manager.stop_all() end
 ---Step into a specific call on the current line. Prompts when the line has
 ---multiple call targets; falls back to a plain step-in when unsupported or
 ---there is only one target.
-function M.debug.step_into_targets()
+function M.debug.step_in_target()
     local sess = manager.session()
     if not sess then
         vim.notify("[dap] no active session", vim.log.levels.WARN); return

@@ -27,7 +27,7 @@ local function _warn_unknown(sub, subs, prefix)
 end
 
 local _bp_subs = {
-    "toggle", "set", "column", "remove",
+    "toggle", "column", "remove",
     "clear_file", "clear_all", "clear_fn",
     "enable", "disable", "toggle_enabled", "enable_all", "disable_all",
     "condition", "logpoint",
@@ -35,39 +35,6 @@ local _bp_subs = {
     "data", "data_clear", "data_list",
     "list",
 }
-
----`set` argument keys, mapped to the fields `commands.breakpoint.set` takes.
-local _BP_SET_KEYS = {
-    col = "column", cond = "condition", hit = "hit_condition", log = "log_message",
-}
-
----Read `:Ndap breakpoint set [col=N] [cond=…] [hit=…] [log=…]`. Values are
----split by Vim's rules, so escape any space (`cond=x\ >\ 3`); an empty value clears
----the field. `col=` takes a column number — the word under the cursor is
----`:Ndap breakpoint column`. No arguments at all sets a plain line breakpoint at
----the cursor.
----@param args string[]
----@return ndap.commands.BpSetOpts?
-local function _parse_bp_set_args(args)
-    local opts = {}
-    for _, tok in ipairs(args) do
-        local key, value = tok:match("^([%w_]+)=(.*)$")
-        local field = key and _BP_SET_KEYS[key]
-        if not field then
-            vim.notify("[ndap] breakpoint set: expected col=/cond=/hit=/log=, got '" .. tok .. "'",
-                vim.log.levels.WARN)
-            return
-        end
-        if field == "column" and not tonumber(value) then
-            vim.notify("[ndap] breakpoint set: col= takes a column number; "
-                .. "use :Ndap breakpoint column for the word under the cursor",
-                vim.log.levels.WARN)
-            return
-        end
-        opts[field] = value
-    end
-    return opts
-end
 
 ---Run the `breakpoint` subcommand. Also reachable via `:Ndap breakpoint …`.
 ---@param args string[]
@@ -82,9 +49,6 @@ local function _bp_run(args)
         else
             commands.breakpoint.toggle()
         end
-    elseif sub == "set" then
-        local set_opts = _parse_bp_set_args({ unpack(args, 2) })
-        if set_opts then commands.breakpoint.set(set_opts) end
     elseif sub == "column" then
         if args[2] then
             vim.notify("[ndap] breakpoint column takes no argument, got '" .. args[2] .. "'",
@@ -138,9 +102,6 @@ end
 ---@return string[]
 local function _bp_complete(rest)
     if #rest == 0 then return _bp_subs end
-    if rest[1] == "set" then
-        return { "cond=", "hit=", "log=", "col=" }
-    end
     if rest[1] == "fn" and #rest == 1 then
         return vim.tbl_map(function(bp) return bp.name end,
             require("ndap.dap.breakpoints").function_breakpoints())
@@ -179,7 +140,7 @@ local _debug_subs = {
     "breakpoint",
     "view", "panel", "continue", "continue_all",
     "step_over", "next", "step_in", "step_out", "step_back",
-    "step_into_targets", "reverse_continue",
+    "step_in_target", "reverse_continue",
     "jump_to_cursor", "restart_frame", "exception_info",
     "pause", "restart",
     "stop", "stop_all",
@@ -309,8 +270,8 @@ local function _debug_run(_, args, opts)
         commands.debug.step_out()
     elseif sub == "step_back" then
         commands.debug.step_back()
-    elseif sub == "step_into_targets" then
-        commands.debug.step_into_targets()
+    elseif sub == "step_in_target" then
+        commands.debug.step_in_target()
     elseif sub == "reverse_continue" then
         commands.debug.reverse_continue()
     elseif sub == "jump_to_cursor" then
